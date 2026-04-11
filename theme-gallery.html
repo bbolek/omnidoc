@@ -1,1 +1,494 @@
-See local file - pushing via git
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>md-viewer Themes</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:#0d1117;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:20px;color:#e6edf3}
+h1{text-align:center;font-size:20px;font-weight:600;margin-bottom:20px;color:#f0f6fc}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px;max-width:1160px;margin:0 auto}
+.card{border-radius:10px;overflow:hidden;border:1px solid #30363d;box-shadow:0 2px 8px rgba(0,0,0,.4);font-size:12px}
+.titlebar{background:var(--titlebar);color:var(--titlebar-text);padding:7px 10px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)}
+.dots{display:flex;gap:4px}.dot{width:10px;height:10px;border-radius:50%}.red{background:#ff5f56}.yellow{background:#ffbd2e}.green{background:#27c93f}
+.app-name{font-size:11px;font-weight:500;opacity:.7}
+.label-badge{margin-left:auto;font-size:10px;font-weight:600;background:var(--accent);color:var(--accent-fg);padding:2px 7px;border-radius:10px}
+.app-body{display:flex;height:210px;background:var(--bg)}
+.sidebar{width:110px;background:var(--sidebar);border-right:1px solid var(--border);flex-shrink:0;overflow:hidden}
+.sidebar-title{padding:5px 8px;font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);border-bottom:1px solid var(--border)}
+.sidebar-item{padding:4px 8px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:10px}
+.sidebar-item.active{background:rgba(128,128,128,.15);color:var(--text)}
+.content{flex:1;overflow:hidden;display:flex;flex-direction:column}
+.tabs{display:flex;background:var(--tab-bg);border-bottom:1px solid var(--border);height:26px}
+.tab{padding:0 10px;display:flex;align-items:center;font-size:10px;color:var(--text-muted);border-right:1px solid var(--border);white-space:nowrap}
+.tab.active{background:var(--tab-active);color:var(--text)}
+.prose{padding:10px 14px;overflow:hidden;flex:1;color:var(--text);line-height:1.5}
+.h1{font-size:14px;font-weight:700;margin-bottom:5px;padding-bottom:4px;border-bottom:1px solid var(--border)}
+.h2{font-size:11px;font-weight:600;margin:6px 0 3px}
+p{font-size:10px;color:var(--text-muted);margin-bottom:5px}
+.codeblock{background:var(--bg-inset);border:1px solid var(--border);border-radius:4px;padding:6px 8px;margin-bottom:6px;font-family:'Fira Code',monospace}
+.code-line{font-size:9.5px;line-height:1.6;color:var(--text)}
+.kw{color:var(--accent)}.type{color:#79b8ff}.str{color:#e8985e}
+.list-item{font-size:10px;margin-bottom:2px;color:var(--text-muted)}
+blockquote{border-left:2px solid var(--accent);padding:3px 8px;margin-top:5px;font-size:10px;color:var(--text-muted);font-style:italic}
+.statusbar{background:var(--statusbar);color:var(--statusbar-text);padding:4px 10px;font-size:9px;display:flex;align-items:center;border-top:1px solid var(--border)}
+.swatches{background:#161b22;padding:8px 10px;display:flex;gap:6px;align-items:center;border-top:1px solid #21262d}
+.swatch{width:22px;height:22px;border-radius:4px;border:1px solid rgba(255,255,255,.1)}
+.accent-text{display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700}
+</style>
+</head>
+<body>
+<h1>md-viewer — Theme Gallery</h1>
+<div class="grid">
+  <div class="card" style="
+    --bg:#ffffff;
+    --bg-subtle:#f6f8fa;
+    --bg-inset:#eaeef2;
+    --sidebar:#f6f8fa;
+    --border:#d0d7de;
+    --text:#1f2328;
+    --text-muted:#6e7781;
+    --accent:#0969da;
+    --accent-fg:#ffffff;
+    --statusbar:#06f;
+    --statusbar-text:#fff;
+    --tab-active:#fff;
+    --tab-bg:#f0f2f4;
+    --titlebar:#f6f8fa;
+    --titlebar-text:#1f2328;
+  ">
+    <div class="titlebar">
+      <span class="dots"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></span>
+      <span class="app-name">md-viewer</span>
+      <span class="label-badge">GitHub Light</span>
+    </div>
+    <div class="app-body">
+      <div class="sidebar">
+        <div class="sidebar-title">Explorer</div>
+        <div class="sidebar-item active">📄 README.md</div>
+        <div class="sidebar-item">📁 src</div>
+        <div class="sidebar-item">📄 config.yaml</div>
+        <div class="sidebar-item">📄 data.json</div>
+      </div>
+      <div class="content">
+        <div class="tabs">
+          <div class="tab active">README.md</div>
+          <div class="tab">config.yaml</div>
+          <div class="tab">main.ts</div>
+        </div>
+        <div class="prose">
+          <div class="h1">md-viewer</div>
+          <p>A beautiful cross-platform markdown viewer built with Tauri and React.</p>
+          <div class="codeblock">
+            <div class="code-line"><span class="kw">interface</span> <span class="type">ThemeDefinition</span> &#123;</div>
+            <div class="code-line">&nbsp;&nbsp;name: <span class="type">string</span>;</div>
+            <div class="code-line">&nbsp;&nbsp;scheme: <span class="str">"light"</span> | <span class="str">"dark"</span>;</div>
+            <div class="code-line">&#125;</div>
+          </div>
+          <div class="h2">Features</div>
+          <div class="list-item">✅ <b>7 built-in themes</b></div>
+          <div class="list-item">✅ Markdown + GFM + math</div>
+          <div class="list-item">✅ JSON, YAML, TOML viewers</div>
+          <blockquote>Beautiful software is a joy to use.</blockquote>
+        </div>
+      </div>
+    </div>
+    <div class="statusbar">README.md &nbsp;·&nbsp; 4.2 KB &nbsp;·&nbsp; UTF-8 &nbsp;·&nbsp; 312 words &nbsp; <span style="margin-left:auto">GitHub Light</span></div>
+    <div class="swatches">
+      <div class="swatch" style="background:var(--bg)" title="background"></div>
+      <div class="swatch" style="background:var(--bg-subtle)" title="subtle"></div>
+      <div class="swatch" style="background:var(--bg-inset)" title="inset"></div>
+      <div class="swatch" style="background:var(--sidebar)" title="sidebar"></div>
+      <div class="swatch" style="background:var(--accent)" title="accent"></div>
+      <div class="swatch accent-text" style="background:var(--accent);color:var(--accent-fg)">Aa</div>
+      <div class="swatch" style="background:var(--statusbar)" title="statusbar"></div>
+    </div>
+  </div>
+  <div class="card" style="
+    --bg:#0d1117;
+    --bg-subtle:#161b22;
+    --bg-inset:#010409;
+    --sidebar:#161b22;
+    --border:#30363d;
+    --text:#e6edf3;
+    --text-muted:#6e7681;
+    --accent:#58a6ff;
+    --accent-fg:#0d1117;
+    --statusbar:#06f;
+    --statusbar-text:#fff;
+    --tab-active:#fff;
+    --tab-bg:#161b22;
+    --titlebar:#161b22;
+    --titlebar-text:#e6edf3;
+  ">
+    <div class="titlebar">
+      <span class="dots"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></span>
+      <span class="app-name">md-viewer</span>
+      <span class="label-badge">GitHub Dark</span>
+    </div>
+    <div class="app-body">
+      <div class="sidebar">
+        <div class="sidebar-title">Explorer</div>
+        <div class="sidebar-item active">📄 README.md</div>
+        <div class="sidebar-item">📁 src</div>
+        <div class="sidebar-item">📄 config.yaml</div>
+        <div class="sidebar-item">📄 data.json</div>
+      </div>
+      <div class="content">
+        <div class="tabs">
+          <div class="tab active">README.md</div>
+          <div class="tab">config.yaml</div>
+          <div class="tab">main.ts</div>
+        </div>
+        <div class="prose">
+          <div class="h1">md-viewer</div>
+          <p>A beautiful cross-platform markdown viewer built with Tauri and React.</p>
+          <div class="codeblock">
+            <div class="code-line"><span class="kw">interface</span> <span class="type">ThemeDefinition</span> &#123;</div>
+            <div class="code-line">&nbsp;&nbsp;name: <span class="type">string</span>;</div>
+            <div class="code-line">&nbsp;&nbsp;scheme: <span class="str">"light"</span> | <span class="str">"dark"</span>;</div>
+            <div class="code-line">&#125;</div>
+          </div>
+          <div class="h2">Features</div>
+          <div class="list-item">✅ <b>7 built-in themes</b></div>
+          <div class="list-item">✅ Markdown + GFM + math</div>
+          <div class="list-item">✅ JSON, YAML, TOML viewers</div>
+          <blockquote>Beautiful software is a joy to use.</blockquote>
+        </div>
+      </div>
+    </div>
+    <div class="statusbar">README.md &nbsp;·&nbsp; 4.2 KB &nbsp;·&nbsp; UTF-8 &nbsp;·&nbsp; 312 words &nbsp; <span style="margin-left:auto">GitHub Dark</span></div>
+    <div class="swatches">
+      <div class="swatch" style="background:var(--bg)" title="background"></div>
+      <div class="swatch" style="background:var(--bg-subtle)" title="subtle"></div>
+      <div class="swatch" style="background:var(--bg-inset)" title="inset"></div>
+      <div class="swatch" style="background:var(--sidebar)" title="sidebar"></div>
+      <div class="swatch" style="background:var(--accent)" title="accent"></div>
+      <div class="swatch accent-text" style="background:var(--accent);color:var(--accent-fg)">Aa</div>
+      <div class="swatch" style="background:var(--statusbar)" title="statusbar"></div>
+    </div>
+  </div>
+  <div class="card" style="
+    --bg:#282a36;
+    --bg-subtle:#21222c;
+    --bg-inset:#191a21;
+    --sidebar:#21222c;
+    --border:#44475a;
+    --text:#f8f8f2;
+    --text-muted:#6272a4;
+    --accent:#bd93f9;
+    --accent-fg:#282a36;
+    --statusbar:#06f;
+    --statusbar-text:#fff;
+    --tab-active:#fff;
+    --tab-bg:#21222c;
+    --titlebar:#191a21;
+    --titlebar-text:#f8f8f2;
+  ">
+    <div class="titlebar">
+      <span class="dots"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></span>
+      <span class="app-name">md-viewer</span>
+      <span class="label-badge">Dracula</span>
+    </div>
+    <div class="app-body">
+      <div class="sidebar">
+        <div class="sidebar-title">Explorer</div>
+        <div class="sidebar-item active">📄 README.md</div>
+        <div class="sidebar-item">📁 src</div>
+        <div class="sidebar-item">📄 config.yaml</div>
+        <div class="sidebar-item">📄 data.json</div>
+      </div>
+      <div class="content">
+        <div class="tabs">
+          <div class="tab active">README.md</div>
+          <div class="tab">config.yaml</div>
+          <div class="tab">main.ts</div>
+        </div>
+        <div class="prose">
+          <div class="h1">md-viewer</div>
+          <p>A beautiful cross-platform markdown viewer built with Tauri and React.</p>
+          <div class="codeblock">
+            <div class="code-line"><span class="kw">interface</span> <span class="type">ThemeDefinition</span> &#123;</div>
+            <div class="code-line">&nbsp;&nbsp;name: <span class="type">string</span>;</div>
+            <div class="code-line">&nbsp;&nbsp;scheme: <span class="str">"light"</span> | <span class="str">"dark"</span>;</div>
+            <div class="code-line">&#125;</div>
+          </div>
+          <div class="h2">Features</div>
+          <div class="list-item">✅ <b>7 built-in themes</b></div>
+          <div class="list-item">✅ Markdown + GFM + math</div>
+          <div class="list-item">✅ JSON, YAML, TOML viewers</div>
+          <blockquote>Beautiful software is a joy to use.</blockquote>
+        </div>
+      </div>
+    </div>
+    <div class="statusbar">README.md &nbsp;·&nbsp; 4.2 KB &nbsp;·&nbsp; UTF-8 &nbsp;·&nbsp; 312 words &nbsp; <span style="margin-left:auto">Dracula</span></div>
+    <div class="swatches">
+      <div class="swatch" style="background:var(--bg)" title="background"></div>
+      <div class="swatch" style="background:var(--bg-subtle)" title="subtle"></div>
+      <div class="swatch" style="background:var(--bg-inset)" title="inset"></div>
+      <div class="swatch" style="background:var(--sidebar)" title="sidebar"></div>
+      <div class="swatch" style="background:var(--accent)" title="accent"></div>
+      <div class="swatch accent-text" style="background:var(--accent);color:var(--accent-fg)">Aa</div>
+      <div class="swatch" style="background:var(--statusbar)" title="statusbar"></div>
+    </div>
+  </div>
+  <div class="card" style="
+    --bg:#2e3440;
+    --bg-subtle:#3b4252;
+    --bg-inset:#242933;
+    --sidebar:#3b4252;
+    --border:#4c566a;
+    --text:#eceff4;
+    --text-muted:#81a1c1;
+    --accent:#88c0d0;
+    --accent-fg:#2e3440;
+    --statusbar:#06f;
+    --statusbar-text:#fff;
+    --tab-active:#fff;
+    --tab-bg:#3b4252;
+    --titlebar:#242933;
+    --titlebar-text:#eceff4;
+  ">
+    <div class="titlebar">
+      <span class="dots"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></span>
+      <span class="app-name">md-viewer</span>
+      <span class="label-badge">Nord</span>
+    </div>
+    <div class="app-body">
+      <div class="sidebar">
+        <div class="sidebar-title">Explorer</div>
+        <div class="sidebar-item active">📄 README.md</div>
+        <div class="sidebar-item">📁 src</div>
+        <div class="sidebar-item">📄 config.yaml</div>
+        <div class="sidebar-item">📄 data.json</div>
+      </div>
+      <div class="content">
+        <div class="tabs">
+          <div class="tab active">README.md</div>
+          <div class="tab">config.yaml</div>
+          <div class="tab">main.ts</div>
+        </div>
+        <div class="prose">
+          <div class="h1">md-viewer</div>
+          <p>A beautiful cross-platform markdown viewer built with Tauri and React.</p>
+          <div class="codeblock">
+            <div class="code-line"><span class="kw">interface</span> <span class="type">ThemeDefinition</span> &#123;</div>
+            <div class="code-line">&nbsp;&nbsp;name: <span class="type">string</span>;</div>
+            <div class="code-line">&nbsp;&nbsp;scheme: <span class="str">"light"</span> | <span class="str">"dark"</span>;</div>
+            <div class="code-line">&#125;</div>
+          </div>
+          <div class="h2">Features</div>
+          <div class="list-item">✅ <b>7 built-in themes</b></div>
+          <div class="list-item">✅ Markdown + GFM + math</div>
+          <div class="list-item">✅ JSON, YAML, TOML viewers</div>
+          <blockquote>Beautiful software is a joy to use.</blockquote>
+        </div>
+      </div>
+    </div>
+    <div class="statusbar">README.md &nbsp;·&nbsp; 4.2 KB &nbsp;·&nbsp; UTF-8 &nbsp;·&nbsp; 312 words &nbsp; <span style="margin-left:auto">Nord</span></div>
+    <div class="swatches">
+      <div class="swatch" style="background:var(--bg)" title="background"></div>
+      <div class="swatch" style="background:var(--bg-subtle)" title="subtle"></div>
+      <div class="swatch" style="background:var(--bg-inset)" title="inset"></div>
+      <div class="swatch" style="background:var(--sidebar)" title="sidebar"></div>
+      <div class="swatch" style="background:var(--accent)" title="accent"></div>
+      <div class="swatch accent-text" style="background:var(--accent);color:var(--accent-fg)">Aa</div>
+      <div class="swatch" style="background:var(--statusbar)" title="statusbar"></div>
+    </div>
+  </div>
+  <div class="card" style="
+    --bg:#1a1b26;
+    --bg-subtle:#16161e;
+    --bg-inset:#13131a;
+    --sidebar:#16161e;
+    --border:#2f3549;
+    --text:#c0caf5;
+    --text-muted:#565f89;
+    --accent:#7aa2f7;
+    --accent-fg:#1a1b26;
+    --statusbar:#06f;
+    --statusbar-text:#fff;
+    --tab-active:#fff;
+    --tab-bg:#16161e;
+    --titlebar:#13131a;
+    --titlebar-text:#c0caf5;
+  ">
+    <div class="titlebar">
+      <span class="dots"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></span>
+      <span class="app-name">md-viewer</span>
+      <span class="label-badge">Tokyo Night</span>
+    </div>
+    <div class="app-body">
+      <div class="sidebar">
+        <div class="sidebar-title">Explorer</div>
+        <div class="sidebar-item active">📄 README.md</div>
+        <div class="sidebar-item">📁 src</div>
+        <div class="sidebar-item">📄 config.yaml</div>
+        <div class="sidebar-item">📄 data.json</div>
+      </div>
+      <div class="content">
+        <div class="tabs">
+          <div class="tab active">README.md</div>
+          <div class="tab">config.yaml</div>
+          <div class="tab">main.ts</div>
+        </div>
+        <div class="prose">
+          <div class="h1">md-viewer</div>
+          <p>A beautiful cross-platform markdown viewer built with Tauri and React.</p>
+          <div class="codeblock">
+            <div class="code-line"><span class="kw">interface</span> <span class="type">ThemeDefinition</span> &#123;</div>
+            <div class="code-line">&nbsp;&nbsp;name: <span class="type">string</span>;</div>
+            <div class="code-line">&nbsp;&nbsp;scheme: <span class="str">"light"</span> | <span class="str">"dark"</span>;</div>
+            <div class="code-line">&#125;</div>
+          </div>
+          <div class="h2">Features</div>
+          <div class="list-item">✅ <b>7 built-in themes</b></div>
+          <div class="list-item">✅ Markdown + GFM + math</div>
+          <div class="list-item">✅ JSON, YAML, TOML viewers</div>
+          <blockquote>Beautiful software is a joy to use.</blockquote>
+        </div>
+      </div>
+    </div>
+    <div class="statusbar">README.md &nbsp;·&nbsp; 4.2 KB &nbsp;·&nbsp; UTF-8 &nbsp;·&nbsp; 312 words &nbsp; <span style="margin-left:auto">Tokyo Night</span></div>
+    <div class="swatches">
+      <div class="swatch" style="background:var(--bg)" title="background"></div>
+      <div class="swatch" style="background:var(--bg-subtle)" title="subtle"></div>
+      <div class="swatch" style="background:var(--bg-inset)" title="inset"></div>
+      <div class="swatch" style="background:var(--sidebar)" title="sidebar"></div>
+      <div class="swatch" style="background:var(--accent)" title="accent"></div>
+      <div class="swatch accent-text" style="background:var(--accent);color:var(--accent-fg)">Aa</div>
+      <div class="swatch" style="background:var(--statusbar)" title="statusbar"></div>
+    </div>
+  </div>
+  <div class="card" style="
+    --bg:#fdf6e3;
+    --bg-subtle:#eee8d5;
+    --bg-inset:#e5ddc8;
+    --sidebar:#eee8d5;
+    --border:#c9c3b0;
+    --text:#586e75;
+    --text-muted:#93a1a1;
+    --accent:#268bd2;
+    --accent-fg:#fdf6e3;
+    --statusbar:#06f;
+    --statusbar-text:#fff;
+    --tab-active:#fff;
+    --tab-bg:#e8e2cf;
+    --titlebar:#eee8d5;
+    --titlebar-text:#586e75;
+  ">
+    <div class="titlebar">
+      <span class="dots"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></span>
+      <span class="app-name">md-viewer</span>
+      <span class="label-badge">Solarized Light</span>
+    </div>
+    <div class="app-body">
+      <div class="sidebar">
+        <div class="sidebar-title">Explorer</div>
+        <div class="sidebar-item active">📄 README.md</div>
+        <div class="sidebar-item">📁 src</div>
+        <div class="sidebar-item">📄 config.yaml</div>
+        <div class="sidebar-item">📄 data.json</div>
+      </div>
+      <div class="content">
+        <div class="tabs">
+          <div class="tab active">README.md</div>
+          <div class="tab">config.yaml</div>
+          <div class="tab">main.ts</div>
+        </div>
+        <div class="prose">
+          <div class="h1">md-viewer</div>
+          <p>A beautiful cross-platform markdown viewer built with Tauri and React.</p>
+          <div class="codeblock">
+            <div class="code-line"><span class="kw">interface</span> <span class="type">ThemeDefinition</span> &#123;</div>
+            <div class="code-line">&nbsp;&nbsp;name: <span class="type">string</span>;</div>
+            <div class="code-line">&nbsp;&nbsp;scheme: <span class="str">"light"</span> | <span class="str">"dark"</span>;</div>
+            <div class="code-line">&#125;</div>
+          </div>
+          <div class="h2">Features</div>
+          <div class="list-item">✅ <b>7 built-in themes</b></div>
+          <div class="list-item">✅ Markdown + GFM + math</div>
+          <div class="list-item">✅ JSON, YAML, TOML viewers</div>
+          <blockquote>Beautiful software is a joy to use.</blockquote>
+        </div>
+      </div>
+    </div>
+    <div class="statusbar">README.md &nbsp;·&nbsp; 4.2 KB &nbsp;·&nbsp; UTF-8 &nbsp;·&nbsp; 312 words &nbsp; <span style="margin-left:auto">Solarized Light</span></div>
+    <div class="swatches">
+      <div class="swatch" style="background:var(--bg)" title="background"></div>
+      <div class="swatch" style="background:var(--bg-subtle)" title="subtle"></div>
+      <div class="swatch" style="background:var(--bg-inset)" title="inset"></div>
+      <div class="swatch" style="background:var(--sidebar)" title="sidebar"></div>
+      <div class="swatch" style="background:var(--accent)" title="accent"></div>
+      <div class="swatch accent-text" style="background:var(--accent);color:var(--accent-fg)">Aa</div>
+      <div class="swatch" style="background:var(--statusbar)" title="statusbar"></div>
+    </div>
+  </div>
+  <div class="card" style="
+    --bg:#1e1e2e;
+    --bg-subtle:#181825;
+    --bg-inset:#11111b;
+    --sidebar:#181825;
+    --border:#313244;
+    --text:#cdd6f4;
+    --text-muted:#6c7086;
+    --accent:#cba6f7;
+    --accent-fg:#1e1e2e;
+    --statusbar:#06f;
+    --statusbar-text:#fff;
+    --tab-active:#fff;
+    --tab-bg:#181825;
+    --titlebar:#11111b;
+    --titlebar-text:#cdd6f4;
+  ">
+    <div class="titlebar">
+      <span class="dots"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></span>
+      <span class="app-name">md-viewer</span>
+      <span class="label-badge">Catppuccin Mocha</span>
+    </div>
+    <div class="app-body">
+      <div class="sidebar">
+        <div class="sidebar-title">Explorer</div>
+        <div class="sidebar-item active">📄 README.md</div>
+        <div class="sidebar-item">📁 src</div>
+        <div class="sidebar-item">📄 config.yaml</div>
+        <div class="sidebar-item">📄 data.json</div>
+      </div>
+      <div class="content">
+        <div class="tabs">
+          <div class="tab active">README.md</div>
+          <div class="tab">config.yaml</div>
+          <div class="tab">main.ts</div>
+        </div>
+        <div class="prose">
+          <div class="h1">md-viewer</div>
+          <p>A beautiful cross-platform markdown viewer built with Tauri and React.</p>
+          <div class="codeblock">
+            <div class="code-line"><span class="kw">interface</span> <span class="type">ThemeDefinition</span> &#123;</div>
+            <div class="code-line">&nbsp;&nbsp;name: <span class="type">string</span>;</div>
+            <div class="code-line">&nbsp;&nbsp;scheme: <span class="str">"light"</span> | <span class="str">"dark"</span>;</div>
+            <div class="code-line">&#125;</div>
+          </div>
+          <div class="h2">Features</div>
+          <div class="list-item">✅ <b>7 built-in themes</b></div>
+          <div class="list-item">✅ Markdown + GFM + math</div>
+          <div class="list-item">✅ JSON, YAML, TOML viewers</div>
+          <blockquote>Beautiful software is a joy to use.</blockquote>
+        </div>
+      </div>
+    </div>
+    <div class="statusbar">README.md &nbsp;·&nbsp; 4.2 KB &nbsp;·&nbsp; UTF-8 &nbsp;·&nbsp; 312 words &nbsp; <span style="margin-left:auto">Catppuccin Mocha</span></div>
+    <div class="swatches">
+      <div class="swatch" style="background:var(--bg)" title="background"></div>
+      <div class="swatch" style="background:var(--bg-subtle)" title="subtle"></div>
+      <div class="swatch" style="background:var(--bg-inset)" title="inset"></div>
+      <div class="swatch" style="background:var(--sidebar)" title="sidebar"></div>
+      <div class="swatch" style="background:var(--accent)" title="accent"></div>
+      <div class="swatch accent-text" style="background:var(--accent);color:var(--accent-fg)">Aa</div>
+      <div class="swatch" style="background:var(--statusbar)" title="statusbar"></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
