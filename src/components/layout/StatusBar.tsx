@@ -1,16 +1,18 @@
 import { useState, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Pencil, Plus } from "lucide-react";
+import { Pencil, Plus, Wand2 } from "lucide-react";
 import { useFileStore } from "../../store/fileStore";
 import { useThemeStore } from "../../store/themeStore";
 import { THEMES, BUILTIN_THEMES } from "../../themes";
-import { formatFileSize, getFileExtension } from "../../utils/fileUtils";
+import { formatFileSize, getFileExtension, getFileType } from "../../utils/fileUtils";
 import { readingTime, wordCount } from "../../utils/markdownUtils";
+import { canFormat, formatContent } from "../../utils/formatUtils";
+import { showToast } from "../ui/Toast";
 import { ThemeEditor } from "../ui/ThemeEditor";
 import type { ThemeDefinition } from "../../types";
 
 export function StatusBar() {
-  const { tabs, activeTabId } = useFileStore();
+  const { tabs, activeTabId, updateTabContent } = useFileStore();
   const { themeName, colorScheme, setTheme, setColorScheme } = useThemeStore();
   const [showThemePicker, setShowThemePicker] = useState(false);
   const [editingTheme, setEditingTheme] = useState<ThemeDefinition | null | undefined>(undefined);
@@ -43,6 +45,23 @@ export function StatusBar() {
   const openEditor = (theme: ThemeDefinition | null) => {
     setShowThemePicker(false);
     setEditingTheme(theme);
+  };
+
+  // Format document
+  const fileType = activeTab ? getFileType(ext) : null;
+  const formattable = !!activeTab && !!fileType && canFormat(fileType, ext);
+
+  const handleFormat = () => {
+    if (!activeTab || !fileType) return;
+    const { result, error } = formatContent(activeTab.content, fileType, ext);
+    if (error) {
+      showToast({ message: `Format failed: ${error}`, type: "error" });
+    } else if (result !== activeTab.content) {
+      updateTabContent(activeTab.id, result);
+      showToast({ message: "Document formatted", type: "success" });
+    } else {
+      showToast({ message: "Already formatted", type: "info" });
+    }
   };
 
   return (
@@ -79,6 +98,22 @@ export function StatusBar() {
 
         {/* Right */}
         <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+          {/* Format button — only shown for formattable file types */}
+          {formattable && (
+            <>
+              <div className="status-item">
+                <button
+                  onClick={handleFormat}
+                  title="Format Document (Ctrl+Shift+F)"
+                  style={{ display: "flex", alignItems: "center", gap: 4 }}
+                >
+                  <Wand2 size={11} />
+                  Format
+                </button>
+              </div>
+              <div className="status-separator" />
+            </>
+          )}
           {/* Color scheme toggle */}
           <div className="status-item">
             <button onClick={nextScheme} title="Toggle color scheme">

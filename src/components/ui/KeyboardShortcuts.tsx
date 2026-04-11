@@ -21,6 +21,9 @@ const SHORTCUTS = [
     { keys: [`${mod}+F`], description: "Search in file" },
     { keys: ["Escape"], description: "Close overlay / search" },
   ]},
+  { group: "Editing", items: [
+    { keys: [`${mod}+Shift+F`], description: "Format document (JSON, XML, YAML, TOML)" },
+  ]},
   { group: "Theme", items: [
     { keys: ["Status bar → theme name"], description: "Switch theme" },
     { keys: ["Status bar → Light/Dark/System"], description: "Toggle color scheme" },
