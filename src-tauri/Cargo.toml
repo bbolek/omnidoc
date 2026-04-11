@@ -1,0 +1,38 @@
+[package]
+name = "md-viewer"
+version = "0.1.0"
+description = "A beautiful markdown and file viewer"
+authors = []
+license = ""
+repository = ""
+edition = "2021"
+
+[lib]
+name = "md_viewer_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-fs = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-shell = "2"
+tauri-plugin-os = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+notify = { version = "7", features = ["serde"] }
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "sync"] }
+anyhow = "1"
+encoding_rs = "0.8"
+
+[profile.dev]
+incremental = true
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true
