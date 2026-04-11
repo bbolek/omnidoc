@@ -70,8 +70,12 @@ export function TabBar() {
                   e.preventDefault();
                   setContextMenu({ x: e.clientX, y: e.clientY, tabId: tab.id });
                 }}
-                // Prevent text selection during drag
-                style={{ userSelect: "none" }}
+                // Prevent text selection during drag; set background explicitly so
+                // framer-motion's style merging never shadows the CSS variable.
+                style={{
+                  userSelect: "none",
+                  background: tab.id === activeTabId ? "var(--color-tab-active)" : undefined,
+                }}
               >
                 <FileIcon
                   extension={getFileExtension(tab.path)}
