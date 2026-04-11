@@ -1,0 +1,7 @@
+{
+  "id": "example-plugin",
+  "name": "Example Plugin",
+  "version": "1.0.0",
+  "description": "Demonstrates the plugin API — custom viewer, command, sidebar panel, and theme.",
+  "author": "You"
+}

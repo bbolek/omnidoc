@@ -4,10 +4,13 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import { useThemeInit } from "./hooks/useTheme";
 import { useThemeStore } from "./store/themeStore";
+import { usePluginStore } from "./store/pluginStore";
 import { useGlobalKeyboard } from "./hooks/useKeyboard";
 import { useAllFileWatchers } from "./hooks/useFileWatcher";
 import { useUiStore } from "./store/uiStore";
 import { useFileStore } from "./store/fileStore";
+import { pluginManager } from "./plugins/pluginManager";
+import { resolveScheme } from "./themes";
 import { AppShell } from "./components/layout/AppShell";
 import { KeyboardShortcuts } from "./components/ui/KeyboardShortcuts";
 import { ToastContainer } from "./components/ui/Toast";
@@ -20,15 +23,32 @@ function AppInner() {
   useThemeInit();
   useGlobalKeyboard();
   useAllFileWatchers();
-  const { loadUserThemes, applyCurrentTheme } = useThemeStore();
+  const { loadUserThemes, applyCurrentTheme, themeName, colorScheme } = useThemeStore();
+  const { discoverAndLoad } = usePluginStore();
 
   useEffect(() => {
-    // Load user themes first, then re-apply current theme so user theme tokens are present
+    // Load user themes first, then re-apply so user theme tokens are present
     loadUserThemes().then(() => applyCurrentTheme());
+    // Discover and load installed plugins
+    discoverAndLoad();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const { openFile } = useFileStore();
+  // Notify plugins whenever the active theme changes
+  useEffect(() => {
+    const scheme = resolveScheme({ scheme: "light", name: "", label: "", shikiTheme: "", tokens: {} }, colorScheme);
+    pluginManager.emitThemeChange(themeName, scheme);
+  }, [themeName, colorScheme]);
+
+  const { openFile, tabs, activeTabId } = useFileStore();
+
+  // Notify plugins when the active file changes
+  useEffect(() => {
+    const activeTab = tabs.find((t) => t.id === activeTabId);
+    if (activeTab) {
+      pluginManager.emitFileOpen(activeTab.path, activeTab.content);
+    }
+  }, [activeTabId, tabs]);
 
   // Tauri drag-and-drop via window events
   useEffect(() => {
@@ -48,7 +68,7 @@ function AppInner() {
               if (!info.is_dir) {
                 openFile(path, getFileName(path), content, info);
               }
-            } catch (err) {
+            } catch {
               showToast({ message: `Could not open ${getFileName(path)}`, type: "error" });
             }
           }

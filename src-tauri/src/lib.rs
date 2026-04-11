@@ -19,6 +19,9 @@ pub fn run() {
             commands::export::export_html,
             commands::themes::load_user_themes,
             commands::themes::save_user_themes,
+            commands::plugins::list_plugins,
+            commands::plugins::read_plugin_file,
+            commands::plugins::get_plugins_dir,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

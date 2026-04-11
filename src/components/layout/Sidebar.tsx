@@ -1,9 +1,11 @@
-import { useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { useUiStore } from "../../store/uiStore";
 import { useFileStore } from "../../store/fileStore";
+import { pluginManager } from "../../plugins/pluginManager";
 import { FileTree } from "../sidebar/FileTree";
 import { TOCPanel } from "../sidebar/TOCPanel";
 import { RecentFiles } from "../sidebar/RecentFiles";
+import { PluginsPanel } from "../plugins/PluginsPanel";
 import type { SidebarPosition } from "../../types";
 
 interface Props {
@@ -14,6 +16,10 @@ export function Sidebar({ position }: Props) {
   const { activeSidebarPanel, sidebarWidth, setSidebarWidth } = useUiStore();
   const { tabs, activeTabId } = useFileStore();
   const activeTab = tabs.find((t) => t.id === activeTabId);
+
+  // Re-render when plugin panels change
+  const [, setTick] = useState(0);
+  useEffect(() => pluginManager.subscribe(() => setTick((n) => n + 1)), []);
 
   const isResizing = useRef(false);
   const startX = useRef(0);
@@ -46,18 +52,29 @@ export function Sidebar({ position }: Props) {
     [sidebarWidth, setSidebarWidth, position]
   );
 
+  // Find a plugin-defined panel matching the active id
+  const pluginPanel = pluginManager
+    .getAllSidebarPanels()
+    .find((p) => p.id === activeSidebarPanel);
+
   const panelTitles: Record<string, string> = {
     tree: "Explorer",
     toc: "Contents",
     recent: "Recent",
+    plugins: "Plugins",
   };
+
+  const headerTitle =
+    panelTitles[activeSidebarPanel] ??
+    pluginPanel?.label ??
+    "Explorer";
 
   return (
     <div
       className={`sidebar ${position}`}
       style={{ width: sidebarWidth, position: "relative" }}
     >
-      <div className="sidebar-header">{panelTitles[activeSidebarPanel] ?? "Explorer"}</div>
+      <div className="sidebar-header">{headerTitle}</div>
 
       <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
         {activeSidebarPanel === "tree" && <FileTree />}
@@ -65,6 +82,10 @@ export function Sidebar({ position }: Props) {
           <TOCPanel content={activeTab?.content ?? ""} />
         )}
         {activeSidebarPanel === "recent" && <RecentFiles />}
+        {activeSidebarPanel === "plugins" && <PluginsPanel />}
+        {pluginPanel && activeSidebarPanel === pluginPanel.id && (
+          <PluginSidebarPanel panelId={pluginPanel.id} mount={pluginPanel.mount} />
+        )}
       </div>
 
       {/* Resize handle */}
@@ -74,5 +95,30 @@ export function Sidebar({ position }: Props) {
         onMouseDown={onMouseDown}
       />
     </div>
+  );
+}
+
+// ── Plugin sidebar panel (DOM-based mount/unmount) ────────────────────────────
+
+interface PluginPanelProps {
+  panelId: string;
+  mount: (container: HTMLElement) => () => void;
+}
+
+function PluginSidebarPanel({ panelId, mount }: PluginPanelProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const cleanup = mount(containerRef.current);
+    return cleanup;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panelId]);
+
+  return (
+    <div
+      ref={containerRef}
+      style={{ flex: 1, overflow: "auto" }}
+    />
   );
 }

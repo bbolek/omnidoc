@@ -6,7 +6,7 @@ import { RefreshCw, CheckCircle, AlertCircle, X } from "lucide-react";
 export interface ToastMessage {
   id: string;
   message: string;
-  type: "info" | "success" | "error";
+  type: "info" | "success" | "warning" | "error";
   duration?: number;
 }
 
@@ -38,6 +38,7 @@ export function ToastContainer() {
   const icons = {
     info: <RefreshCw size={14} />,
     success: <CheckCircle size={14} style={{ color: "#2da44e" }} />,
+    warning: <AlertCircle size={14} style={{ color: "#d29922" }} />,
     error: <AlertCircle size={14} style={{ color: "#cf222e" }} />,
   };
 
