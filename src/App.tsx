@@ -25,12 +25,15 @@ function AppInner() {
   useAllFileWatchers();
   const { loadUserThemes, applyCurrentTheme, themeName, colorScheme } = useThemeStore();
   const { discoverAndLoad } = usePluginStore();
+  const { openFile, tabs, activeTabId, restoreSession } = useFileStore();
 
   useEffect(() => {
     // Load user themes first, then re-apply so user theme tokens are present
     loadUserThemes().then(() => applyCurrentTheme());
     // Discover and load installed plugins
     discoverAndLoad();
+    // Restore last session tabs
+    restoreSession();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -39,8 +42,6 @@ function AppInner() {
     const scheme = resolveScheme({ scheme: "light", name: "", label: "", shikiTheme: "", tokens: {} }, colorScheme);
     pluginManager.emitThemeChange(themeName, scheme);
   }, [themeName, colorScheme]);
-
-  const { openFile, tabs, activeTabId } = useFileStore();
 
   // Notify plugins when the active file changes
   useEffect(() => {

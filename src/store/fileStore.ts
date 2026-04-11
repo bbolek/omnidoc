@@ -1,6 +1,12 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { invoke } from "@tauri-apps/api/core";
 import type { Tab, FileEntry, RecentFile, FileInfo } from "../types";
+
+interface SessionTab {
+  path: string;
+  name: string;
+}
 
 interface FileState {
   openFolder: string | null;
@@ -10,17 +16,26 @@ interface FileState {
   recentFiles: RecentFile[];
   splitView: boolean;
   rightPaneTabId: string | null;
+  /** Persisted last session for restore on startup. */
+  lastSession: { tabs: SessionTab[]; activePath: string | null } | null;
 
   setFolder: (path: string | null) => void;
   setTree: (entries: FileEntry[]) => void;
   openFile: (path: string, name: string, content: string, info?: FileInfo) => void;
   closeTab: (id: string) => void;
+  closeAllTabs: () => void;
+  closeTabsToRight: (id: string) => void;
+  closeTabsToLeft: (id: string) => void;
+  closeOtherTabs: (id: string) => void;
+  reorderTabs: (newTabs: Tab[]) => void;
   setActiveTab: (id: string) => void;
   updateTabContent: (id: string, content: string) => void;
   addRecentFile: (file: RecentFile) => void;
   setSplitView: (enabled: boolean) => void;
   setRightPaneTab: (id: string | null) => void;
   getActiveTab: () => Tab | null;
+  /** Re-open tabs from the last session. Call once on app startup. */
+  restoreSession: () => Promise<void>;
 }
 
 let tabCounter = 0;
@@ -36,6 +51,7 @@ export const useFileStore = create<FileState>()(
       recentFiles: [],
       splitView: false,
       rightPaneTabId: null,
+      lastSession: null,
 
       setFolder: (path) => set({ openFolder: path, tree: [] }),
 
@@ -55,14 +71,8 @@ export const useFileStore = create<FileState>()(
           activeTabId: id,
         }));
 
-        // Add to recent files
         const ext = path.split(".").pop()?.toLowerCase();
-        get().addRecentFile({
-          path,
-          name,
-          accessedAt: Date.now(),
-          extension: ext,
-        });
+        get().addRecentFile({ path, name, accessedAt: Date.now(), extension: ext });
       },
 
       closeTab: (id) => {
@@ -72,21 +82,59 @@ export const useFileStore = create<FileState>()(
           let newActive = state.activeTabId;
 
           if (state.activeTabId === id) {
-            if (newTabs.length === 0) {
-              newActive = null;
-            } else if (idx > 0) {
-              newActive = newTabs[idx - 1].id;
-            } else {
-              newActive = newTabs[0].id;
-            }
+            if (newTabs.length === 0) newActive = null;
+            else if (idx > 0) newActive = newTabs[idx - 1].id;
+            else newActive = newTabs[0].id;
           }
 
-          const newRightPane =
-            state.rightPaneTabId === id ? null : state.rightPaneTabId;
-
-          return { tabs: newTabs, activeTabId: newActive, rightPaneTabId: newRightPane };
+          return {
+            tabs: newTabs,
+            activeTabId: newActive,
+            rightPaneTabId: state.rightPaneTabId === id ? null : state.rightPaneTabId,
+          };
         });
       },
+
+      closeAllTabs: () => set({ tabs: [], activeTabId: null, rightPaneTabId: null }),
+
+      closeTabsToRight: (id) => {
+        const { tabs, activeTabId, rightPaneTabId } = get();
+        const idx = tabs.findIndex((t) => t.id === id);
+        if (idx < 0) return;
+        const newTabs = tabs.slice(0, idx + 1);
+        const activeStillOpen = newTabs.some((t) => t.id === activeTabId);
+        set({
+          tabs: newTabs,
+          activeTabId: activeStillOpen ? activeTabId : (newTabs[newTabs.length - 1]?.id ?? null),
+          rightPaneTabId: newTabs.some((t) => t.id === rightPaneTabId) ? rightPaneTabId : null,
+        });
+      },
+
+      closeTabsToLeft: (id) => {
+        const { tabs, activeTabId, rightPaneTabId } = get();
+        const idx = tabs.findIndex((t) => t.id === id);
+        if (idx < 0) return;
+        const newTabs = tabs.slice(idx);
+        const activeStillOpen = newTabs.some((t) => t.id === activeTabId);
+        set({
+          tabs: newTabs,
+          activeTabId: activeStillOpen ? activeTabId : (newTabs[0]?.id ?? null),
+          rightPaneTabId: newTabs.some((t) => t.id === rightPaneTabId) ? rightPaneTabId : null,
+        });
+      },
+
+      closeOtherTabs: (id) => {
+        const { tabs, rightPaneTabId } = get();
+        const tab = tabs.find((t) => t.id === id);
+        if (!tab) return;
+        set({
+          tabs: [tab],
+          activeTabId: id,
+          rightPaneTabId: rightPaneTabId === id ? id : null,
+        });
+      },
+
+      reorderTabs: (newTabs) => set({ tabs: newTabs }),
 
       setActiveTab: (id) => set({ activeTabId: id }),
 
@@ -111,12 +159,38 @@ export const useFileStore = create<FileState>()(
         const { tabs, activeTabId } = get();
         return tabs.find((t) => t.id === activeTabId) ?? null;
       },
+
+      restoreSession: async () => {
+        const { lastSession } = get();
+        if (!lastSession?.tabs?.length) return;
+
+        for (const { path, name } of lastSession.tabs) {
+          try {
+            const [content, info] = await Promise.all([
+              invoke<string>("read_file", { path }),
+              invoke<FileInfo>("get_file_info", { path }),
+            ]);
+            get().openFile(path, name, content as string, info as FileInfo);
+          } catch {
+            // File deleted or moved — skip silently
+          }
+        }
+
+        if (lastSession.activePath) {
+          const active = get().tabs.find((t) => t.path === lastSession.activePath);
+          if (active) get().setActiveTab(active.id);
+        }
+      },
     }),
     {
       name: "md-viewer-files",
       partialize: (state) => ({
         recentFiles: state.recentFiles,
         openFolder: state.openFolder,
+        lastSession: {
+          tabs: state.tabs.map((t) => ({ path: t.path, name: t.name })),
+          activePath: state.tabs.find((t) => t.id === state.activeTabId)?.path ?? null,
+        },
       }),
     }
   )
