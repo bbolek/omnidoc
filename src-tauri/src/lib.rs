@@ -17,6 +17,8 @@ pub fn run() {
             commands::watcher::unwatch_path,
             commands::watcher::unwatch_all,
             commands::export::export_html,
+            commands::themes::load_user_themes,
+            commands::themes::save_user_themes,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -3,6 +3,7 @@ import { platform } from "@tauri-apps/plugin-os";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import { useThemeInit } from "./hooks/useTheme";
+import { useThemeStore } from "./store/themeStore";
 import { useGlobalKeyboard } from "./hooks/useKeyboard";
 import { useAllFileWatchers } from "./hooks/useFileWatcher";
 import { useUiStore } from "./store/uiStore";
@@ -19,6 +20,13 @@ function AppInner() {
   useThemeInit();
   useGlobalKeyboard();
   useAllFileWatchers();
+  const { loadUserThemes, applyCurrentTheme } = useThemeStore();
+
+  useEffect(() => {
+    // Load user themes first, then re-apply current theme so user theme tokens are present
+    loadUserThemes().then(() => applyCurrentTheme());
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const { openFile } = useFileStore();
 

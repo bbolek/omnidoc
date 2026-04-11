@@ -60,4 +60,5 @@ export interface ThemeDefinition {
   scheme: "light" | "dark";
   shikiTheme: string;
   tokens: Record<string, string>;
+  isUserTheme?: boolean;
 }
