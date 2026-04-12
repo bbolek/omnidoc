@@ -15,6 +15,7 @@ interface UiState {
   globalSearchQuery: string;
   pendingFindQuery: string | null;
   showLineNumbers: boolean;
+  zenMode: boolean;
 
   setSidebarPosition: (pos: SidebarPosition) => void;
   toggleSidebar: () => void;
@@ -33,6 +34,8 @@ interface UiState {
   setPendingFindQuery: (q: string | null) => void;
   toggleLineNumbers: () => void;
   setShowLineNumbers: (v: boolean) => void;
+  toggleZenMode: () => void;
+  setZenMode: (v: boolean) => void;
 }
 
 export const useUiStore = create<UiState>()(
@@ -50,6 +53,7 @@ export const useUiStore = create<UiState>()(
       globalSearchQuery: "",
       pendingFindQuery: null,
       showLineNumbers: false,
+      zenMode: false,
 
       setSidebarPosition: (pos) => set({ sidebarPosition: pos }),
       toggleSidebar: () => set((s) => ({ sidebarVisible: !s.sidebarVisible })),
@@ -69,6 +73,8 @@ export const useUiStore = create<UiState>()(
       setPendingFindQuery: (q) => set({ pendingFindQuery: q }),
       toggleLineNumbers: () => set((s) => ({ showLineNumbers: !s.showLineNumbers })),
       setShowLineNumbers: (v) => set({ showLineNumbers: v }),
+      toggleZenMode: () => set((s) => ({ zenMode: !s.zenMode })),
+      setZenMode: (v) => set({ zenMode: v }),
     }),
     {
       name: "md-viewer-ui",

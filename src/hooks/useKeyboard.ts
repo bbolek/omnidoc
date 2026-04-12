@@ -15,6 +15,7 @@ export function useGlobalKeyboard() {
     toggleSidebar, toggleSearch, setShortcutsVisible, setSearchVisible,
     searchVisible, increaseZoom, decreaseZoom, resetZoom,
     setQuickOpenVisible, setActiveSidebarPanel,
+    toggleZenMode, setZenMode, zenMode,
   } = useUiStore();
 
   const handler = useCallback(
@@ -81,6 +82,13 @@ export function useGlobalKeyboard() {
       if (ctrl && e.key === "\\") {
         e.preventDefault();
         setSplitView(!splitView);
+        return;
+      }
+
+      // Ctrl+Shift+Z → toggle zen / focus mode
+      if (ctrl && e.shiftKey && (e.key === "Z" || e.key === "z")) {
+        e.preventDefault();
+        toggleZenMode();
         return;
       }
 
@@ -183,10 +191,11 @@ export function useGlobalKeyboard() {
         return;
       }
 
-      // Escape → close overlays
+      // Escape → close overlays / exit zen mode
       if (e.key === "Escape") {
         setShortcutsVisible(false);
         setSearchVisible(false);
+        if (zenMode) setZenMode(false);
       }
     },
     [
@@ -194,6 +203,7 @@ export function useGlobalKeyboard() {
       setShortcutsVisible, setSearchVisible, setSplitView, splitView,
       tabs, updateTabContent, nextTab, prevTab, searchVisible,
       increaseZoom, decreaseZoom, resetZoom, setQuickOpenVisible, setActiveSidebarPanel,
+      toggleZenMode, setZenMode, zenMode,
     ]
   );
 

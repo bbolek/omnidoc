@@ -2,7 +2,7 @@ import React from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
-import { FolderOpen, File, X, Minus, Square } from "lucide-react";
+import { FolderOpen, File, X, Minus, Square, Focus, Printer } from "lucide-react";
 import { useUiStore } from "../../store/uiStore";
 import { useFileStore } from "../../store/fileStore";
 import { getFileName } from "../../utils/fileUtils";
@@ -57,8 +57,22 @@ async function handleOpenFolder(
   }
 }
 
+function handleExportPdf(title: string | null) {
+  const previousTitle = document.title;
+  if (title) document.title = title;
+  try {
+    window.print();
+  } finally {
+    // Restore title after print dialog closes (some browsers print async)
+    setTimeout(() => {
+      document.title = previousTitle;
+    }, 1000);
+  }
+}
+
 export function Titlebar() {
   const platform = useUiStore((s) => s.platform);
+  const toggleZenMode = useUiStore((s) => s.toggleZenMode);
   const { openFile, setFolder, setTree, tabs, activeTabId } = useFileStore();
   const activeTab = tabs.find((t) => t.id === activeTabId);
 
@@ -126,6 +140,16 @@ export function Titlebar() {
           icon={<FolderOpen size={14} />}
           title="Open Folder"
           onClick={() => handleOpenFolder(setFolder, setTree)}
+        />
+        <TitlebarButton
+          icon={<Printer size={14} />}
+          title="Export to PDF"
+          onClick={() => handleExportPdf(activeTab?.name ?? null)}
+        />
+        <TitlebarButton
+          icon={<Focus size={14} />}
+          title="Zen Mode (Ctrl+Shift+Z)"
+          onClick={toggleZenMode}
         />
       </div>
 
