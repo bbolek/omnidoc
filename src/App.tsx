@@ -1,4 +1,6 @@
 import { useEffect } from "react";
+import { Loader2 } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import { platform } from "@tauri-apps/plugin-os";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useThemeInit } from "./hooks/useTheme";
@@ -31,6 +33,7 @@ function AppInner() {
   }, [zoomLevel]);
   const { discoverAndLoad } = usePluginStore();
   const { openFile, tabs, activeTabId, restoreSession } = useFileStore();
+  const isRestoring = useFileStore((s) => s.isRestoring);
 
   useEffect(() => {
     // Load user themes first, then re-apply so user theme tokens are present
@@ -90,7 +93,45 @@ function AppInner() {
       <QuickOpen />
       <KeyboardShortcuts />
       <ToastContainer />
+      <SessionLoader visible={isRestoring} />
     </>
+  );
+}
+
+/**
+ * Full-screen overlay shown while the app is booting and the previous
+ * session's tabs are being re-opened. Masks the per-tab flashes that would
+ * otherwise happen as each restored file mounts in sequence.
+ */
+function SessionLoader({ visible }: { visible: boolean }) {
+  return (
+    <AnimatePresence>
+      {visible && (
+        <motion.div
+          initial={{ opacity: 1 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2, ease: "easeOut" }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 9999,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 12,
+            background: "var(--color-bg)",
+            color: "var(--color-text-muted)",
+            fontSize: 13,
+            pointerEvents: "all",
+          }}
+        >
+          <Loader2 size={28} className="spin" style={{ color: "var(--color-accent)" }} />
+          <div>Restoring session…</div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
 

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Startup loader overlay covers the app while the previous session's tabs are being re-opened, so the UI no longer flashes through each tab as it mounts.
+
 ### Fixed
 - PDF viewer rendered every page as a thin squashed strip on multi-page documents: each `PdfPage` fired its `page.render()` call as soon as it mounted, so 17 concurrent renders ran against the same document and pdf.js's shared worker state produced corrupt/collapsed output. Renders are now serialized through a shared promise chain on `PdfViewer`, so pages render one at a time.
 - PDF viewer did not scroll vertically: the scroll container was `flex: 1` with the default `min-height: auto`, so it grew to fit all pages instead of constraining to the parent height and `overflow: auto` never triggered. Setting `min-height: 0` lets the container clip and scroll its pages.
