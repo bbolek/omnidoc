@@ -122,7 +122,7 @@ export function StatusBar() {
           </div>
           <div className="status-separator" />
           {/* Theme picker */}
-          <div className="status-item" style={{ position: "relative" }}>
+          <div className="status-item">
             <button
               ref={themeButtonRef}
               onClick={() => setShowThemePicker((v) => !v)}
@@ -143,9 +143,9 @@ export function StatusBar() {
                     exit={{ opacity: 0, y: 4 }}
                     transition={{ duration: 0.12 }}
                     style={{
-                      position: "absolute",
-                      bottom: "calc(100% + 8px)",
-                      right: 0,
+                      position: "fixed",
+                      bottom: "calc(var(--status-bar-height) + 8px)",
+                      right: 8,
                       background: "var(--color-bg-overlay)",
                       border: "1px solid var(--color-border)",
                       borderRadius: "var(--radius)",
