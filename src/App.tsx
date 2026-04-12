@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import { platform } from "@tauri-apps/plugin-os";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { invoke } from "@tauri-apps/api/core";
 import { useThemeInit } from "./hooks/useTheme";
 import { useThemeStore } from "./store/themeStore";
 import { usePluginStore } from "./store/pluginStore";
@@ -16,9 +15,8 @@ import { KeyboardShortcuts } from "./components/ui/KeyboardShortcuts";
 import { ToastContainer } from "./components/ui/Toast";
 import { SearchOverlay } from "./components/search/SearchOverlay";
 import { QuickOpen } from "./components/search/QuickOpen";
-import { getFileName } from "./utils/fileUtils";
+import { getFileName, loadFileForOpen } from "./utils/fileUtils";
 import { showToast } from "./components/ui/Toast";
-import type { FileInfo } from "./types";
 
 function AppInner() {
   useThemeInit();
@@ -69,10 +67,7 @@ function AppInner() {
           const paths = event.payload.paths ?? [];
           for (const path of paths) {
             try {
-              const [content, info] = await Promise.all([
-                invoke<string>("read_file", { path }),
-                invoke<FileInfo>("get_file_info", { path }),
-              ]);
+              const { content, info } = await loadFileForOpen(path);
               if (!info.is_dir) {
                 openFile(path, getFileName(path), content, info);
               }

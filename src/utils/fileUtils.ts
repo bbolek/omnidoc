@@ -1,4 +1,5 @@
-import type { FileType } from "../types";
+import { invoke } from "@tauri-apps/api/core";
+import type { FileInfo, FileType } from "../types";
 
 const MD_EXTENSIONS = new Set(["md", "mdx", "markdown", "mdown", "mkd", "mkdn"]);
 const HTML_EXTENSIONS = new Set(["html", "htm"]);
@@ -17,6 +18,7 @@ const JSON_EXTENSIONS = new Set(["json", "jsonc", "json5"]);
 const YAML_EXTENSIONS = new Set(["yaml", "yml"]);
 const TOML_EXTENSIONS = new Set(["toml"]);
 const TEXT_EXTENSIONS = new Set(["txt", "log", "text", "ini", "cfg", "conf", "env"]);
+const PDF_EXTENSIONS = new Set(["pdf"]);
 
 export function getFileType(extension?: string): FileType {
   if (!extension) return "text";
@@ -29,7 +31,26 @@ export function getFileType(extension?: string): FileType {
   if (CSV_EXTENSIONS.has(ext)) return "csv";
   if (CODE_EXTENSIONS.has(ext)) return "code";
   if (TEXT_EXTENSIONS.has(ext)) return "text";
+  if (PDF_EXTENSIONS.has(ext)) return "pdf";
   return "text";
+}
+
+/**
+ * Binary file types that are viewable but should not be loaded as text.
+ * The corresponding viewer is responsible for fetching the bytes itself
+ * (e.g., PdfViewer uses the `read_file_bytes` Tauri command).
+ */
+export function isBinaryViewable(extension?: string): boolean {
+  if (!extension) return false;
+  return PDF_EXTENSIONS.has(extension.toLowerCase());
+}
+
+/**
+ * A file can be opened in a tab if it is either plain text or a binary format
+ * we have a dedicated viewer for.
+ */
+export function isOpenable(extension?: string): boolean {
+  return isTextReadable(extension) || isBinaryViewable(extension);
 }
 
 export function getLanguageForExtension(ext: string): string {
@@ -75,6 +96,26 @@ export function getFileExtension(path: string): string {
   const name = getFileName(path);
   const dot = name.lastIndexOf(".");
   return dot > 0 ? name.slice(dot + 1).toLowerCase() : "";
+}
+
+/**
+ * Load a file for opening: reads text content for text files, or an empty
+ * string for binary-viewable files (the dedicated viewer fetches its own bytes).
+ */
+export async function loadFileForOpen(
+  path: string,
+  extension?: string
+): Promise<{ content: string; info: FileInfo }> {
+  const ext = extension ?? getFileExtension(path);
+  if (isBinaryViewable(ext)) {
+    const info = await invoke<FileInfo>("get_file_info", { path });
+    return { content: "", info };
+  }
+  const [content, info] = await Promise.all([
+    invoke<string>("read_file", { path }),
+    invoke<FileInfo>("get_file_info", { path }),
+  ]);
+  return { content, info };
 }
 
 export function isTextReadable(extension?: string): boolean {
