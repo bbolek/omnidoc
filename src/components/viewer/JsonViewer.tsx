@@ -1,7 +1,5 @@
 import { useEffect, useState } from "react";
-import { useThemeStore } from "../../store/themeStore";
-import { getShikiTheme } from "../../themes";
-import { highlight } from "../../utils/shikiUtils";
+import { JsonTree } from "./JsonTree";
 import type { Tab } from "../../types";
 
 interface Props {
@@ -9,29 +7,18 @@ interface Props {
 }
 
 export function JsonViewer({ tab }: Props) {
-  const { themeName } = useThemeStore();
-  const [html, setHtml] = useState("");
+  const [parsed, setParsed] = useState<unknown>(null);
   const [error, setError] = useState<string | null>(null);
-  const [formatted, setFormatted] = useState(tab.content);
 
   useEffect(() => {
     try {
-      const parsed = JSON.parse(tab.content);
-      const pretty = JSON.stringify(parsed, null, 2);
-      setFormatted(pretty);
+      setParsed(JSON.parse(tab.content));
       setError(null);
     } catch (e) {
-      setFormatted(tab.content);
+      setParsed(null);
       setError(`JSON parse error: ${e}`);
     }
   }, [tab.content]);
-
-  useEffect(() => {
-    const shikiTheme = getShikiTheme(themeName);
-    highlight(formatted, "json", shikiTheme)
-      .then(setHtml)
-      .catch(() => setHtml(""));
-  }, [formatted, themeName]);
 
   return (
     <div className="json-viewer selectable fade-in">
@@ -48,15 +35,12 @@ export function JsonViewer({ tab }: Props) {
           }}
         >
           {error}
+          <pre style={{ marginTop: 8, fontFamily: "'Fira Code', monospace", fontSize: 12, whiteSpace: "pre-wrap" }}>
+            {tab.content}
+          </pre>
         </div>
       )}
-      {html ? (
-        <div dangerouslySetInnerHTML={{ __html: html }} />
-      ) : (
-        <pre style={{ fontFamily: "'Fira Code', monospace", fontSize: 13, lineHeight: 1.6 }}>
-          {formatted}
-        </pre>
-      )}
+      {parsed !== null && <JsonTree data={parsed as never} />}
     </div>
   );
 }
