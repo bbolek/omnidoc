@@ -29,6 +29,8 @@ interface FileState {
   closeOtherTabs: (id: string) => void;
   reorderTabs: (newTabs: Tab[]) => void;
   setActiveTab: (id: string) => void;
+  nextTab: () => void;
+  prevTab: () => void;
   updateTabContent: (id: string, content: string) => void;
   addRecentFile: (file: RecentFile) => void;
   setSplitView: (enabled: boolean) => void;
@@ -137,6 +139,20 @@ export const useFileStore = create<FileState>()(
       reorderTabs: (newTabs) => set({ tabs: newTabs }),
 
       setActiveTab: (id) => set({ activeTabId: id }),
+
+      nextTab: () => {
+        const { tabs, activeTabId } = get();
+        if (tabs.length < 2) return;
+        const idx = tabs.findIndex((t) => t.id === activeTabId);
+        get().setActiveTab(tabs[(idx + 1) % tabs.length].id);
+      },
+
+      prevTab: () => {
+        const { tabs, activeTabId } = get();
+        if (tabs.length < 2) return;
+        const idx = tabs.findIndex((t) => t.id === activeTabId);
+        get().setActiveTab(tabs[(idx - 1 + tabs.length) % tabs.length].id);
+      },
 
       updateTabContent: (id, content) => {
         set((state) => ({

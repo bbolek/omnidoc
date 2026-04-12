@@ -441,7 +441,7 @@ body {
   padding: 32px 48px;
   color: var(--color-text);
   font-family: "Inter", system-ui, sans-serif;
-  font-size: 15px;
+  font-size: calc(15px * var(--content-zoom, 1));
   line-height: 1.7;
   user-select: text;
 }
@@ -916,7 +916,7 @@ kbd {
 .code-viewer .shiki {
   border-radius: var(--radius);
   font-family: "Fira Code", monospace;
-  font-size: 13px;
+  font-size: calc(13px * var(--content-zoom, 1));
   line-height: 1.6;
   padding: 1.25rem 1.5rem;
   overflow-x: auto;

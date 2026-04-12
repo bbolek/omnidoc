@@ -110,6 +110,15 @@ export function SearchOverlay() {
     }
   }, [searchVisible, clearHighlights]);
 
+  // Allow external triggers (F3 / Shift+F3) to navigate matches
+  useEffect(() => {
+    const handler = (e: Event) => {
+      navigate((e as CustomEvent<{ direction: 1 | -1 }>).detail.direction);
+    };
+    window.addEventListener("search:navigate", handler);
+    return () => window.removeEventListener("search:navigate", handler);
+  }, [navigate]);
+
   useEffect(() => {
     if (searchVisible && query) {
       const timeout = setTimeout(() => applyHighlights(query), 200);

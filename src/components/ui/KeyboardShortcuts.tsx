@@ -11,15 +11,30 @@ const SHORTCUTS = [
     { keys: [`${mod}+O`], description: "Open file" },
     { keys: [`${mod}+Shift+O`], description: "Open folder" },
     { keys: [`${mod}+W`], description: "Close current tab" },
+    { keys: [`${mod}+Shift+W`], description: "Close all tabs" },
+  ]},
+  { group: "Tab Navigation", items: [
+    { keys: [`${mod}+Tab`], description: "Next tab" },
+    { keys: [`${mod}+Shift+Tab`], description: "Previous tab" },
+    { keys: [`${mod}+PageDown`], description: "Next tab" },
+    { keys: [`${mod}+PageUp`], description: "Previous tab" },
   ]},
   { group: "View", items: [
     { keys: [`${mod}+B`], description: "Toggle sidebar" },
     { keys: [`${mod}+\\`], description: "Toggle split view" },
+    { keys: ["F11"], description: "Toggle fullscreen" },
     { keys: ["?"], description: "Keyboard shortcuts" },
   ]},
-  { group: "Navigation", items: [
+  { group: "Zoom", items: [
+    { keys: [`${mod}+=`], description: "Zoom in" },
+    { keys: [`${mod}+-`], description: "Zoom out" },
+    { keys: [`${mod}+0`], description: "Reset zoom" },
+  ]},
+  { group: "Search", items: [
     { keys: [`${mod}+F`], description: "Search in file" },
-    { keys: ["Escape"], description: "Close overlay / search" },
+    { keys: ["F3"], description: "Find next" },
+    { keys: ["Shift+F3"], description: "Find previous" },
+    { keys: ["Escape"], description: "Close search / overlay" },
   ]},
   { group: "Editing", items: [
     { keys: [`${mod}+Shift+F`], description: "Format document (JSON, XML, YAML, TOML)" },
