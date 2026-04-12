@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, createContext, useContext } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { ChevronRight, ChevronDown, FolderOpen, Folder, FolderPlus, ChevronsDownUp, Search, X } from "lucide-react";
@@ -9,13 +9,27 @@ import { FileIcon } from "../ui/FileIcon";
 import { ContextMenu, ContextMenuItem } from "../ui/ContextMenu";
 import type { FileEntry, FileInfo } from "../../types";
 
+interface NodeHandlers {
+  expand: () => void;
+  collapse: () => void;
+}
+
+interface TreeNavContextValue {
+  focusedPath: string | null;
+  setFocusedPath: (path: string | null) => void;
+  nodeHandlersRef: React.MutableRefObject<Map<string, NodeHandlers>>;
+}
+
+const TreeNavContext = createContext<TreeNavContextValue | null>(null);
+
 interface TreeNodeProps {
   entry: FileEntry;
   depth: number;
   collapseKey: number;
+  parentPath?: string;
 }
 
-function TreeNode({ entry, depth, collapseKey }: TreeNodeProps) {
+function TreeNode({ entry, depth, collapseKey, parentPath }: TreeNodeProps) {
   const [expanded, setExpanded] = useState(false);
   const [children, setChildren] = useState<FileEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -23,6 +37,9 @@ function TreeNode({ entry, depth, collapseKey }: TreeNodeProps) {
 
   const { openFile, tabs, activeTabId } = useFileStore();
   const isActive = tabs.find((t) => t.path === entry.path && t.id === activeTabId);
+
+  const navCtx = useContext(TreeNavContext);
+  const isFocused = navCtx?.focusedPath === entry.path;
 
   // Collapse when parent requests it
   useEffect(() => {
@@ -67,6 +84,16 @@ function TreeNode({ entry, depth, collapseKey }: TreeNodeProps) {
     }
   }, [entry, openFile, handleExpand]);
 
+  // Register expand/collapse handlers with the nav context so the keyboard handler can trigger them
+  useEffect(() => {
+    if (!navCtx) return;
+    navCtx.nodeHandlersRef.current.set(entry.path, {
+      expand: () => { if (!expanded) handleExpand(); },
+      collapse: () => setExpanded(false),
+    });
+    return () => { navCtx.nodeHandlersRef.current.delete(entry.path); };
+  }, [entry.path, expanded, handleExpand, navCtx]);
+
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -81,11 +108,16 @@ function TreeNode({ entry, depth, collapseKey }: TreeNodeProps) {
   return (
     <>
       <div
-        className={`tree-item ${isActive ? "selected" : ""}`}
+        className={`tree-item ${isActive ? "selected" : ""} ${isFocused ? "focused" : ""}`}
         style={{ paddingLeft: 8 + depth * 14 }}
-        onClick={handleFileOpen}
+        onClick={() => { navCtx?.setFocusedPath(entry.path); handleFileOpen(); }}
         onContextMenu={handleContextMenu}
         data-context-menu
+        data-tree-item
+        data-path={entry.path}
+        data-parent-path={parentPath ?? ""}
+        data-is-dir={entry.is_dir ? "true" : "false"}
+        data-expanded={expanded ? "true" : "false"}
       >
         {/* Expand arrow for dirs */}
         {entry.is_dir ? (
@@ -122,7 +154,7 @@ function TreeNode({ entry, depth, collapseKey }: TreeNodeProps) {
             style={{ overflow: "hidden" }}
           >
             {children.map((child) => (
-              <TreeNode key={child.path} entry={child} depth={depth + 1} collapseKey={collapseKey} />
+              <TreeNode key={child.path} entry={child} depth={depth + 1} collapseKey={collapseKey} parentPath={entry.path} />
             ))}
           </motion.div>
         )}
@@ -232,6 +264,77 @@ export function FileTree() {
   const [isSearching, setIsSearching] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  const [focusedPath, setFocusedPath] = useState<string | null>(null);
+  const nodeHandlersRef = useRef<Map<string, NodeHandlers>>(new Map());
+  const treeContainerRef = useRef<HTMLDivElement>(null);
+
+  // Clear focus when search query changes
+  useEffect(() => {
+    setFocusedPath(null);
+  }, [query]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    const keys = ["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Enter", "Home", "End"];
+    if (!keys.includes(e.key)) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const container = treeContainerRef.current;
+    if (!container) return;
+
+    const items = Array.from(container.querySelectorAll<HTMLElement>("[data-tree-item]"));
+    if (items.length === 0) return;
+
+    const currentIdx = focusedPath
+      ? items.findIndex((el) => el.dataset.path === focusedPath)
+      : -1;
+
+    const focusItem = (el: HTMLElement) => {
+      setFocusedPath(el.dataset.path ?? null);
+      el.scrollIntoView({ block: "nearest" });
+    };
+
+    if (e.key === "ArrowDown") {
+      focusItem(currentIdx < items.length - 1 ? items[currentIdx + 1] : items[0]);
+      return;
+    }
+    if (e.key === "ArrowUp") {
+      focusItem(currentIdx > 0 ? items[currentIdx - 1] : items[items.length - 1]);
+      return;
+    }
+    if (e.key === "Home") { focusItem(items[0]); return; }
+    if (e.key === "End")  { focusItem(items[items.length - 1]); return; }
+
+    if (currentIdx === -1) return;
+    const current = items[currentIdx];
+    const path       = current.dataset.path ?? "";
+    const isDir      = current.dataset.isDir === "true";
+    const isExpanded = current.dataset.expanded === "true";
+    const parentPath = current.dataset.parentPath ?? "";
+
+    if (e.key === "ArrowRight") {
+      if (isDir && !isExpanded) {
+        nodeHandlersRef.current.get(path)?.expand();
+      } else if (isDir && isExpanded && currentIdx + 1 < items.length) {
+        focusItem(items[currentIdx + 1]);
+      }
+      return;
+    }
+    if (e.key === "ArrowLeft") {
+      if (isDir && isExpanded) {
+        nodeHandlersRef.current.get(path)?.collapse();
+      } else if (parentPath) {
+        const parentEl = items.find((el) => el.dataset.path === parentPath);
+        if (parentEl) focusItem(parentEl);
+      }
+      return;
+    }
+    if (e.key === "Enter") {
+      current.click();
+      return;
+    }
+  }, [focusedPath]);
+
   const handleOpenFolder = async () => {
     const selected = await open({ directory: true, multiple: false });
     if (typeof selected === "string") {
@@ -310,6 +413,7 @@ export function FileTree() {
   const isFiltered = query.trim().length > 0;
 
   return (
+    <TreeNavContext.Provider value={{ focusedPath, setFocusedPath, nodeHandlersRef }}>
     <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", paddingBottom: 8 }}>
       {/* Folder root label + collapse-all button */}
       <div
@@ -332,7 +436,7 @@ export function FileTree() {
           {folderName}
         </span>
         <button
-          onClick={() => setCollapseKey((k) => k + 1)}
+          onClick={() => { setCollapseKey((k) => k + 1); setFocusedPath(null); }}
           title="Collapse All"
           style={{
             background: "none",
@@ -408,7 +512,12 @@ export function FileTree() {
       </div>
 
       {/* Tree or search results */}
-      <div style={{ flex: 1, overflow: "auto" }}>
+      <div
+        ref={treeContainerRef}
+        style={{ flex: 1, overflow: "auto", outline: "none" }}
+        tabIndex={0}
+        onKeyDown={handleKeyDown}
+      >
         {isFiltered ? (
           isSearching ? (
             <div style={{ padding: "8px 12px", fontSize: 12, color: "var(--color-text-muted)" }}>
@@ -430,5 +539,6 @@ export function FileTree() {
         )}
       </div>
     </div>
+    </TreeNavContext.Provider>
   );
 }

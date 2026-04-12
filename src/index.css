@@ -427,6 +427,20 @@ body {
   color: var(--color-sidebar-active-text);
 }
 
+.tree-item.focused {
+  background: var(--color-sidebar-hover);
+  color: var(--color-text);
+  outline: 1px solid var(--color-accent);
+  outline-offset: -1px;
+}
+
+.tree-item.focused.selected {
+  background: var(--color-sidebar-active);
+  color: var(--color-sidebar-active-text);
+  outline: 1px solid var(--color-accent);
+  outline-offset: -1px;
+}
+
 .tree-item-name {
   overflow: hidden;
   text-overflow: ellipsis;
