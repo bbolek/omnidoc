@@ -195,9 +195,18 @@ pub struct GitStatusEntry {
 
 #[tauri::command]
 pub async fn get_git_status(folder: String) -> Result<Vec<GitStatusEntry>, String> {
-    let output = tokio::process::Command::new("git")
-        .args(["status", "--porcelain", "-u"])
-        .current_dir(&folder)
+    let mut cmd = tokio::process::Command::new("git");
+    cmd.args(["status", "--porcelain", "-u"]).current_dir(&folder);
+
+    // On Windows, prevent a console window from flashing each time `git` is spawned.
+    // CREATE_NO_WINDOW = 0x08000000
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000);
+    }
+
+    let output = cmd
         .output()
         .await
         .map_err(|e| format!("Failed to run git: {e}"))?;
