@@ -22,6 +22,7 @@ const SHORTCUTS = [
   { group: "View", items: [
     { keys: [`${mod}+B`], description: "Toggle sidebar" },
     { keys: [`${mod}+\\`], description: "Toggle split view" },
+    { keys: [`${mod}+Shift+Z`], description: "Toggle Zen / Focus mode" },
     { keys: ["F11"], description: "Toggle fullscreen" },
     { keys: ["?"], description: "Keyboard shortcuts" },
   ]},

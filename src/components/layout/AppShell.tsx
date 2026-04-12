@@ -8,10 +8,10 @@ import { StatusBar } from "./StatusBar";
 import { MainArea } from "./MainArea";
 
 export function AppShell() {
-  const { sidebarPosition, sidebarVisible } = useUiStore();
+  const { sidebarPosition, sidebarVisible, zenMode } = useUiStore();
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell${zenMode ? " zen-mode" : ""}`}>
       <Titlebar />
 
       <div className="app-body">
@@ -59,6 +59,10 @@ export function AppShell() {
       </div>
 
       <StatusBar />
+
+      {zenMode && (
+        <div className="zen-exit-hint">Press Esc or Ctrl+Shift+Z to exit Zen Mode</div>
+      )}
     </div>
   );
 }

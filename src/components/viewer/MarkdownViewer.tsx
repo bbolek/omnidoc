@@ -12,6 +12,7 @@ import { getShikiTheme } from "../../themes";
 import { highlight } from "../../utils/shikiUtils";
 import { getLanguageForExtension } from "../../utils/fileUtils";
 import { MermaidBlock } from "./MermaidBlock";
+import { Callout, extractCalloutFromChildren } from "./Callout";
 import { MarkdownEditor } from "../editor/MarkdownEditor";
 import type { Tab } from "../../types";
 import "katex/dist/katex.min.css";
@@ -164,6 +165,18 @@ function makeHeadingComponent(level: 1 | 2 | 3 | 4 | 5 | 6) {
   };
 }
 
+function CalloutBlockquote({
+  children,
+  node: _node,
+  ...props
+}: React.HTMLAttributes<HTMLQuoteElement> & { node?: unknown }) {
+  const extracted = extractCalloutFromChildren(children);
+  if (extracted) {
+    return <Callout match={extracted.match}>{extracted.content}</Callout>;
+  }
+  return <blockquote {...props}>{children}</blockquote>;
+}
+
 const components: Components = {
   code: CodeBlock as Components["code"],
   h1: makeHeadingComponent(1) as Components["h1"],
@@ -172,6 +185,7 @@ const components: Components = {
   h4: makeHeadingComponent(4) as Components["h4"],
   h5: makeHeadingComponent(5) as Components["h5"],
   h6: makeHeadingComponent(6) as Components["h6"],
+  blockquote: CalloutBlockquote as Components["blockquote"],
 };
 
 export function MarkdownViewer({ tab }: Props) {
@@ -271,6 +285,7 @@ export function MarkdownViewer({ tab }: Props) {
     >
       {/* Sticky toggle bar */}
       <div
+        className="markdown-viewer-toggle-bar"
         style={{
           position: isEditMode ? "relative" : "sticky",
           top: 0,
