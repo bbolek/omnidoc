@@ -33,12 +33,13 @@ const SHORTCUTS = [
   ]},
   { group: "Search", items: [
     { keys: [`${mod}+F`], description: "Search in file" },
+    { keys: [`${mod}+Shift+F`], description: "Global search (across files)" },
     { keys: ["F3"], description: "Find next" },
     { keys: ["Shift+F3"], description: "Find previous" },
     { keys: ["Escape"], description: "Close search / overlay" },
   ]},
   { group: "Editing", items: [
-    { keys: [`${mod}+Shift+F`], description: "Format document (JSON, XML, YAML, TOML)" },
+    { keys: ["Shift+Alt+F"], description: "Format document (JSON, XML, YAML, TOML)" },
   ]},
   { group: "Theme", items: [
     { keys: ["Status bar → theme name"], description: "Switch theme" },

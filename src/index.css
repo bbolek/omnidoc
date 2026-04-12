@@ -1097,10 +1097,15 @@ kbd {
 }
 
 /* ─── Zen / Focus Mode ────────────────────────────────────────────────── */
+.app-shell.zen-mode {
+  grid-template-rows: 1fr;
+}
+
 .app-shell.zen-mode .titlebar,
 .app-shell.zen-mode .activity-bar,
 .app-shell.zen-mode .sidebar,
 .app-shell.zen-mode .tab-bar,
+.app-shell.zen-mode .breadcrumb,
 .app-shell.zen-mode .status-bar {
   display: none !important;
 }
