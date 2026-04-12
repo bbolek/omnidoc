@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { WrapText } from "lucide-react";
+import { Hash, WrapText } from "lucide-react";
+import { useUiStore } from "../../store/uiStore";
 import type { Tab } from "../../types";
 
 interface Props {
@@ -8,6 +9,7 @@ interface Props {
 
 export function TextViewer({ tab }: Props) {
   const [wrap, setWrap] = useState(true);
+  const { showLineNumbers, toggleLineNumbers } = useUiStore();
   const lines = tab.content.split("\n");
 
   return (
@@ -28,6 +30,26 @@ export function TextViewer({ tab }: Props) {
       >
         <span>{lines.length} lines</span>
         <div style={{ flex: 1 }} />
+        <button
+          onClick={toggleLineNumbers}
+          title="Toggle line numbers"
+          style={{
+            background: showLineNumbers ? "var(--color-accent-subtle)" : "none",
+            border: "none",
+            borderRadius: "var(--radius-sm)",
+            padding: "2px 6px",
+            cursor: "pointer",
+            color: showLineNumbers ? "var(--color-accent)" : "var(--color-text-muted)",
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+            fontSize: 12,
+            fontFamily: "Inter, sans-serif",
+          }}
+        >
+          <Hash size={12} />
+          Lines
+        </button>
         <button
           onClick={() => setWrap((w) => !w)}
           title="Toggle word wrap"
@@ -63,22 +85,24 @@ export function TextViewer({ tab }: Props) {
         }}
       >
         {/* Line numbers */}
-        <div
-          style={{
-            padding: "16px 8px 16px 16px",
-            textAlign: "right",
-            color: "var(--color-text-muted)",
-            userSelect: "none",
-            borderRight: "1px solid var(--color-border-muted)",
-            background: "var(--color-bg-subtle)",
-            flexShrink: 0,
-            minWidth: 44,
-          }}
-        >
-          {lines.map((_, i) => (
-            <div key={i}>{i + 1}</div>
-          ))}
-        </div>
+        {showLineNumbers && (
+          <div
+            style={{
+              padding: "16px 8px 16px 16px",
+              textAlign: "right",
+              color: "var(--color-text-muted)",
+              userSelect: "none",
+              borderRight: "1px solid var(--color-border-muted)",
+              background: "var(--color-bg-subtle)",
+              flexShrink: 0,
+              minWidth: 44,
+            }}
+          >
+            {lines.map((_, i) => (
+              <div key={i}>{i + 1}</div>
+            ))}
+          </div>
+        )}
 
         {/* Text */}
         <pre
