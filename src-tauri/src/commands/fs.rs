@@ -112,6 +112,126 @@ pub async fn write_file(path: String, content: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub async fn create_file(path: String) -> Result<(), String> {
+    // Validate no forbidden characters in the final name component
+    let name = std::path::Path::new(&path)
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
+    if name.is_empty() || name.contains(['/', '\\', ':', '*', '?', '"', '<', '>', '|']) {
+        return Err("Invalid file name".to_string());
+    }
+    if std::path::Path::new(&path).exists() {
+        return Err("A file with that name already exists".to_string());
+    }
+    tokio::fs::write(&path, b"")
+        .await
+        .map_err(|e| format!("Failed to create file: {e}"))
+}
+
+#[tauri::command]
+pub async fn create_directory(path: String) -> Result<(), String> {
+    let name = std::path::Path::new(&path)
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
+    if name.is_empty() || name.contains(['/', '\\', ':', '*', '?', '"', '<', '>', '|']) {
+        return Err("Invalid folder name".to_string());
+    }
+    if std::path::Path::new(&path).exists() {
+        return Err("A folder with that name already exists".to_string());
+    }
+    tokio::fs::create_dir_all(&path)
+        .await
+        .map_err(|e| format!("Failed to create directory: {e}"))
+}
+
+#[tauri::command]
+pub async fn rename_path(from: String, to: String) -> Result<(), String> {
+    let name = std::path::Path::new(&to)
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
+    if name.is_empty() || name.contains(['/', '\\', ':', '*', '?', '"', '<', '>', '|']) {
+        return Err("Invalid name".to_string());
+    }
+    if std::path::Path::new(&to).exists() {
+        return Err("A file or folder with that name already exists".to_string());
+    }
+    tokio::fs::rename(&from, &to)
+        .await
+        .map_err(|e| format!("Failed to rename: {e}"))
+}
+
+#[tauri::command]
+pub async fn delete_path(path: String) -> Result<(), String> {
+    let meta = tokio::fs::metadata(&path)
+        .await
+        .map_err(|e| format!("Failed to get metadata: {e}"))?;
+    if meta.is_dir() {
+        tokio::fs::remove_dir_all(&path)
+            .await
+            .map_err(|e| format!("Failed to delete directory: {e}"))
+    } else {
+        tokio::fs::remove_file(&path)
+            .await
+            .map_err(|e| format!("Failed to delete file: {e}"))
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GitStatusEntry {
+    pub path: String,
+    pub status: String, // "modified" | "untracked" | "staged" | "deleted" | "ignored" | "renamed"
+}
+
+#[tauri::command]
+pub async fn get_git_status(folder: String) -> Result<Vec<GitStatusEntry>, String> {
+    let output = tokio::process::Command::new("git")
+        .args(["status", "--porcelain", "-u"])
+        .current_dir(&folder)
+        .output()
+        .await
+        .map_err(|e| format!("Failed to run git: {e}"))?;
+
+    if !output.status.success() {
+        // Not a git repo or git not found — return empty
+        return Ok(vec![]);
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut entries = Vec::new();
+
+    for line in stdout.lines() {
+        if line.len() < 3 { continue; }
+        let xy = &line[0..2];
+        let file_path = line[3..].trim_matches('"');
+
+        // Handle renames: "old -> new"
+        let actual_path = if file_path.contains(" -> ") {
+            file_path.split(" -> ").last().unwrap_or(file_path)
+        } else {
+            file_path
+        };
+
+        let status = match xy {
+            s if s.starts_with('!') => "ignored",
+            s if s.starts_with('?') => "untracked",
+            s if s.starts_with('D') || s.ends_with('D') => "deleted",
+            s if s.starts_with('R') => "renamed",
+            s if s.starts_with('A') || s.starts_with('M') || s.starts_with('C') => "staged",
+            s if s.ends_with('M') => "modified",
+            _ => "modified",
+        };
+
+        let full_path = format!("{}/{}", folder.trim_end_matches('/'), actual_path);
+        entries.push(GitStatusEntry { path: full_path, status: status.to_string() });
+    }
+
+    Ok(entries)
+}
+
+#[tauri::command]
 pub async fn get_file_info(path: String) -> Result<FileInfo, String> {
     let metadata = tokio::fs::metadata(&path)
         .await

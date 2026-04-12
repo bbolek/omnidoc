@@ -28,6 +28,8 @@ interface FileState {
   closeTabsToLeft: (id: string) => void;
   closeOtherTabs: (id: string) => void;
   reorderTabs: (newTabs: Tab[]) => void;
+  updateTabPath: (oldPath: string, newPath: string, newName: string) => void;
+  closeTabsByPath: (path: string) => void;
   setActiveTab: (id: string) => void;
   nextTab: () => void;
   prevTab: () => void;
@@ -139,6 +141,31 @@ export const useFileStore = create<FileState>()(
       },
 
       reorderTabs: (newTabs) => set({ tabs: newTabs }),
+
+      updateTabPath: (oldPath, newPath, newName) => {
+        set((state) => ({
+          tabs: state.tabs.map((t) =>
+            t.path === oldPath ? { ...t, path: newPath, name: newName } : t
+          ),
+        }));
+      },
+
+      closeTabsByPath: (path) => {
+        const { tabs, activeTabId, rightPaneTabId } = get();
+        const newTabs = tabs.filter(
+          (t) => t.path !== path && !t.path.startsWith(path + "/")
+        );
+        const activeStillOpen = newTabs.some((t) => t.id === activeTabId);
+        set({
+          tabs: newTabs,
+          activeTabId: activeStillOpen
+            ? activeTabId
+            : (newTabs[newTabs.length - 1]?.id ?? null),
+          rightPaneTabId: newTabs.some((t) => t.id === rightPaneTabId)
+            ? rightPaneTabId
+            : null,
+        });
+      },
 
       setActiveTab: (id) => set({ activeTabId: id }),
 
