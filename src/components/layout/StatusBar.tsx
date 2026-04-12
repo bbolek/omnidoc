@@ -1,8 +1,9 @@
 import { useState, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Pencil, Plus, Wand2 } from "lucide-react";
+import { Pencil, Plus, Wand2, ZoomIn, ZoomOut } from "lucide-react";
 import { useFileStore } from "../../store/fileStore";
 import { useThemeStore } from "../../store/themeStore";
+import { useUiStore } from "../../store/uiStore";
 import { THEMES, BUILTIN_THEMES } from "../../themes";
 import { formatFileSize, getFileExtension, getFileType } from "../../utils/fileUtils";
 import { readingTime, wordCount } from "../../utils/markdownUtils";
@@ -14,6 +15,7 @@ import type { ThemeDefinition } from "../../types";
 export function StatusBar() {
   const { tabs, activeTabId, updateTabContent } = useFileStore();
   const { themeName, colorScheme, setTheme, setColorScheme } = useThemeStore();
+  const { zoomLevel, increaseZoom, decreaseZoom, resetZoom } = useUiStore();
   const [showThemePicker, setShowThemePicker] = useState(false);
   const [editingTheme, setEditingTheme] = useState<ThemeDefinition | null | undefined>(undefined);
   const themeButtonRef = useRef<HTMLButtonElement>(null);
@@ -98,6 +100,33 @@ export function StatusBar() {
 
         {/* Right */}
         <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+          {/* Zoom controls */}
+          <div className="status-item" style={{ display: "flex", alignItems: "center", gap: 0 }}>
+            <button
+              onClick={decreaseZoom}
+              title="Zoom Out (Ctrl+-)"
+              disabled={zoomLevel <= 0.5}
+              style={{ display: "flex", alignItems: "center", padding: "0 3px", opacity: zoomLevel <= 0.5 ? 0.4 : 1 }}
+            >
+              <ZoomOut size={11} />
+            </button>
+            <button
+              onClick={resetZoom}
+              title="Reset Zoom (Ctrl+0)"
+              style={{ padding: "0 4px", minWidth: 36, textAlign: "center" }}
+            >
+              {Math.round(zoomLevel * 100)}%
+            </button>
+            <button
+              onClick={increaseZoom}
+              title="Zoom In (Ctrl+=)"
+              disabled={zoomLevel >= 2.0}
+              style={{ display: "flex", alignItems: "center", padding: "0 3px", opacity: zoomLevel >= 2.0 ? 0.4 : 1 }}
+            >
+              <ZoomIn size={11} />
+            </button>
+          </div>
+          <div className="status-separator" />
           {/* Format button — only shown for formattable file types */}
           {formattable && (
             <>

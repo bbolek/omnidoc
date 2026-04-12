@@ -776,7 +776,7 @@ mark.search-highlight.current {
 /* ─── JSON viewer ─────────────────────────────────────────────────────── */
 .json-viewer {
   font-family: "Fira Code", monospace;
-  font-size: 13px;
+  font-size: calc(13px * var(--content-zoom, 1));
   line-height: 1.6;
   padding: 24px 32px;
   user-select: text;
