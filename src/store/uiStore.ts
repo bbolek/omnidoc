@@ -12,6 +12,8 @@ interface UiState {
   quickOpenVisible: boolean;
   platform: "macos" | "windows" | "linux" | "unknown";
   zoomLevel: number;
+  globalSearchQuery: string;
+  pendingFindQuery: string | null;
 
   setSidebarPosition: (pos: SidebarPosition) => void;
   toggleSidebar: () => void;
@@ -26,6 +28,8 @@ interface UiState {
   increaseZoom: () => void;
   decreaseZoom: () => void;
   resetZoom: () => void;
+  setGlobalSearchQuery: (q: string) => void;
+  setPendingFindQuery: (q: string | null) => void;
 }
 
 export const useUiStore = create<UiState>()(
@@ -40,6 +44,8 @@ export const useUiStore = create<UiState>()(
       quickOpenVisible: false,
       platform: "unknown",
       zoomLevel: 1.0,
+      globalSearchQuery: "",
+      pendingFindQuery: null,
 
       setSidebarPosition: (pos) => set({ sidebarPosition: pos }),
       toggleSidebar: () => set((s) => ({ sidebarVisible: !s.sidebarVisible })),
@@ -55,6 +61,8 @@ export const useUiStore = create<UiState>()(
       increaseZoom: () => get().setZoomLevel(get().zoomLevel + 0.1),
       decreaseZoom: () => get().setZoomLevel(get().zoomLevel - 0.1),
       resetZoom: () => get().setZoomLevel(1.0),
+      setGlobalSearchQuery: (q) => set({ globalSearchQuery: q }),
+      setPendingFindQuery: (q) => set({ pendingFindQuery: q }),
     }),
     {
       name: "md-viewer-ui",
@@ -64,6 +72,7 @@ export const useUiStore = create<UiState>()(
         sidebarWidth: state.sidebarWidth,
         activeSidebarPanel: state.activeSidebarPanel,
         zoomLevel: state.zoomLevel,
+        globalSearchQuery: state.globalSearchQuery,
       }),
     }
   )

@@ -14,7 +14,7 @@ export function useGlobalKeyboard() {
   const {
     toggleSidebar, toggleSearch, setShortcutsVisible, setSearchVisible,
     searchVisible, increaseZoom, decreaseZoom, resetZoom,
-    setQuickOpenVisible,
+    setQuickOpenVisible, setActiveSidebarPanel,
   } = useUiStore();
 
   const handler = useCallback(
@@ -137,10 +137,19 @@ export function useGlobalKeyboard() {
         return;
       }
 
+      // ── Global search ────────────────────────────────────────────────────
+
+      // Ctrl+Shift+F → open global search panel
+      if (ctrl && e.shiftKey && e.key === "F") {
+        e.preventDefault();
+        setActiveSidebarPanel("search");
+        return;
+      }
+
       // ── Editing ──────────────────────────────────────────────────────────
 
-      // Ctrl+Shift+F → format document
-      if (ctrl && e.shiftKey && e.key === "F") {
+      // Shift+Alt+F → format document
+      if (e.shiftKey && e.altKey && e.key === "F") {
         e.preventDefault();
         const tab = tabs.find((t) => t.id === activeTabId);
         if (!tab) return;
@@ -184,7 +193,7 @@ export function useGlobalKeyboard() {
       activeTabId, closeTab, closeAllTabs, toggleSidebar, toggleSearch,
       setShortcutsVisible, setSearchVisible, setSplitView, splitView,
       tabs, updateTabContent, nextTab, prevTab, searchVisible,
-      increaseZoom, decreaseZoom, resetZoom, setQuickOpenVisible,
+      increaseZoom, decreaseZoom, resetZoom, setQuickOpenVisible, setActiveSidebarPanel,
     ]
   );
 
