@@ -6,6 +6,7 @@ import { FileTree } from "../sidebar/FileTree";
 import { TOCPanel } from "../sidebar/TOCPanel";
 import { RecentFiles } from "../sidebar/RecentFiles";
 import { PluginsPanel } from "../plugins/PluginsPanel";
+import { GlobalSearchPanel } from "../sidebar/GlobalSearchPanel";
 import type { SidebarPosition } from "../../types";
 
 interface Props {
@@ -61,6 +62,7 @@ export function Sidebar({ position }: Props) {
     tree: "Explorer",
     toc: "Contents",
     recent: "Recent",
+    search: "Search",
     plugins: "Plugins",
   };
 
@@ -82,6 +84,7 @@ export function Sidebar({ position }: Props) {
           <TOCPanel content={activeTab?.content ?? ""} />
         )}
         {activeSidebarPanel === "recent" && <RecentFiles />}
+        {activeSidebarPanel === "search" && <GlobalSearchPanel />}
         {activeSidebarPanel === "plugins" && <PluginsPanel />}
         {pluginPanel && activeSidebarPanel === pluginPanel.id && (
           <PluginSidebarPanel panelId={pluginPanel.id} mount={pluginPanel.mount} />

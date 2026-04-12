@@ -55,6 +55,15 @@ export type FileType =
   | "text"
   | "unknown";
 
+export interface SearchMatch {
+  path: string;
+  filename: string;
+  line_number: number;
+  line_text: string;
+  match_start: number;
+  match_end: number;
+}
+
 export interface ThemeDefinition {
   name: string;
   label: string;

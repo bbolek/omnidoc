@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FolderTree, List, Clock, Puzzle, ChevronLeft, ChevronRight } from "lucide-react";
+import { FolderTree, List, Clock, Puzzle, Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { useUiStore } from "../../store/uiStore";
 import { pluginManager } from "../../plugins/pluginManager";
 import type { SidebarPanel, SidebarPosition } from "../../types";
@@ -28,6 +28,7 @@ export function ActivityBar({ position }: Props) {
     { id: "tree", icon: <FolderTree size={18} />, title: "File Explorer" },
     { id: "toc", icon: <List size={18} />, title: "Table of Contents" },
     { id: "recent", icon: <Clock size={18} />, title: "Recent Files" },
+    { id: "search", icon: <Search size={18} />, title: "Search (Ctrl+Shift+F)" },
     { id: "plugins", icon: <Puzzle size={18} />, title: "Plugins" },
   ];
 

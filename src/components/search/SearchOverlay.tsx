@@ -5,7 +5,7 @@ import { useUiStore } from "../../store/uiStore";
 import { useFileStore } from "../../store/fileStore";
 
 export function SearchOverlay() {
-  const { searchVisible, setSearchVisible } = useUiStore();
+  const { searchVisible, setSearchVisible, pendingFindQuery, setPendingFindQuery } = useUiStore();
   const { tabs, activeTabId } = useFileStore();
   const activeTab = tabs.find((t) => t.id === activeTabId);
 
@@ -17,10 +17,14 @@ export function SearchOverlay() {
 
   useEffect(() => {
     if (searchVisible) {
+      if (pendingFindQuery !== null) {
+        setQuery(pendingFindQuery);
+        setPendingFindQuery(null);
+      }
       inputRef.current?.focus();
       inputRef.current?.select();
     }
-  }, [searchVisible]);
+  }, [searchVisible]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const clearHighlights = useCallback(() => {
     // Remove all mark elements
