@@ -3,7 +3,7 @@ name = "md-viewer"
 version = "0.1.0"
 description = "A beautiful markdown and file viewer"
 authors = []
-license = ""
+license = "MIT"
 repository = ""
 edition = "2021"
 
