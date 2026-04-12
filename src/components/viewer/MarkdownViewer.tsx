@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, memo, createContext, useContext, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkBreaks from "remark-breaks";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import rehypeRaw from "rehype-raw";
@@ -145,11 +146,18 @@ function makeHeadingComponent(level: 1 | 2 | 3 | 4 | 5 | 6) {
       </>
     );
 
+    // Move heading margins onto the wrapper div so vertical spacing is
+    // preserved after we zero out the heading's own margins (which we do
+    // to avoid double-spacing inside the wrapper).
     const wrapperProps = {
       id: slug,
       "data-slug": slug,
       "data-heading-level": String(level),
-      style: { scrollMarginTop: 80 },
+      style: {
+        scrollMarginTop: 80,
+        marginTop: "1.5em",
+        marginBottom: "0.5em",
+      } as React.CSSProperties,
     };
 
     return (
@@ -339,7 +347,7 @@ export function MarkdownViewer({ tab }: Props) {
             className={`markdown-body selectable fade-in${showLineNumbers ? " show-line-numbers" : ""}`}
           >
             <ReactMarkdown
-              remarkPlugins={[remarkGfm, remarkMath]}
+              remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]}
               rehypePlugins={[rehypeKatex, rehypeRaw]}
               components={components}
             >
