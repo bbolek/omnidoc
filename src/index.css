@@ -215,6 +215,7 @@ body {
   flex-direction: column;
   overflow: hidden;
   flex-shrink: 0;
+  height: 100%;
   transition: background-color 150ms ease, border-color 150ms ease;
 }
 
