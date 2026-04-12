@@ -1,4 +1,5 @@
 import { useRef, useState, useCallback, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   Bold,
   Italic,
@@ -35,20 +36,27 @@ interface TooltipButtonProps {
 }
 
 function TooltipButton({ tooltip, onClick, children, disabled, accent, label }: TooltipButtonProps) {
-  const [visible, setVisible] = useState(false);
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
 
   const show = () => {
-    timerRef.current = setTimeout(() => setVisible(true), 300);
+    timerRef.current = setTimeout(() => {
+      if (btnRef.current) {
+        const r = btnRef.current.getBoundingClientRect();
+        setPos({ x: r.left + r.width / 2, y: r.bottom + 8 });
+      }
+    }, 300);
   };
   const hide = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
-    setVisible(false);
+    setPos(null);
   };
 
   return (
-    <div style={{ position: "relative", display: "inline-flex", flexShrink: 0 }}>
+    <div style={{ display: "inline-flex", flexShrink: 0 }}>
       <button
+        ref={btnRef}
         onMouseEnter={show}
         onMouseLeave={hide}
         onMouseDown={hide}
@@ -111,12 +119,12 @@ function TooltipButton({ tooltip, onClick, children, disabled, accent, label }: 
         {label && <span>{label}</span>}
       </button>
 
-      {visible && (
+      {pos && createPortal(
         <div
           style={{
-            position: "absolute",
-            top: "calc(100% + 8px)",
-            left: "50%",
+            position: "fixed",
+            left: pos.x,
+            top: pos.y,
             transform: "translateX(-50%)",
             background: "var(--color-bg-overlay, #1a1a2e)",
             color: "#e8e8e8",
@@ -127,11 +135,10 @@ function TooltipButton({ tooltip, onClick, children, disabled, accent, label }: 
             boxShadow: "var(--shadow-md, 0 4px 12px rgba(0,0,0,0.3))",
             whiteSpace: "nowrap",
             pointerEvents: "none",
-            zIndex: 100,
+            zIndex: 9999,
             lineHeight: 1.4,
           }}
         >
-          {/* Arrow */}
           <span
             style={{
               position: "absolute",
@@ -146,7 +153,8 @@ function TooltipButton({ tooltip, onClick, children, disabled, accent, label }: 
             }}
           />
           {tooltip}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
