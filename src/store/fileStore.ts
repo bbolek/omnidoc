@@ -32,6 +32,8 @@ interface FileState {
   nextTab: () => void;
   prevTab: () => void;
   updateTabContent: (id: string, content: string) => void;
+  saveTabContent: (id: string) => Promise<void>;
+  discardTabChanges: (id: string) => Promise<void>;
   addRecentFile: (file: RecentFile) => void;
   setSplitView: (enabled: boolean) => void;
   setRightPaneTab: (id: string | null) => void;
@@ -156,7 +158,25 @@ export const useFileStore = create<FileState>()(
 
       updateTabContent: (id, content) => {
         set((state) => ({
-          tabs: state.tabs.map((t) => (t.id === id ? { ...t, content } : t)),
+          tabs: state.tabs.map((t) => (t.id === id ? { ...t, content, isDirty: true } : t)),
+        }));
+      },
+
+      saveTabContent: async (id) => {
+        const tab = get().tabs.find((t) => t.id === id);
+        if (!tab) return;
+        await invoke("write_file", { path: tab.path, content: tab.content });
+        set((state) => ({
+          tabs: state.tabs.map((t) => (t.id === id ? { ...t, isDirty: false } : t)),
+        }));
+      },
+
+      discardTabChanges: async (id) => {
+        const tab = get().tabs.find((t) => t.id === id);
+        if (!tab) return;
+        const content = await invoke<string>("read_file", { path: tab.path });
+        set((state) => ({
+          tabs: state.tabs.map((t) => (t.id === id ? { ...t, content, isDirty: false } : t)),
         }));
       },
 

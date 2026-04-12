@@ -105,6 +105,13 @@ pub async fn list_directory(path: String) -> Result<Vec<FileEntry>, String> {
 }
 
 #[tauri::command]
+pub async fn write_file(path: String, content: String) -> Result<(), String> {
+    tokio::fs::write(&path, content.as_bytes())
+        .await
+        .map_err(|e| format!("Failed to write file: {e}"))
+}
+
+#[tauri::command]
 pub async fn get_file_info(path: String) -> Result<FileInfo, String> {
     let metadata = tokio::fs::metadata(&path)
         .await

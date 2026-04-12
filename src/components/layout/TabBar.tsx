@@ -82,7 +82,19 @@ export function TabBar() {
                   size={14}
                   style={{ flexShrink: 0, opacity: 0.7 }}
                 />
-                <span className="tab-name" title={tab.path}>
+                <span className="tab-name" title={tab.path} style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                  {tab.isDirty && (
+                    <span
+                      style={{
+                        width: 7,
+                        height: 7,
+                        borderRadius: "50%",
+                        background: "var(--color-accent)",
+                        flexShrink: 0,
+                        display: "inline-block",
+                      }}
+                    />
+                  )}
                   {tab.name}
                 </span>
                 <span
