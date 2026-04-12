@@ -725,6 +725,44 @@ export function FileTree() {
     }
   }, [currentFolder, tree.length, setTree]);
 
+  // ── reveal-path event: expand folders and scroll to a path ────────────────
+
+  useEffect(() => {
+    const handler = async (ev: Event) => {
+      const detail = (ev as CustomEvent<{ path: string }>).detail;
+      if (!detail?.path || !currentFolder) return;
+      if (!detail.path.startsWith(currentFolder)) return;
+
+      const rel = detail.path.slice(currentFolder.length).replace(/^[/\\]/, "");
+      const parts = rel ? rel.split(/[/\\]/).filter(Boolean) : [];
+
+      // Walk from root, expanding each intermediate folder in sequence.
+      let accum = currentFolder;
+      for (const part of parts) {
+        accum = accum + "/" + part;
+        const handlers = nodeHandlersRef.current.get(accum);
+        if (handlers) {
+          handlers.expand();
+          // Wait a tick for children to render/load so deeper handlers register.
+          await new Promise((r) => setTimeout(r, 60));
+        }
+      }
+
+      // Scroll the target into view if present.
+      setTimeout(() => {
+        const el = treeContainerRef.current?.querySelector<HTMLElement>(
+          `[data-path="${CSS.escape(detail.path)}"]`
+        );
+        if (el) {
+          el.scrollIntoView({ block: "center", behavior: "smooth" });
+          setFocusedPath(detail.path);
+        }
+      }, 80);
+    };
+    window.addEventListener("md-viewer:reveal-path", handler);
+    return () => window.removeEventListener("md-viewer:reveal-path", handler);
+  }, [currentFolder]);
+
   // ── open folder ───────────────────────────────────────────────────────────
 
   const handleOpenFolder = async () => {

@@ -2,6 +2,7 @@ import { Allotment } from "allotment";
 import "allotment/dist/style.css";
 import { useFileStore } from "../../store/fileStore";
 import { TabBar } from "./TabBar";
+import { Breadcrumb } from "./Breadcrumb";
 import { ViewerRouter } from "../viewer/ViewerRouter";
 import { WelcomeScreen } from "../welcome/WelcomeScreen";
 
@@ -16,6 +17,7 @@ export function MainArea() {
     return (
       <div className="main-area">
         <TabBar />
+        <Breadcrumb />
         <div className="viewer-area">
           {activeTab ? (
             <ViewerRouter tab={activeTab} />

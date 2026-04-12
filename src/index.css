@@ -624,6 +624,60 @@ body {
   font-weight: 500;
 }
 
+/* ─── Spinner ─────────────────────────────────────────────────────────── */
+@keyframes md-viewer-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.spin {
+  animation: md-viewer-spin 1s linear infinite;
+}
+
+/* ─── Breadcrumb ──────────────────────────────────────────────────────── */
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 10px;
+  background: var(--color-bg-inset);
+  border-bottom: 1px solid var(--color-border-muted);
+  font-size: 11px;
+  color: var(--color-text-muted);
+  min-height: 22px;
+  overflow: hidden;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+.breadcrumb-segment {
+  background: none;
+  border: none;
+  padding: 1px 4px;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-family: Inter, sans-serif;
+  border-radius: var(--radius-sm);
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color 80ms, background-color 80ms;
+}
+.breadcrumb-segment:hover {
+  color: var(--color-text);
+  background: var(--color-sidebar-hover);
+}
+.breadcrumb-segment.filename {
+  color: var(--color-text);
+  font-weight: 500;
+}
+.breadcrumb-sep {
+  color: var(--color-text-muted);
+  opacity: 0.5;
+  flex-shrink: 0;
+  user-select: none;
+}
+
 /* ─── Search overlay ──────────────────────────────────────────────────── */
 .search-overlay {
   position: fixed;
