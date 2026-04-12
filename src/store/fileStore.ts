@@ -18,6 +18,12 @@ interface FileState {
   rightPaneTabId: string | null;
   /** Persisted last session for restore on startup. */
   lastSession: { tabs: SessionTab[]; activePath: string | null } | null;
+  /**
+   * True from app mount until `restoreSession` finishes. Used by the shell
+   * to render a single loader instead of flashing through each tab as it
+   * re-opens. Never persisted.
+   */
+  isRestoring: boolean;
 
   setFolder: (path: string | null) => void;
   setTree: (entries: FileEntry[]) => void;
@@ -58,6 +64,7 @@ export const useFileStore = create<FileState>()(
       splitView: false,
       rightPaneTabId: null,
       lastSession: null,
+      isRestoring: true,
 
       setFolder: (path) => set({ openFolder: path, tree: [] }),
 
@@ -225,23 +232,27 @@ export const useFileStore = create<FileState>()(
 
       restoreSession: async () => {
         const { lastSession } = get();
-        if (!lastSession?.tabs?.length) return;
+        try {
+          if (!lastSession?.tabs?.length) return;
 
-        for (const { path, name } of lastSession.tabs) {
-          try {
-            const [content, info] = await Promise.all([
-              invoke<string>("read_file", { path }),
-              invoke<FileInfo>("get_file_info", { path }),
-            ]);
-            get().openFile(path, name, content as string, info as FileInfo);
-          } catch {
-            // File deleted or moved — skip silently
+          for (const { path, name } of lastSession.tabs) {
+            try {
+              const [content, info] = await Promise.all([
+                invoke<string>("read_file", { path }),
+                invoke<FileInfo>("get_file_info", { path }),
+              ]);
+              get().openFile(path, name, content as string, info as FileInfo);
+            } catch {
+              // File deleted or moved — skip silently
+            }
           }
-        }
 
-        if (lastSession.activePath) {
-          const active = get().tabs.find((t) => t.path === lastSession.activePath);
-          if (active) get().setActiveTab(active.id);
+          if (lastSession.activePath) {
+            const active = get().tabs.find((t) => t.path === lastSession.activePath);
+            if (active) get().setActiveTab(active.id);
+          }
+        } finally {
+          set({ isRestoring: false });
         }
       },
     }),
