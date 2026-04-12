@@ -776,11 +776,68 @@ mark.search-highlight.current {
 /* ─── JSON viewer ─────────────────────────────────────────────────────── */
 .json-viewer {
   font-family: "Fira Code", monospace;
-  font-size: 13px;
+  font-size: calc(13px * var(--content-zoom, 1));
   line-height: 1.6;
   padding: 24px 32px;
   user-select: text;
   color: var(--color-text);
+}
+
+/* ─── JSON tree ────────────────────────────────────────────────────────── */
+.jt-root {
+  font-family: "Fira Code", monospace;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.jt-line {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: nowrap;
+  min-height: 1.7em;
+  white-space: pre;
+}
+
+.jt-group {
+  display: block;
+}
+
+.jt-children {
+  padding-left: 20px;
+  border-left: 1px solid var(--color-border-muted);
+  margin-left: 5px;
+}
+
+.jt-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  border-radius: var(--radius-sm);
+  color: inherit;
+}
+
+.jt-toggle:hover {
+  background: var(--color-bg-subtle);
+}
+
+.jt-chevron {
+  opacity: 0.6;
+  flex-shrink: 0;
+  position: relative;
+  top: 1px;
+}
+
+.jt-count {
+  font-size: 11px;
+  padding: 0 4px;
+  font-style: italic;
 }
 
 /* ─── Keyboard shortcut overlay ───────────────────────────────────────── */

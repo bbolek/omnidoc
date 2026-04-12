@@ -174,7 +174,20 @@ export function useGlobalKeyboard() {
   );
 
   useEffect(() => {
+    const onWheel = (e: WheelEvent) => {
+      const isMac = navigator.platform.toUpperCase().includes("MAC");
+      const ctrl = isMac ? e.metaKey : e.ctrlKey;
+      if (!ctrl) return;
+      e.preventDefault();
+      if (e.deltaY < 0) increaseZoom();
+      else decreaseZoom();
+    };
+
     window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [handler]);
+    window.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      window.removeEventListener("keydown", handler);
+      window.removeEventListener("wheel", onWheel);
+    };
+  }, [handler, increaseZoom, decreaseZoom]);
 }
