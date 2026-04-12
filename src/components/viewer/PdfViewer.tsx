@@ -76,7 +76,6 @@ export function PdfViewer({ tab }: Props) {
     if (!container) return;
 
     let cancelled = false;
-    pageRefs.current = new Array(pdf.numPages).fill(null);
 
     async function renderAll() {
       if (!pdf) return;

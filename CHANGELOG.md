@@ -7,12 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- PDF viewer rendered only empty placeholder cards: the render effect was resetting `pageRefs.current` to an array of nulls after React had already populated it via ref callbacks, so `renderAll()` skipped every page. The reset is removed; React keeps the ref array in sync.
+- Markdown preview collapsed single newlines into one line, so consecutive lines like `**Date:** …`, `**Project:** …` ran together. Added `remark-breaks` so single newlines render as `<br>`, matching the source layout.
+- Restored vertical spacing around headings in the markdown preview. The folding-aware heading wrapper zeroed the heading's own margins to avoid doubling, but never applied any margin to the wrapper, leaving headings flush against the next paragraph. Margins now live on the wrapper div.
+
+## [0.2.0] - 2026-04-12
+
 ### Added
-- MIT license ([LICENSE](LICENSE)); declared in `package.json` and `src-tauri/Cargo.toml`.
-- PDF viewer — opens `.pdf` files in a tab with vertically-scrollable pages rendered via `pdfjs-dist`, a toolbar for previous/next page, page number input, zoom in/out, fit-to-width, selectable/copyable text, and `PageUp`/`PageDown` keyboard navigation. Backed by a new `read_file_bytes` Tauri command that returns raw file bytes via `tauri::ipc::Response` (#24).
+- PDF viewer — opens `.pdf` files in a tab with vertically-scrollable pages rendered via `pdfjs-dist`, a toolbar for previous/next page, page number input, zoom in/out, fit-to-width, selectable/copyable text, and `PageUp`/`PageDown` keyboard navigation. Backed by a new `read_file_bytes` Tauri command that returns raw file bytes via `tauri::ipc::Response` (#24, #46).
 
 ### Fixed
-- Folder explorer was not resizable: the `AppShell` wrapper animated its width to an undefined `--sidebar-width` CSS variable (falling back to 260px), clipping the inner sidebar and the resize handle. Wrapper width is now bound to the stored `sidebarWidth` directly (#24).
+- Folder explorer was not resizable: the `AppShell` wrapper animated its width to an undefined `--sidebar-width` CSS variable (falling back to 260px), clipping the inner sidebar and the resize handle. Wrapper width is now bound to the stored `sidebarWidth` directly (#24, #46).
+
+## [0.1.1] - 2026-04-12
+
+### Added
+- MIT license ([LICENSE](LICENSE)); declared in `package.json` and `src-tauri/Cargo.toml` (#45).
 
 ## [0.1.0] - 2026-04-12
 
@@ -43,5 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Windows build: enabled tokio `process` feature required by `get_git_status` (#43).
 - Zen mode: collapsed app-shell grid rows so hidden chrome no longer reserves empty space; hid breadcrumb in zen mode (#44).
 
-[Unreleased]: https://github.com/bbolek/md-viewer/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/bbolek/md-viewer/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/bbolek/md-viewer/compare/v0.1.1...v0.2.0
+[0.1.1]: https://github.com/bbolek/md-viewer/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/bbolek/md-viewer/releases/tag/v0.1.0
