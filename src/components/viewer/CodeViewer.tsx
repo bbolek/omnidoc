@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useThemeStore } from "../../store/themeStore";
+import { useUiStore } from "../../store/uiStore";
 import { getShikiTheme } from "../../themes";
 import { highlight } from "../../utils/shikiUtils";
 import { getLanguageForExtension } from "../../utils/fileUtils";
@@ -12,6 +13,7 @@ interface Props {
 
 export function CodeViewer({ tab, ext }: Props) {
   const { themeName } = useThemeStore();
+  const { showLineNumbers } = useUiStore();
   const [html, setHtml] = useState("");
   const lang = getLanguageForExtension(ext);
 
@@ -23,7 +25,7 @@ export function CodeViewer({ tab, ext }: Props) {
   }, [tab.content, lang, themeName]);
 
   return (
-    <div className="code-viewer selectable fade-in">
+    <div className={`code-viewer selectable fade-in${showLineNumbers ? " show-line-numbers" : ""}`}>
       {html ? (
         <div dangerouslySetInnerHTML={{ __html: html }} />
       ) : (

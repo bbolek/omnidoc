@@ -1,11 +1,13 @@
-import { useEffect, useState, memo } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, memo, createContext, useContext, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import rehypeRaw from "rehype-raw";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import type { Components } from "react-markdown";
 import { useThemeStore } from "../../store/themeStore";
+import { useUiStore } from "../../store/uiStore";
 import { getShikiTheme } from "../../themes";
 import { highlight } from "../../utils/shikiUtils";
 import { getLanguageForExtension } from "../../utils/fileUtils";
@@ -95,32 +97,68 @@ function slugify(text: string): string {
     .trim();
 }
 
-// Add id/data-slug to headings for TOC + scroll
+// ── Folding context ────────────────────────────────────────────────────────────
+
+interface FoldContextValue {
+  foldedSlugs: Set<string>;
+  toggleFold: (slug: string, ctrlKey: boolean) => void;
+}
+
+const FoldContext = createContext<FoldContextValue | null>(null);
+
+// Add id/data-slug to headings for TOC + scroll, plus a fold toggle button
 function makeHeadingComponent(level: 1 | 2 | 3 | 4 | 5 | 6) {
   return function HeadingComponent({
     children,
     node: _node,
     ...props
   }: React.HTMLAttributes<HTMLHeadingElement> & { node?: unknown }) {
-    const tag = `h${level}`;
     const text = String(children ?? "");
     const slug = slugify(text);
+    const foldCtx = useContext(FoldContext);
+    const foldable = level >= 1 && level <= 4;
+    const isFolded = foldCtx?.foldedSlugs.has(slug) ?? false;
+
+    const handleFoldClick = (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      foldCtx?.toggleFold(slug, e.ctrlKey || e.metaKey);
+    };
+
+    const headingInner = (
+      <>
+        {foldable && (
+          <button
+            type="button"
+            className={`heading-fold-btn${isFolded ? " folded" : ""}`}
+            aria-label={isFolded ? "Expand section" : "Collapse section"}
+            title={isFolded ? "Expand (Ctrl+Click: all)" : "Collapse (Ctrl+Click: all)"}
+            onClick={handleFoldClick}
+            tabIndex={-1}
+          >
+            {isFolded ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+          </button>
+        )}
+        {children}
+        {isFolded && <span className="fold-placeholder">…</span>}
+      </>
+    );
+
+    const wrapperProps = {
+      id: slug,
+      "data-slug": slug,
+      "data-heading-level": String(level),
+      style: { scrollMarginTop: 80 },
+    };
 
     return (
-      <div
-        id={slug}
-        data-slug={slug}
-        style={{ scrollMarginTop: 80 }}
-        {...(props as React.HTMLAttributes<HTMLDivElement>)}
-        className={undefined}
-      >
-        {/* Render as heading semantically inside the div */}
-        {tag === "h1" && <h1 style={{ margin: 0 }} {...props}>{children}</h1>}
-        {tag === "h2" && <h2 style={{ margin: 0 }} {...props}>{children}</h2>}
-        {tag === "h3" && <h3 style={{ margin: 0 }} {...props}>{children}</h3>}
-        {tag === "h4" && <h4 style={{ margin: 0 }} {...props}>{children}</h4>}
-        {tag === "h5" && <h5 style={{ margin: 0 }} {...props}>{children}</h5>}
-        {tag === "h6" && <h6 style={{ margin: 0 }} {...props}>{children}</h6>}
+      <div {...wrapperProps}>
+        {level === 1 && <h1 style={{ margin: 0 }} {...props}>{headingInner}</h1>}
+        {level === 2 && <h2 style={{ margin: 0 }} {...props}>{headingInner}</h2>}
+        {level === 3 && <h3 style={{ margin: 0 }} {...props}>{headingInner}</h3>}
+        {level === 4 && <h4 style={{ margin: 0 }} {...props}>{headingInner}</h4>}
+        {level === 5 && <h5 style={{ margin: 0 }} {...props}>{headingInner}</h5>}
+        {level === 6 && <h6 style={{ margin: 0 }} {...props}>{headingInner}</h6>}
       </div>
     );
   };
@@ -138,8 +176,11 @@ const components: Components = {
 
 export function MarkdownViewer({ tab }: Props) {
   const { themeName } = useThemeStore();
+  const { showLineNumbers } = useUiStore();
   const [mode, setMode] = useState<ViewMode>("preview");
   const [sourceHtml, setSourceHtml] = useState("");
+  const [foldedSlugs, setFoldedSlugs] = useState<Set<string>>(new Set());
+  const previewRef = useRef<HTMLDivElement>(null);
   const shikiTheme = getShikiTheme(themeName);
 
   useEffect(() => {
@@ -148,6 +189,75 @@ export function MarkdownViewer({ tab }: Props) {
       .then(setSourceHtml)
       .catch(() => setSourceHtml(""));
   }, [tab.content, shikiTheme, mode]);
+
+  // Reset fold state when switching tabs or content (per-file, non-persisted)
+  useEffect(() => {
+    setFoldedSlugs(new Set());
+  }, [tab.id]);
+
+  const toggleFold = useCallback(
+    (slug: string, ctrlKey: boolean) => {
+      if (ctrlKey) {
+        // Toggle all: collect all foldable heading slugs from the rendered DOM
+        const root = previewRef.current;
+        if (!root) return;
+        const nodes = root.querySelectorAll<HTMLElement>(
+          "[data-heading-level='1'],[data-heading-level='2'],[data-heading-level='3'],[data-heading-level='4']"
+        );
+        const allSlugs: string[] = [];
+        nodes.forEach((n) => {
+          const s = n.dataset.slug;
+          if (s) allSlugs.push(s);
+        });
+        setFoldedSlugs((prev) => {
+          // If any are folded, unfold all; otherwise fold all
+          const anyFolded = allSlugs.some((s) => prev.has(s));
+          if (anyFolded) return new Set();
+          return new Set(allSlugs);
+        });
+        return;
+      }
+      setFoldedSlugs((prev) => {
+        const next = new Set(prev);
+        if (next.has(slug)) next.delete(slug);
+        else next.add(slug);
+        return next;
+      });
+    },
+    []
+  );
+
+  // Apply fold visibility to DOM siblings after render
+  useLayoutEffect(() => {
+    if (mode !== "preview") return;
+    const root = previewRef.current;
+    if (!root) return;
+
+    const children = Array.from(root.children) as HTMLElement[];
+
+    // Reset display
+    children.forEach((el) => {
+      el.style.display = "";
+    });
+
+    // Compute hidden ranges for each folded heading
+    const headings = children
+      .map((el, idx) => {
+        const lvl = parseInt(el.dataset.headingLevel ?? "0", 10);
+        return { el, idx, level: lvl, slug: el.dataset.slug ?? "" };
+      })
+      .filter((h) => h.level >= 1 && h.level <= 6);
+
+    foldedSlugs.forEach((slug) => {
+      const h = headings.find((x) => x.slug === slug);
+      if (!h) return;
+      for (let i = h.idx + 1; i < children.length; i++) {
+        const nextLvl = parseInt(children[i].dataset.headingLevel ?? "0", 10);
+        if (nextLvl >= 1 && nextLvl <= h.level) break;
+        children[i].style.display = "none";
+      }
+    });
+  }, [foldedSlugs, tab.content, mode]);
 
   const isEditMode = mode === "edit";
 
@@ -208,21 +318,26 @@ export function MarkdownViewer({ tab }: Props) {
       {mode === "edit" ? (
         <MarkdownEditor tab={tab} />
       ) : mode === "preview" ? (
-        <div className="markdown-body selectable fade-in">
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm, remarkMath]}
-            rehypePlugins={[rehypeKatex, rehypeRaw]}
-            components={components}
+        <FoldContext.Provider value={{ foldedSlugs, toggleFold }}>
+          <div
+            ref={previewRef}
+            className={`markdown-body selectable fade-in${showLineNumbers ? " show-line-numbers" : ""}`}
           >
-            {tab.content}
-          </ReactMarkdown>
-        </div>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm, remarkMath]}
+              rehypePlugins={[rehypeKatex, rehypeRaw]}
+              components={components}
+            >
+              {tab.content}
+            </ReactMarkdown>
+          </div>
+        </FoldContext.Provider>
       ) : sourceHtml ? (
-        <div className="code-viewer selectable fade-in">
+        <div className={`code-viewer selectable fade-in${showLineNumbers ? " show-line-numbers" : ""}`}>
           <div dangerouslySetInnerHTML={{ __html: sourceHtml }} />
         </div>
       ) : (
-        <div className="code-viewer selectable fade-in">
+        <div className={`code-viewer selectable fade-in${showLineNumbers ? " show-line-numbers" : ""}`}>
           <pre style={{ fontFamily: "'Fira Code', monospace", fontSize: 13, lineHeight: 1.6, color: "var(--color-text)" }}>
             {tab.content}
           </pre>
