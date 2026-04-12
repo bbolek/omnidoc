@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef, createContext, useContext } from "react";
+import { useState, useCallback, useEffect, useRef, createContext, useContext, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { ChevronRight, ChevronDown, FolderOpen, Folder, FolderPlus, ChevronsDownUp, Search, X } from "lucide-react";
@@ -48,6 +48,7 @@ function TreeNode({ entry, depth, collapseKey, parentPath }: TreeNodeProps) {
 
   const handleExpand = useCallback(async () => {
     if (!entry.is_dir) return;
+    if (loading) return;
     const next = !expanded;
     setExpanded(next);
 
@@ -62,7 +63,7 @@ function TreeNode({ entry, depth, collapseKey, parentPath }: TreeNodeProps) {
         setLoading(false);
       }
     }
-  }, [entry, expanded, children.length]);
+  }, [entry, expanded, children.length, loading]);
 
   const handleFileOpen = useCallback(async () => {
     if (entry.is_dir) {
@@ -145,17 +146,24 @@ function TreeNode({ entry, depth, collapseKey, parentPath }: TreeNodeProps) {
 
       {/* Children */}
       <AnimatePresence initial={false}>
-        {expanded && !loading && children.length > 0 && (
+        {expanded && (loading || children.length > 0) && (
           <motion.div
+            key="children"
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.15 }}
             style={{ overflow: "hidden" }}
           >
-            {children.map((child) => (
-              <TreeNode key={child.path} entry={child} depth={depth + 1} collapseKey={collapseKey} parentPath={entry.path} />
-            ))}
+            {loading ? (
+              <div style={{ paddingLeft: 8 + (depth + 1) * 14 + 18, paddingTop: 2, paddingBottom: 2, fontSize: 11, color: "var(--color-text-muted)" }}>
+                Loading…
+              </div>
+            ) : (
+              children.map((child) => (
+                <TreeNode key={child.path} entry={child} depth={depth + 1} collapseKey={collapseKey} parentPath={entry.path} />
+              ))
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -412,8 +420,13 @@ export function FileTree() {
   const folderName = getFileName(currentFolder);
   const isFiltered = query.trim().length > 0;
 
+  const treeNavContextValue = useMemo(
+    () => ({ focusedPath, setFocusedPath, nodeHandlersRef }),
+    [focusedPath]
+  );
+
   return (
-    <TreeNavContext.Provider value={{ focusedPath, setFocusedPath, nodeHandlersRef }}>
+    <TreeNavContext.Provider value={treeNavContextValue}>
     <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", paddingBottom: 8 }}>
       {/* Folder root label + collapse-all button */}
       <div
