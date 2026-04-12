@@ -24,6 +24,12 @@ function AppInner() {
   useGlobalKeyboard();
   useAllFileWatchers();
   const { loadUserThemes, applyCurrentTheme, themeName, colorScheme } = useThemeStore();
+  const { zoomLevel } = useUiStore();
+
+  // Apply zoom CSS variable whenever zoom changes
+  useEffect(() => {
+    document.documentElement.style.setProperty("--content-zoom", String(zoomLevel));
+  }, [zoomLevel]);
   const { discoverAndLoad } = usePluginStore();
   const { openFile, tabs, activeTabId, restoreSession } = useFileStore();
 

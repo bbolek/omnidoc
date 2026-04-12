@@ -215,6 +215,7 @@ body {
   flex-direction: column;
   overflow: hidden;
   flex-shrink: 0;
+  height: 100%;
   transition: background-color 150ms ease, border-color 150ms ease;
 }
 
@@ -440,7 +441,7 @@ body {
   padding: 32px 48px;
   color: var(--color-text);
   font-family: "Inter", system-ui, sans-serif;
-  font-size: 15px;
+  font-size: calc(15px * var(--content-zoom, 1));
   line-height: 1.7;
   user-select: text;
 }
@@ -514,6 +515,12 @@ body {
   overflow-x: auto;
   border: 1px solid var(--color-border);
   background: var(--color-syntax-bg) !important;
+}
+
+/* Shiki HTML wrapper: constrain to parent width, let inner pre scroll */
+.markdown-body .shiki-wrapper {
+  min-width: 0;
+  overflow: hidden;
 }
 
 .markdown-body blockquote {
@@ -909,7 +916,7 @@ kbd {
 .code-viewer .shiki {
   border-radius: var(--radius);
   font-family: "Fira Code", monospace;
-  font-size: 13px;
+  font-size: calc(13px * var(--content-zoom, 1));
   line-height: 1.6;
   padding: 1.25rem 1.5rem;
   overflow-x: auto;
