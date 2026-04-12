@@ -193,11 +193,35 @@ pub struct GitStatusEntry {
     pub status: String, // "modified" | "untracked" | "staged" | "deleted" | "ignored" | "renamed"
 }
 
+/// Build a `git` command with the given args in `folder`. On Windows we set
+/// `CREATE_NO_WINDOW` (0x08000000) to prevent a console window from flashing
+/// each time `git` is spawned from this GUI app.
+fn git_command(folder: &str, args: &[&str]) -> tokio::process::Command {
+    let mut cmd = tokio::process::Command::new("git");
+    cmd.args(args).current_dir(folder);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000);
+    }
+    cmd
+}
+
+/// Returns true if `folder` is inside a git working tree. Used to skip git
+/// status work entirely for non-git folders.
+#[tauri::command]
+pub async fn is_git_repo(folder: String) -> Result<bool, String> {
+    let output = git_command(&folder, &["rev-parse", "--is-inside-work-tree"])
+        .output()
+        .await
+        .map_err(|e| format!("Failed to run git: {e}"))?;
+    Ok(output.status.success()
+        && String::from_utf8_lossy(&output.stdout).trim() == "true")
+}
+
 #[tauri::command]
 pub async fn get_git_status(folder: String) -> Result<Vec<GitStatusEntry>, String> {
-    let output = tokio::process::Command::new("git")
-        .args(["status", "--porcelain", "-u"])
-        .current_dir(&folder)
+    let output = git_command(&folder, &["status", "--porcelain", "-u"])
         .output()
         .await
         .map_err(|e| format!("Failed to run git: {e}"))?;

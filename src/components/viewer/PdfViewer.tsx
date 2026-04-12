@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { ChevronLeft, ChevronRight, Maximize2, ZoomIn, ZoomOut } from "lucide-react";
 import * as pdfjsLib from "pdfjs-dist";
-import type { PDFDocumentProxy } from "pdfjs-dist";
+import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
 // Vite-friendly worker import: bundled as an asset URL
 // eslint-disable-next-line import/no-unresolved
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -18,6 +18,8 @@ type FitMode = "actual" | "width";
 
 const MIN_SCALE = 0.25;
 const MAX_SCALE = 4;
+const PAGE_GAP = 16;
+const CONTAINER_PADDING = 24;
 
 export function PdfViewer({ tab }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -29,6 +31,7 @@ export function PdfViewer({ tab }: Props) {
   const [fitMode, setFitMode] = useState<FitMode>("width");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageInput, setPageInput] = useState("1");
+  const [containerWidth, setContainerWidth] = useState(0);
 
   const numPages = pdf?.numPages ?? 0;
 
@@ -69,78 +72,16 @@ export function PdfViewer({ tab }: Props) {
     };
   }, [tab.path]);
 
-  // ── Render all pages whenever pdf / scale / fitMode change ───────────────
+  // ── Track container width (for fit-to-width scaling) ─────────────────────
   useEffect(() => {
-    if (!pdf) return;
-    const container = containerRef.current;
-    if (!container) return;
-
-    let cancelled = false;
-
-    async function renderAll() {
-      if (!pdf) return;
-      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-        if (cancelled) return;
-        const page = await pdf.getPage(pageNum);
-        if (cancelled) return;
-
-        const unscaled = page.getViewport({ scale: 1 });
-        let effectiveScale = scale;
-        if (fitMode === "width" && container) {
-          const available = container.clientWidth - 48; // padding
-          if (available > 0) effectiveScale = available / unscaled.width;
-        }
-        const viewport = page.getViewport({ scale: effectiveScale });
-
-        const pageWrap = pageRefs.current[pageNum - 1];
-        if (!pageWrap) continue;
-
-        // Canvas
-        const canvas = pageWrap.querySelector<HTMLCanvasElement>("canvas.pdf-page-canvas");
-        if (!canvas) continue;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) continue;
-
-        const dpr = window.devicePixelRatio || 1;
-        canvas.width = Math.floor(viewport.width * dpr);
-        canvas.height = Math.floor(viewport.height * dpr);
-        canvas.style.width = `${Math.floor(viewport.width)}px`;
-        canvas.style.height = `${Math.floor(viewport.height)}px`;
-
-        await page.render({
-          canvasContext: ctx,
-          viewport,
-          transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined,
-        }).promise;
-
-        // Text layer for selection/copy
-        const textLayerDiv = pageWrap.querySelector<HTMLDivElement>(".pdf-text-layer");
-        if (textLayerDiv) {
-          textLayerDiv.replaceChildren();
-          textLayerDiv.style.width = `${Math.floor(viewport.width)}px`;
-          textLayerDiv.style.height = `${Math.floor(viewport.height)}px`;
-          try {
-            const textLayer = new pdfjsLib.TextLayer({
-              textContentSource: await page.getTextContent(),
-              container: textLayerDiv,
-              viewport,
-            });
-            await textLayer.render();
-          } catch {
-            // Text layer rendering is best-effort; ignore failures
-          }
-        }
-      }
-    }
-
-    renderAll().catch((err) => {
-      if (!cancelled) console.error("PDF render error:", err);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [pdf, scale, fitMode]);
+    const el = containerRef.current;
+    if (!el) return;
+    const update = () => setContainerWidth(el.clientWidth);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // ── Track currently visible page (for toolbar + keyboard nav) ────────────
   useEffect(() => {
@@ -226,6 +167,12 @@ export function PdfViewer({ tab }: Props) {
     () => Array.from({ length: numPages }, (_, i) => i + 1),
     [numPages]
   );
+
+  // Reset per-page refs when the PDF changes so stale refs from a prior
+  // document aren't observed / scrolled to.
+  if (pageRefs.current.length !== numPages) {
+    pageRefs.current = new Array(numPages).fill(null);
+  }
 
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
@@ -317,11 +264,11 @@ export function PdfViewer({ tab }: Props) {
           overflow: "auto",
           background: "var(--color-bg-subtle)",
           outline: "none",
-          padding: 24,
+          padding: CONTAINER_PADDING,
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          gap: 16,
+          gap: PAGE_GAP,
         }}
       >
         {loading && (
@@ -336,35 +283,159 @@ export function PdfViewer({ tab }: Props) {
         )}
         {pdf &&
           pageItems.map((p) => (
-            <div
-              key={p}
-              ref={(el) => {
+            <PdfPage
+              key={`${tab.path}:${p}`}
+              pdf={pdf}
+              pageNumber={p}
+              scale={scale}
+              fitMode={fitMode}
+              // Subtract horizontal container padding; ResizeObserver keeps this live.
+              availableWidth={Math.max(0, containerWidth - CONTAINER_PADDING * 2)}
+              setRef={(el) => {
                 pageRefs.current[p - 1] = el;
               }}
-              data-page={p}
-              style={{
-                position: "relative",
-                background: "var(--color-bg)",
-                boxShadow: "var(--shadow-sm)",
-                borderRadius: "var(--radius-sm)",
-                overflow: "hidden",
-              }}
-            >
-              <canvas className="pdf-page-canvas" style={{ display: "block" }} />
-              <div
-                className="pdf-text-layer"
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  overflow: "hidden",
-                  opacity: 0.25,
-                  lineHeight: 1,
-                  userSelect: "text",
-                }}
-              />
-            </div>
+            />
           ))}
       </div>
+    </div>
+  );
+}
+
+interface PdfPageProps {
+  pdf: PDFDocumentProxy;
+  pageNumber: number;
+  scale: number;
+  fitMode: FitMode;
+  availableWidth: number;
+  setRef: (el: HTMLDivElement | null) => void;
+}
+
+/**
+ * Renders a single PDF page into its own canvas + text layer. Owning refs and
+ * the render effect at this level avoids cross-page timing issues (stale ref
+ * arrays, container width read before layout, etc.).
+ */
+function PdfPage({ pdf, pageNumber, scale, fitMode, availableWidth, setRef }: PdfPageProps) {
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const textLayerRef = useRef<HTMLDivElement | null>(null);
+  // Unscaled viewport dimensions drive the placeholder size so the page wrapper
+  // reserves real estate even before rendering completes.
+  const [dims, setDims] = useState<{ w: number; h: number } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    let renderTask: { cancel: () => void } | null = null;
+    let currentPage: PDFPageProxy | null = null;
+
+    async function render() {
+      if (availableWidth <= 0) return;
+      try {
+        const page = await pdf.getPage(pageNumber);
+        if (cancelled) return;
+        currentPage = page;
+
+        const unscaled = page.getViewport({ scale: 1 });
+        const effectiveScale =
+          fitMode === "width" ? availableWidth / unscaled.width : scale;
+        const viewport = page.getViewport({ scale: effectiveScale });
+
+        setDims({ w: Math.floor(viewport.width), h: Math.floor(viewport.height) });
+
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = Math.floor(viewport.width * dpr);
+        canvas.height = Math.floor(viewport.height * dpr);
+        canvas.style.width = `${Math.floor(viewport.width)}px`;
+        canvas.style.height = `${Math.floor(viewport.height)}px`;
+
+        const task = page.render({
+          canvasContext: ctx,
+          viewport,
+          transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined,
+        });
+        renderTask = task;
+        await task.promise;
+        if (cancelled) return;
+
+        const textLayerDiv = textLayerRef.current;
+        if (textLayerDiv) {
+          textLayerDiv.replaceChildren();
+          textLayerDiv.style.width = `${Math.floor(viewport.width)}px`;
+          textLayerDiv.style.height = `${Math.floor(viewport.height)}px`;
+          try {
+            const textLayer = new pdfjsLib.TextLayer({
+              textContentSource: await page.getTextContent(),
+              container: textLayerDiv,
+              viewport,
+            });
+            await textLayer.render();
+          } catch {
+            // Text layer rendering is best-effort; ignore failures
+          }
+        }
+      } catch (err) {
+        if (!cancelled) {
+          // `RenderingCancelledException` is expected when scale changes mid-render
+          const name = (err as { name?: string } | null)?.name;
+          if (name !== "RenderingCancelledException") {
+            console.error(`PDF render error (page ${pageNumber}):`, err);
+          }
+        }
+      }
+    }
+
+    render();
+
+    return () => {
+      cancelled = true;
+      try {
+        renderTask?.cancel();
+      } catch {
+        // already settled
+      }
+      currentPage?.cleanup();
+    };
+  }, [pdf, pageNumber, scale, fitMode, availableWidth]);
+
+  return (
+    <div
+      ref={(el) => {
+        wrapRef.current = el;
+        setRef(el);
+      }}
+      data-page={pageNumber}
+      style={{
+        position: "relative",
+        background: "var(--color-bg)",
+        boxShadow: "var(--shadow-sm)",
+        borderRadius: "var(--radius-sm)",
+        overflow: "hidden",
+        width: dims ? dims.w : undefined,
+        height: dims ? dims.h : undefined,
+      }}
+    >
+      <canvas
+        ref={canvasRef}
+        className="pdf-page-canvas"
+        style={{ display: "block" }}
+      />
+      <div
+        ref={textLayerRef}
+        className="pdf-text-layer"
+        style={{
+          position: "absolute",
+          inset: 0,
+          overflow: "hidden",
+          opacity: 0.25,
+          lineHeight: 1,
+          userSelect: "text",
+        }}
+      />
     </div>
   );
 }

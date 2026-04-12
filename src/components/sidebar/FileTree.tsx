@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef, createContext, useContext, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
   ChevronRight, ChevronDown, FolderOpen, Folder, FolderPlus,
@@ -675,21 +676,99 @@ export function FileTree() {
     }
   }, [currentFolder, refreshRoot]);
 
-  // ── git status polling ────────────────────────────────────────────────────
+  // ── git status: event-driven, with a slow safety poll ─────────────────────
+  //
+  // Strategy:
+  //   1. Check once whether `currentFolder` is actually a git repo. If not,
+  //      skip all git work (no polling, no watcher, no empty-result spam).
+  //   2. Register a recursive folder watcher on the Rust side that emits
+  //      `git-folder-changed` for create/modify/remove events (minus noisy
+  //      paths like `node_modules`, `.git/objects`). Debounce refreshes.
+  //   3. Keep a slow safety interval (30s) to catch anything the watcher
+  //      might miss (network-triggered state, platform edge cases).
 
   useEffect(() => {
-    if (!currentFolder) return;
-    const fetch = async () => {
+    if (!currentFolder) {
+      setGitStatus(new Map());
+      return;
+    }
+
+    let cancelled = false;
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    let safetyInterval: ReturnType<typeof setInterval> | null = null;
+    let unlisten: (() => void) | null = null;
+    let watching = false;
+
+    const refresh = async () => {
       try {
-        const entries = await invoke<GitStatusEntry[]>("get_git_status", { folder: currentFolder });
+        const entries = await invoke<GitStatusEntry[]>("get_git_status", {
+          folder: currentFolder,
+        });
+        if (cancelled) return;
         const map = new Map<string, string>();
         for (const e of entries) map.set(e.path, e.status);
         setGitStatus(map);
-      } catch {}
+      } catch {
+        /* ignore — transient (e.g., folder just unmounted) */
+      }
     };
-    fetch();
-    const id = setInterval(fetch, 5000);
-    return () => clearInterval(id);
+
+    const scheduleRefresh = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(refresh, 500);
+    };
+
+    (async () => {
+      // Clear any stale status from a previous folder while we check.
+      setGitStatus(new Map());
+
+      let isRepo = false;
+      try {
+        isRepo = await invoke<boolean>("is_git_repo", { folder: currentFolder });
+      } catch {
+        isRepo = false;
+      }
+      if (cancelled || !isRepo) return;
+
+      // Initial fetch.
+      await refresh();
+      if (cancelled) return;
+
+      // Event-driven refresh: subscribe first, then ask Rust to watch. This
+      // way we don't miss events fired between watch-start and subscribe.
+      try {
+        const un = await listen<{ folder: string; path: string }>(
+          "git-folder-changed",
+          (event) => {
+            if (event.payload.folder === currentFolder) scheduleRefresh();
+          },
+        );
+        if (cancelled) {
+          un();
+          return;
+        }
+        unlisten = un;
+
+        await invoke("watch_git_folder", { folder: currentFolder });
+        watching = true;
+      } catch (err) {
+        console.warn("git folder watcher failed, falling back to poll:", err);
+      }
+
+      // Safety poll — much slower than before since the watcher covers the
+      // common case. Catches things like remote-driven branch updates.
+      safetyInterval = setInterval(refresh, 30_000);
+    })();
+
+    return () => {
+      cancelled = true;
+      if (debounceTimer) clearTimeout(debounceTimer);
+      if (safetyInterval) clearInterval(safetyInterval);
+      unlisten?.();
+      if (watching) {
+        invoke("unwatch_git_folder", { folder: currentFolder }).catch(() => {});
+      }
+    };
   }, [currentFolder]);
 
   // ── file search ───────────────────────────────────────────────────────────
