@@ -110,6 +110,19 @@ export function SearchOverlay() {
     }
   }, [searchVisible, clearHighlights]);
 
+  const navigate = useCallback((direction: 1 | -1) => {
+    const marks = marksRef.current;
+    if (marks.length === 0) return;
+
+    const prev = marks[currentMatch - 1];
+    prev?.classList.remove("current");
+
+    const next = (currentMatch - 1 + direction + marks.length) % marks.length;
+    marks[next].classList.add("current");
+    marks[next].scrollIntoView({ behavior: "smooth", block: "center" });
+    setCurrentMatch(next + 1);
+  }, [currentMatch]);
+
   // Allow external triggers (F3 / Shift+F3) to navigate matches
   useEffect(() => {
     const handler = (e: Event) => {
@@ -127,19 +140,6 @@ export function SearchOverlay() {
       clearHighlights();
     }
   }, [query, searchVisible, applyHighlights, clearHighlights]);
-
-  const navigate = (direction: 1 | -1) => {
-    const marks = marksRef.current;
-    if (marks.length === 0) return;
-
-    const prev = marks[currentMatch - 1];
-    prev?.classList.remove("current");
-
-    const next = (currentMatch - 1 + direction + marks.length) % marks.length;
-    marks[next].classList.add("current");
-    marks[next].scrollIntoView({ behavior: "smooth", block: "center" });
-    setCurrentMatch(next + 1);
-  };
 
   const handleKey = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
