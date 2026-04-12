@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - PDF viewer rendered every page as a thin squashed strip on multi-page documents: each `PdfPage` fired its `page.render()` call as soon as it mounted, so 17 concurrent renders ran against the same document and pdf.js's shared worker state produced corrupt/collapsed output. Renders are now serialized through a shared promise chain on `PdfViewer`, so pages render one at a time.
+- PDF viewer did not scroll vertically: the scroll container was `flex: 1` with the default `min-height: auto`, so it grew to fit all pages instead of constraining to the parent height and `overflow: auto` never triggered. Setting `min-height: 0` lets the container clip and scroll its pages.
 - PDF viewer rendered only empty placeholder cards: the render effect was resetting `pageRefs.current` to an array of nulls after React had already populated it via ref callbacks, so `renderAll()` skipped every page. The reset is removed; React keeps the ref array in sync.
 - Markdown preview collapsed single newlines into one line, so consecutive lines like `**Date:** …`, `**Project:** …` ran together. Added `remark-breaks` so single newlines render as `<br>`, matching the source layout.
 - Restored vertical spacing around headings in the markdown preview. The folding-aware heading wrapper zeroed the heading's own margins to avoid doubling, but never applied any margin to the wrapper, leaving headings flush against the next paragraph. Margins now live on the wrapper div.

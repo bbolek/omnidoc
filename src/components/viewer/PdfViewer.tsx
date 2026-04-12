@@ -266,6 +266,10 @@ export function PdfViewer({ tab }: Props) {
         className="selectable fade-in"
         style={{
           flex: 1,
+          // Without this the default `min-height: auto` lets the flex item
+          // grow to fit all pages, defeating `overflow: auto` and pushing
+          // the scroll up to the outer `.content-scroll` wrapper.
+          minHeight: 0,
           overflow: "auto",
           background: "var(--color-bg-subtle)",
           outline: "none",
