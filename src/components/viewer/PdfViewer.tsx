@@ -24,6 +24,11 @@ const CONTAINER_PADDING = 24;
 export function PdfViewer({ tab }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const pageRefs = useRef<Array<HTMLDivElement | null>>([]);
+  // Serialized render queue: pdf.js produces corrupt/squashed output when many
+  // pages render concurrently against the same document, so every PdfPage
+  // chains its work onto this shared promise. See
+  // https://stackoverflow.com/questions/19820740
+  const renderQueueRef = useRef<Promise<void>>(Promise.resolve());
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -291,6 +296,7 @@ export function PdfViewer({ tab }: Props) {
               fitMode={fitMode}
               // Subtract horizontal container padding; ResizeObserver keeps this live.
               availableWidth={Math.max(0, containerWidth - CONTAINER_PADDING * 2)}
+              renderQueueRef={renderQueueRef}
               setRef={(el) => {
                 pageRefs.current[p - 1] = el;
               }}
@@ -307,6 +313,7 @@ interface PdfPageProps {
   scale: number;
   fitMode: FitMode;
   availableWidth: number;
+  renderQueueRef: React.MutableRefObject<Promise<void>>;
   setRef: (el: HTMLDivElement | null) => void;
 }
 
@@ -315,7 +322,15 @@ interface PdfPageProps {
  * the render effect at this level avoids cross-page timing issues (stale ref
  * arrays, container width read before layout, etc.).
  */
-function PdfPage({ pdf, pageNumber, scale, fitMode, availableWidth, setRef }: PdfPageProps) {
+function PdfPage({
+  pdf,
+  pageNumber,
+  scale,
+  fitMode,
+  availableWidth,
+  renderQueueRef,
+  setRef,
+}: PdfPageProps) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const textLayerRef = useRef<HTMLDivElement | null>(null);
@@ -324,72 +339,83 @@ function PdfPage({ pdf, pageNumber, scale, fitMode, availableWidth, setRef }: Pd
   const [dims, setDims] = useState<{ w: number; h: number } | null>(null);
 
   useEffect(() => {
+    if (availableWidth <= 0) return;
+
     let cancelled = false;
     let renderTask: { cancel: () => void } | null = null;
     let currentPage: PDFPageProxy | null = null;
 
-    async function render() {
-      if (availableWidth <= 0) return;
-      try {
-        const page = await pdf.getPage(pageNumber);
+    // Chain this page's render onto the shared queue so pdf.js sees one
+    // render at a time. Concurrent renders against the same document produce
+    // corrupt output (pages collapse to tiny strips) — serializing is the
+    // fix recommended by the pdf.js maintainers.
+    const previous = renderQueueRef.current;
+    const work = previous
+      .catch(() => {
+        /* a prior page's failure shouldn't block this one */
+      })
+      .then(async () => {
         if (cancelled) return;
-        currentPage = page;
+        try {
+          const page = await pdf.getPage(pageNumber);
+          if (cancelled) return;
+          currentPage = page;
 
-        const unscaled = page.getViewport({ scale: 1 });
-        const effectiveScale =
-          fitMode === "width" ? availableWidth / unscaled.width : scale;
-        const viewport = page.getViewport({ scale: effectiveScale });
+          const unscaled = page.getViewport({ scale: 1 });
+          const effectiveScale =
+            fitMode === "width" ? availableWidth / unscaled.width : scale;
+          const viewport = page.getViewport({ scale: effectiveScale });
 
-        setDims({ w: Math.floor(viewport.width), h: Math.floor(viewport.height) });
+          setDims({ w: Math.floor(viewport.width), h: Math.floor(viewport.height) });
 
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return;
+          const canvas = canvasRef.current;
+          if (!canvas) return;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return;
 
-        const dpr = window.devicePixelRatio || 1;
-        canvas.width = Math.floor(viewport.width * dpr);
-        canvas.height = Math.floor(viewport.height * dpr);
-        canvas.style.width = `${Math.floor(viewport.width)}px`;
-        canvas.style.height = `${Math.floor(viewport.height)}px`;
+          const dpr = window.devicePixelRatio || 1;
+          canvas.width = Math.floor(viewport.width * dpr);
+          canvas.height = Math.floor(viewport.height * dpr);
+          canvas.style.width = `${Math.floor(viewport.width)}px`;
+          canvas.style.height = `${Math.floor(viewport.height)}px`;
 
-        const task = page.render({
-          canvasContext: ctx,
-          viewport,
-          transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined,
-        });
-        renderTask = task;
-        await task.promise;
-        if (cancelled) return;
+          const task = page.render({
+            canvasContext: ctx,
+            viewport,
+            transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined,
+          });
+          renderTask = task;
+          await task.promise;
+          if (cancelled) return;
 
-        const textLayerDiv = textLayerRef.current;
-        if (textLayerDiv) {
-          textLayerDiv.replaceChildren();
-          textLayerDiv.style.width = `${Math.floor(viewport.width)}px`;
-          textLayerDiv.style.height = `${Math.floor(viewport.height)}px`;
-          try {
-            const textLayer = new pdfjsLib.TextLayer({
-              textContentSource: await page.getTextContent(),
-              container: textLayerDiv,
-              viewport,
-            });
-            await textLayer.render();
-          } catch {
-            // Text layer rendering is best-effort; ignore failures
+          const textLayerDiv = textLayerRef.current;
+          if (textLayerDiv) {
+            textLayerDiv.replaceChildren();
+            textLayerDiv.style.width = `${Math.floor(viewport.width)}px`;
+            textLayerDiv.style.height = `${Math.floor(viewport.height)}px`;
+            try {
+              const textLayer = new pdfjsLib.TextLayer({
+                textContentSource: await page.getTextContent(),
+                container: textLayerDiv,
+                viewport,
+              });
+              await textLayer.render();
+            } catch {
+              // Text layer rendering is best-effort; ignore failures
+            }
+          }
+        } catch (err) {
+          if (!cancelled) {
+            // `RenderingCancelledException` is expected when scale changes mid-render
+            const name = (err as { name?: string } | null)?.name;
+            if (name !== "RenderingCancelledException") {
+              console.error(`PDF render error (page ${pageNumber}):`, err);
+            }
           }
         }
-      } catch (err) {
-        if (!cancelled) {
-          // `RenderingCancelledException` is expected when scale changes mid-render
-          const name = (err as { name?: string } | null)?.name;
-          if (name !== "RenderingCancelledException") {
-            console.error(`PDF render error (page ${pageNumber}):`, err);
-          }
-        }
-      }
-    }
+      });
 
-    render();
+    renderQueueRef.current = work;
 
     return () => {
       cancelled = true;
@@ -400,7 +426,7 @@ function PdfPage({ pdf, pageNumber, scale, fitMode, availableWidth, setRef }: Pd
       }
       currentPage?.cleanup();
     };
-  }, [pdf, pageNumber, scale, fitMode, availableWidth]);
+  }, [pdf, pageNumber, scale, fitMode, availableWidth, renderQueueRef]);
 
   return (
     <div
