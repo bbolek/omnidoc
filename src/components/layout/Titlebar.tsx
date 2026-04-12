@@ -131,7 +131,7 @@ export function Titlebar() {
 
       {/* Windows/Linux: window controls (right) */}
       {!isMac && (
-        <div className="titlebar-no-drag" style={{ display: "flex", alignItems: "stretch" }}>
+        <div className="titlebar-no-drag" style={{ display: "flex", alignItems: "stretch", alignSelf: "stretch" }}>
           <WindowControl
             icon={<Minus size={12} />}
             title="Minimize"

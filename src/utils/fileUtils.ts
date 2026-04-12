@@ -1,13 +1,14 @@
 import type { FileType } from "../types";
 
 const MD_EXTENSIONS = new Set(["md", "mdx", "markdown", "mdown", "mkd", "mkdn"]);
+const HTML_EXTENSIONS = new Set(["html", "htm"]);
 const CODE_EXTENSIONS = new Set([
   "js", "jsx", "ts", "tsx", "mjs", "cjs",
   "py", "pyw", "rb", "rs", "go", "java", "kt", "swift",
   "c", "cpp", "cc", "cxx", "h", "hpp",
   "cs", "php", "lua", "r", "m", "sh", "bash", "zsh",
   "sql", "graphql", "gql", "proto",
-  "html", "htm", "xml", "svg",
+  "xml", "svg",
   "css", "scss", "sass", "less",
   "vim", "dockerfile",
 ]);
@@ -21,6 +22,7 @@ export function getFileType(extension?: string): FileType {
   if (!extension) return "text";
   const ext = extension.toLowerCase();
   if (MD_EXTENSIONS.has(ext)) return "markdown";
+  if (HTML_EXTENSIONS.has(ext)) return "html";
   if (JSON_EXTENSIONS.has(ext)) return "json";
   if (YAML_EXTENSIONS.has(ext)) return "yaml";
   if (TOML_EXTENSIONS.has(ext)) return "toml";
