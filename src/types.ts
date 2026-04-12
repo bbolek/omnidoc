@@ -40,7 +40,7 @@ export interface TocHeading {
   slug: string;
 }
 
-export type SidebarPanel = "tree" | "toc" | "recent" | "plugins" | (string & {});
+export type SidebarPanel = "tree" | "toc" | "recent" | "frontmatter" | "tags" | "plugins" | (string & {});
 export type SidebarPosition = "left" | "right";
 export type ColorScheme = "light" | "dark" | "system";
 

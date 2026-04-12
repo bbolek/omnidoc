@@ -4,6 +4,8 @@ import { useFileStore } from "../../store/fileStore";
 import { pluginManager } from "../../plugins/pluginManager";
 import { FileTree } from "../sidebar/FileTree";
 import { TOCPanel } from "../sidebar/TOCPanel";
+import { FrontmatterPanel } from "../sidebar/FrontmatterPanel";
+import { TagPanel } from "../sidebar/TagPanel";
 import { RecentFiles } from "../sidebar/RecentFiles";
 import { PluginsPanel } from "../plugins/PluginsPanel";
 import { GlobalSearchPanel } from "../sidebar/GlobalSearchPanel";
@@ -63,6 +65,8 @@ export function Sidebar({ position }: Props) {
     toc: "Contents",
     recent: "Recent",
     search: "Search",
+    frontmatter: "Frontmatter",
+    tags: "Tags",
     plugins: "Plugins",
   };
 
@@ -85,6 +89,13 @@ export function Sidebar({ position }: Props) {
         )}
         {activeSidebarPanel === "recent" && <RecentFiles />}
         {activeSidebarPanel === "search" && <GlobalSearchPanel />}
+        {activeSidebarPanel === "frontmatter" && (
+          <FrontmatterPanel
+            tabId={activeTab?.id ?? null}
+            content={activeTab?.content ?? ""}
+          />
+        )}
+        {activeSidebarPanel === "tags" && <TagPanel />}
         {activeSidebarPanel === "plugins" && <PluginsPanel />}
         {pluginPanel && activeSidebarPanel === pluginPanel.id && (
           <PluginSidebarPanel panelId={pluginPanel.id} mount={pluginPanel.mount} />
