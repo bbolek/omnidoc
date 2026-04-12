@@ -317,8 +317,8 @@ function ThemePickerRow({ theme, isActive, onSelect, onEdit }: ThemePickerRowPro
             width: 12,
             height: 12,
             borderRadius: "50%",
-            background: theme.scheme === "dark" ? "#1a1a2e" : "#f8f8f8",
-            border: "1px solid var(--color-border)",
+            background: isActive ? "var(--color-accent)" : "transparent",
+            border: `2px solid ${isActive ? "var(--color-accent)" : "var(--color-border)"}`,
             flexShrink: 0,
           }}
         />
