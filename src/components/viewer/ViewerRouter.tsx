@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { getFileType, getFileExtension } from "../../utils/fileUtils";
 import { pluginManager } from "../../plugins/pluginManager";
 import { MarkdownViewer } from "./MarkdownViewer";
+import { HtmlViewer } from "./HtmlViewer";
 import { CodeViewer } from "./CodeViewer";
 import { JsonViewer } from "./JsonViewer";
 import { YamlTomlViewer } from "./YamlTomlViewer";
@@ -48,6 +49,7 @@ function BuiltinViewer({ tab, ext }: { tab: Tab; ext: string }) {
   return (
     <>
       {fileType === "markdown" && <MarkdownViewer tab={tab} />}
+      {fileType === "html" && <HtmlViewer tab={tab} />}
       {fileType === "code" && <CodeViewer tab={tab} ext={ext} />}
       {fileType === "json" && <JsonViewer tab={tab} />}
       {fileType === "yaml" && <YamlTomlViewer tab={tab} format="yaml" />}

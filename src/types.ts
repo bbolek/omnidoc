@@ -46,6 +46,7 @@ export type ColorScheme = "light" | "dark" | "system";
 
 export type FileType =
   | "markdown"
+  | "html"
   | "code"
   | "json"
   | "yaml"
