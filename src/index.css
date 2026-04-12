@@ -516,6 +516,12 @@ body {
   background: var(--color-syntax-bg) !important;
 }
 
+/* Shiki HTML wrapper: constrain to parent width, let inner pre scroll */
+.markdown-body .shiki-wrapper {
+  min-width: 0;
+  overflow: hidden;
+}
+
 .markdown-body blockquote {
   margin: 0 0 1em;
   padding: 0 1em;
