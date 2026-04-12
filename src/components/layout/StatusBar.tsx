@@ -14,7 +14,7 @@ import type { ThemeDefinition } from "../../types";
 
 export function StatusBar() {
   const { tabs, activeTabId, updateTabContent } = useFileStore();
-  const { themeName, colorScheme, setTheme, setColorScheme } = useThemeStore();
+  const { themeName, setTheme } = useThemeStore();
   const { zoomLevel, increaseZoom, decreaseZoom, resetZoom } = useUiStore();
   const [showThemePicker, setShowThemePicker] = useState(false);
   const [editingTheme, setEditingTheme] = useState<ThemeDefinition | null | undefined>(undefined);
@@ -26,18 +26,6 @@ export function StatusBar() {
   const isMarkdown = ["md", "mdx", "markdown"].includes(ext);
   const words = isMarkdown && activeTab ? wordCount(activeTab.content) : null;
   const readTime = isMarkdown && activeTab ? readingTime(activeTab.content) : null;
-
-  const schemeCycle: Array<typeof colorScheme> = ["system", "light", "dark"];
-  const nextScheme = () => {
-    const idx = schemeCycle.indexOf(colorScheme);
-    setColorScheme(schemeCycle[(idx + 1) % schemeCycle.length]);
-  };
-
-  const schemeLabel: Record<typeof colorScheme, string> = {
-    system: "System",
-    light: "Light",
-    dark: "Dark",
-  };
 
   const builtinNames = new Set(BUILTIN_THEMES.map((t) => t.name));
   const allThemes = Array.from(THEMES);
@@ -143,13 +131,6 @@ export function StatusBar() {
               <div className="status-separator" />
             </>
           )}
-          {/* Color scheme toggle */}
-          <div className="status-item">
-            <button onClick={nextScheme} title="Toggle color scheme">
-              {schemeLabel[colorScheme]}
-            </button>
-          </div>
-          <div className="status-separator" />
           {/* Theme picker */}
           <div className="status-item">
             <button

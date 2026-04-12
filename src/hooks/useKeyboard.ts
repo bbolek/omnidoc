@@ -14,6 +14,7 @@ export function useGlobalKeyboard() {
   const {
     toggleSidebar, toggleSearch, setShortcutsVisible, setSearchVisible,
     searchVisible, increaseZoom, decreaseZoom, resetZoom,
+    setQuickOpenVisible,
   } = useUiStore();
 
   const handler = useCallback(
@@ -23,15 +24,15 @@ export function useGlobalKeyboard() {
 
       // ── Tab navigation ───────────────────────────────────────────────────
 
-      // Ctrl+Tab / Ctrl+PageDown → next tab
-      if (ctrl && !e.shiftKey && (e.key === "Tab" || e.key === "PageDown")) {
+      // Ctrl+Tab / Ctrl+PageDown → next tab (use e.ctrlKey directly — Ctrl+Tab is always the Ctrl key)
+      if (e.ctrlKey && !e.shiftKey && (e.key === "Tab" || e.key === "PageDown")) {
         e.preventDefault();
         nextTab();
         return;
       }
 
       // Ctrl+Shift+Tab / Ctrl+PageUp → previous tab
-      if (ctrl && e.shiftKey && (e.key === "Tab" || e.key === "PageUp")) {
+      if (e.ctrlKey && e.shiftKey && (e.key === "Tab" || e.key === "PageUp")) {
         e.preventDefault();
         prevTab();
         return;
@@ -43,6 +44,20 @@ export function useGlobalKeyboard() {
       if (ctrl && !e.shiftKey && e.key === "w") {
         e.preventDefault();
         if (activeTabId) closeTab(activeTabId);
+        return;
+      }
+
+      // Ctrl+F4 → close active tab
+      if (e.ctrlKey && e.key === "F4") {
+        e.preventDefault();
+        if (activeTabId) closeTab(activeTabId);
+        return;
+      }
+
+      // Ctrl+P → quick open file
+      if (ctrl && e.key === "p") {
+        e.preventDefault();
+        setQuickOpenVisible(true);
         return;
       }
 
@@ -169,24 +184,22 @@ export function useGlobalKeyboard() {
       activeTabId, closeTab, closeAllTabs, toggleSidebar, toggleSearch,
       setShortcutsVisible, setSearchVisible, setSplitView, splitView,
       tabs, updateTabContent, nextTab, prevTab, searchVisible,
-      increaseZoom, decreaseZoom, resetZoom,
+      increaseZoom, decreaseZoom, resetZoom, setQuickOpenVisible,
     ]
   );
 
   useEffect(() => {
     const onWheel = (e: WheelEvent) => {
-      const isMac = navigator.platform.toUpperCase().includes("MAC");
-      const ctrl = isMac ? e.metaKey : e.ctrlKey;
-      if (!ctrl) return;
+      if (!e.ctrlKey && !e.metaKey) return;
       e.preventDefault();
       if (e.deltaY < 0) increaseZoom();
       else decreaseZoom();
     };
 
-    window.addEventListener("keydown", handler);
+    window.addEventListener("keydown", handler, { capture: true });
     window.addEventListener("wheel", onWheel, { passive: false });
     return () => {
-      window.removeEventListener("keydown", handler);
+      window.removeEventListener("keydown", handler, { capture: true });
       window.removeEventListener("wheel", onWheel);
     };
   }, [handler, increaseZoom, decreaseZoom]);

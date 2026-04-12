@@ -15,6 +15,7 @@ import { AppShell } from "./components/layout/AppShell";
 import { KeyboardShortcuts } from "./components/ui/KeyboardShortcuts";
 import { ToastContainer } from "./components/ui/Toast";
 import { SearchOverlay } from "./components/search/SearchOverlay";
+import { QuickOpen } from "./components/search/QuickOpen";
 import { getFileName } from "./utils/fileUtils";
 import { showToast } from "./components/ui/Toast";
 import type { FileInfo } from "./types";
@@ -91,6 +92,7 @@ function AppInner() {
     <>
       <AppShell />
       <SearchOverlay />
+      <QuickOpen />
       <KeyboardShortcuts />
       <ToastContainer />
     </>

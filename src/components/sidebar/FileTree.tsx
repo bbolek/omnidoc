@@ -1,7 +1,7 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import { ChevronRight, ChevronDown, FolderOpen, Folder, FolderPlus } from "lucide-react";
+import { ChevronRight, ChevronDown, FolderOpen, Folder, FolderPlus, ChevronsDownUp, Search, X } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useFileStore } from "../../store/fileStore";
 import { getFileName, getFileExtension, isTextReadable } from "../../utils/fileUtils";
@@ -12,9 +12,10 @@ import type { FileEntry, FileInfo } from "../../types";
 interface TreeNodeProps {
   entry: FileEntry;
   depth: number;
+  collapseKey: number;
 }
 
-function TreeNode({ entry, depth }: TreeNodeProps) {
+function TreeNode({ entry, depth, collapseKey }: TreeNodeProps) {
   const [expanded, setExpanded] = useState(false);
   const [children, setChildren] = useState<FileEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -22,6 +23,11 @@ function TreeNode({ entry, depth }: TreeNodeProps) {
 
   const { openFile, tabs, activeTabId } = useFileStore();
   const isActive = tabs.find((t) => t.path === entry.path && t.id === activeTabId);
+
+  // Collapse when parent requests it
+  useEffect(() => {
+    setExpanded(false);
+  }, [collapseKey]);
 
   const handleExpand = useCallback(async () => {
     if (!entry.is_dir) return;
@@ -116,7 +122,7 @@ function TreeNode({ entry, depth }: TreeNodeProps) {
             style={{ overflow: "hidden" }}
           >
             {children.map((child) => (
-              <TreeNode key={child.path} entry={child} depth={depth + 1} />
+              <TreeNode key={child.path} entry={child} depth={depth + 1} collapseKey={collapseKey} />
             ))}
           </motion.div>
         )}
@@ -146,8 +152,85 @@ function TreeNode({ entry, depth }: TreeNodeProps) {
   );
 }
 
+// Flat search result row
+interface SearchResultRowProps {
+  entry: FileEntry;
+  rootFolder: string;
+}
+
+function SearchResultRow({ entry, rootFolder }: SearchResultRowProps) {
+  const { openFile, tabs, activeTabId } = useFileStore();
+  const isActive = tabs.find((t) => t.path === entry.path && t.id === activeTabId);
+
+  const relPath = entry.path.startsWith(rootFolder)
+    ? entry.path.slice(rootFolder.length).replace(/^[/\\]/, "")
+    : entry.path;
+  const dirPart = relPath.includes("/") || relPath.includes("\\")
+    ? relPath.substring(0, relPath.lastIndexOf(relPath.includes("/") ? "/" : "\\"))
+    : "";
+
+  const handleOpen = async () => {
+    try {
+      const [content, info] = await Promise.all([
+        invoke<string>("read_file", { path: entry.path }),
+        invoke<FileInfo>("get_file_info", { path: entry.path }),
+      ]);
+      openFile(entry.path, entry.name, content, info);
+    } catch (err) {
+      console.error("Failed to open file:", err);
+    }
+  };
+
+  return (
+    <div
+      className={`tree-item ${isActive ? "selected" : ""}`}
+      style={{ paddingLeft: 8, flexDirection: "column", alignItems: "flex-start", gap: 1, paddingTop: 5, paddingBottom: 5 }}
+      onClick={handleOpen}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 6, width: "100%" }}>
+        <FileIcon extension={entry.extension} size={13} style={{ flexShrink: 0, opacity: 0.7 }} />
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 13 }}>
+          {entry.name}
+        </span>
+      </div>
+      {dirPart && (
+        <span style={{ fontSize: 11, color: "var(--color-text-muted)", paddingLeft: 19, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: "100%" }}>
+          {dirPart}
+        </span>
+      )}
+    </div>
+  );
+}
+
+// Recursively collect files matching a query, depth-limited
+async function searchFiles(dir: string, query: string, depth = 0): Promise<FileEntry[]> {
+  if (depth > 5) return [];
+  try {
+    const entries = await invoke<FileEntry[]>("list_directory", { path: dir });
+    const results: FileEntry[] = [];
+    for (const entry of entries) {
+      if (!entry.is_dir && entry.name.toLowerCase().includes(query.toLowerCase())) {
+        results.push(entry);
+      }
+      if (entry.is_dir && results.length < 100) {
+        const sub = await searchFiles(entry.path, query, depth + 1);
+        results.push(...sub);
+      }
+      if (results.length >= 100) break;
+    }
+    return results;
+  } catch {
+    return [];
+  }
+}
+
 export function FileTree() {
   const { openFolder: currentFolder, tree, setFolder, setTree } = useFileStore();
+  const [collapseKey, setCollapseKey] = useState(0);
+  const [query, setQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<FileEntry[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const handleOpenFolder = async () => {
     const selected = await open({ directory: true, multiple: false });
@@ -170,6 +253,21 @@ export function FileTree() {
         .catch(console.error);
     }
   }, [currentFolder, tree.length, setTree]);
+
+  // Debounced recursive search
+  useEffect(() => {
+    if (!query.trim() || !currentFolder) {
+      setSearchResults([]);
+      return;
+    }
+    setIsSearching(true);
+    const timer = setTimeout(async () => {
+      const results = await searchFiles(currentFolder, query.trim());
+      setSearchResults(results);
+      setIsSearching(false);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [query, currentFolder]);
 
   if (!currentFolder) {
     return (
@@ -209,13 +307,14 @@ export function FileTree() {
   }
 
   const folderName = getFileName(currentFolder);
+  const isFiltered = query.trim().length > 0;
 
   return (
-    <div style={{ flex: 1, overflow: "auto", paddingBottom: 8 }}>
-      {/* Folder root label */}
+    <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", paddingBottom: 8 }}>
+      {/* Folder root label + collapse-all button */}
       <div
         style={{
-          padding: "4px 8px 8px",
+          padding: "4px 8px 6px",
           fontSize: 11,
           fontWeight: 600,
           color: "var(--color-text-muted)",
@@ -228,15 +327,108 @@ export function FileTree() {
           gap: 6,
         }}
       >
-        <FolderOpen size={13} />
-        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <FolderOpen size={13} style={{ flexShrink: 0 }} />
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
           {folderName}
         </span>
+        <button
+          onClick={() => setCollapseKey((k) => k + 1)}
+          title="Collapse All"
+          style={{
+            background: "none",
+            border: "none",
+            padding: "2px 3px",
+            cursor: "pointer",
+            color: "var(--color-text-muted)",
+            display: "flex",
+            alignItems: "center",
+            borderRadius: "var(--radius-sm)",
+            flexShrink: 0,
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--color-text)"; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--color-text-muted)"; }}
+        >
+          <ChevronsDownUp size={13} />
+        </button>
       </div>
 
-      {tree.map((entry) => (
-        <TreeNode key={entry.path} entry={entry} depth={0} />
-      ))}
+      {/* Search input */}
+      <div style={{ padding: "0 6px 6px", position: "relative" }}>
+        <Search
+          size={12}
+          style={{
+            position: "absolute",
+            left: 14,
+            top: "50%",
+            transform: "translateY(-50%)",
+            color: "var(--color-text-muted)",
+            pointerEvents: "none",
+          }}
+        />
+        <input
+          ref={searchInputRef}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search files…"
+          style={{
+            width: "100%",
+            boxSizing: "border-box",
+            background: "var(--color-bg-inset)",
+            border: "1px solid var(--color-border-muted)",
+            borderRadius: "var(--radius-sm)",
+            padding: "4px 24px 4px 24px",
+            fontSize: 12,
+            color: "var(--color-text)",
+            fontFamily: "Inter, sans-serif",
+            outline: "none",
+          }}
+          onFocus={(e) => { e.currentTarget.style.borderColor = "var(--color-accent)"; }}
+          onBlur={(e) => { e.currentTarget.style.borderColor = "var(--color-border-muted)"; }}
+        />
+        {query && (
+          <button
+            onClick={() => setQuery("")}
+            style={{
+              position: "absolute",
+              right: 14,
+              top: "50%",
+              transform: "translateY(-50%)",
+              background: "none",
+              border: "none",
+              padding: 0,
+              cursor: "pointer",
+              color: "var(--color-text-muted)",
+              display: "flex",
+              alignItems: "center",
+            }}
+          >
+            <X size={11} />
+          </button>
+        )}
+      </div>
+
+      {/* Tree or search results */}
+      <div style={{ flex: 1, overflow: "auto" }}>
+        {isFiltered ? (
+          isSearching ? (
+            <div style={{ padding: "8px 12px", fontSize: 12, color: "var(--color-text-muted)" }}>
+              Searching…
+            </div>
+          ) : searchResults.length === 0 ? (
+            <div style={{ padding: "8px 12px", fontSize: 12, color: "var(--color-text-muted)" }}>
+              No files found
+            </div>
+          ) : (
+            searchResults.map((entry) => (
+              <SearchResultRow key={entry.path} entry={entry} rootFolder={currentFolder} />
+            ))
+          )
+        ) : (
+          tree.map((entry) => (
+            <TreeNode key={entry.path} entry={entry} depth={0} collapseKey={collapseKey} />
+          ))
+        )}
+      </div>
     </div>
   );
 }
