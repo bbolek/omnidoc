@@ -8,7 +8,7 @@ import { StatusBar } from "./StatusBar";
 import { MainArea } from "./MainArea";
 
 export function AppShell() {
-  const { sidebarPosition, sidebarVisible, zenMode } = useUiStore();
+  const { sidebarPosition, sidebarVisible, sidebarWidth, zenMode } = useUiStore();
 
   return (
     <div className={`app-shell${zenMode ? " zen-mode" : ""}`}>
@@ -23,9 +23,12 @@ export function AppShell() {
                 <motion.div
                   key="sidebar"
                   initial={{ width: 0, opacity: 0 }}
-                  animate={{ width: "var(--sidebar-width, 260px)", opacity: 1 }}
+                  animate={{ width: sidebarWidth, opacity: 1 }}
                   exit={{ width: 0, opacity: 0 }}
-                  transition={{ duration: 0.2, ease: "easeInOut" }}
+                  transition={{
+                    opacity: { duration: 0.2, ease: "easeInOut" },
+                    width: { duration: 0 },
+                  }}
                   style={{ overflow: "hidden", flexShrink: 0 }}
                 >
                   <Sidebar position="left" />
@@ -44,9 +47,12 @@ export function AppShell() {
                 <motion.div
                   key="sidebar-right"
                   initial={{ width: 0, opacity: 0 }}
-                  animate={{ width: "var(--sidebar-width, 260px)", opacity: 1 }}
+                  animate={{ width: sidebarWidth, opacity: 1 }}
                   exit={{ width: 0, opacity: 0 }}
-                  transition={{ duration: 0.2, ease: "easeInOut" }}
+                  transition={{
+                    opacity: { duration: 0.2, ease: "easeInOut" },
+                    width: { duration: 0 },
+                  }}
                   style={{ overflow: "hidden", flexShrink: 0 }}
                 >
                   <Sidebar position="right" />

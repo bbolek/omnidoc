@@ -40,6 +40,14 @@ pub async fn read_file(path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+pub async fn read_file_bytes(path: String) -> Result<tauri::ipc::Response, String> {
+    let bytes = tokio::fs::read(&path)
+        .await
+        .map_err(|e| format!("Failed to read file: {e}"))?;
+    Ok(tauri::ipc::Response::new(bytes))
+}
+
+#[tauri::command]
 pub async fn list_directory(path: String) -> Result<Vec<FileEntry>, String> {
     let mut entries: Vec<FileEntry> = Vec::new();
     let mut read_dir = tokio::fs::read_dir(&path)

@@ -53,6 +53,7 @@ export type FileType =
   | "toml"
   | "csv"
   | "text"
+  | "pdf"
   | "unknown";
 
 export interface SearchMatch {

@@ -8,7 +8,7 @@ import {
 import { AnimatePresence, motion } from "framer-motion";
 import { useFileStore } from "../../store/fileStore";
 import { useStarredStore } from "../../store/starredStore";
-import { getFileName, isTextReadable } from "../../utils/fileUtils";
+import { getFileName, isOpenable, loadFileForOpen } from "../../utils/fileUtils";
 import { FileIcon } from "../ui/FileIcon";
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from "../ui/ContextMenu";
 import type { FileEntry, FileInfo } from "../../types";
@@ -212,12 +212,9 @@ function TreeNode({ entry, depth, collapseKey, parentPath }: TreeNodeProps) {
 
   const handleFileOpen = useCallback(async () => {
     if (entry.is_dir) { handleExpand(); return; }
-    if (!isTextReadable(entry.extension)) return;
+    if (!isOpenable(entry.extension)) return;
     try {
-      const [content, info] = await Promise.all([
-        invoke<string>("read_file", { path: entry.path }),
-        invoke<FileInfo>("get_file_info", { path: entry.path }),
-      ]);
+      const { content, info } = await loadFileForOpen(entry.path, entry.extension);
       openFile(entry.path, entry.name, content, info);
     } catch (err) {
       console.error("Failed to open file:", err);
@@ -503,11 +500,9 @@ function SearchResultRow({ entry, rootFolder }: SearchResultRowProps) {
     : "";
 
   const handleOpen = async () => {
+    if (!isOpenable(entry.extension)) return;
     try {
-      const [content, info] = await Promise.all([
-        invoke<string>("read_file", { path: entry.path }),
-        invoke<FileInfo>("get_file_info", { path: entry.path }),
-      ]);
+      const { content, info } = await loadFileForOpen(entry.path, entry.extension);
       openFile(entry.path, entry.name, content, info);
     } catch (err) {
       console.error("Failed to open file:", err);
@@ -566,12 +561,9 @@ function StarredSection({ starredPaths, onToggleStar }: StarredSectionProps) {
   const handleOpen = async (path: string) => {
     const name = getFileName(path);
     const ext = path.split(".").pop()?.toLowerCase();
-    if (!isTextReadable(ext)) return;
+    if (!isOpenable(ext)) return;
     try {
-      const [content, info] = await Promise.all([
-        invoke<string>("read_file", { path }),
-        invoke<FileInfo>("get_file_info", { path }),
-      ]);
+      const { content, info } = await loadFileForOpen(path, ext);
       openFile(path, name, content, info);
     } catch {}
   };
