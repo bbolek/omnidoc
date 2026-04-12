@@ -510,7 +510,7 @@ body {
   padding: 1rem 1.25rem;
   border-radius: var(--radius);
   font-family: "Fira Code", monospace;
-  font-size: 13px;
+  font-size: calc(13px * var(--content-zoom, 1));
   line-height: 1.6;
   overflow-x: auto;
   border: 1px solid var(--color-border);
@@ -732,6 +732,7 @@ mark.search-highlight.current {
   justify-content: center;
   margin: 1em 0;
   overflow-x: auto;
+  zoom: var(--content-zoom, 1);
 }
 
 .mermaid-container svg {

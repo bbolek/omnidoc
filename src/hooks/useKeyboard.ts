@@ -175,9 +175,7 @@ export function useGlobalKeyboard() {
 
   useEffect(() => {
     const onWheel = (e: WheelEvent) => {
-      const isMac = navigator.platform.toUpperCase().includes("MAC");
-      const ctrl = isMac ? e.metaKey : e.ctrlKey;
-      if (!ctrl) return;
+      if (!e.ctrlKey && !e.metaKey) return;
       e.preventDefault();
       if (e.deltaY < 0) increaseZoom();
       else decreaseZoom();
