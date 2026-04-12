@@ -11,6 +11,7 @@ pub fn run() {
         .manage(WatcherState::default())
         .invoke_handler(tauri::generate_handler![
             commands::fs::read_file,
+            commands::fs::write_file,
             commands::fs::list_directory,
             commands::fs::get_file_info,
             commands::watcher::watch_path,

@@ -10,6 +10,7 @@ import { getShikiTheme } from "../../themes";
 import { highlight } from "../../utils/shikiUtils";
 import { getLanguageForExtension } from "../../utils/fileUtils";
 import { MermaidBlock } from "./MermaidBlock";
+import { MarkdownEditor } from "../editor/MarkdownEditor";
 import type { Tab } from "../../types";
 import "katex/dist/katex.min.css";
 
@@ -17,7 +18,7 @@ interface Props {
   tab: Tab;
 }
 
-type ViewMode = "preview" | "source";
+type ViewMode = "preview" | "source" | "edit";
 
 function escapeHtml(str: string): string {
   return str
@@ -148,12 +149,20 @@ export function MarkdownViewer({ tab }: Props) {
       .catch(() => setSourceHtml(""));
   }, [tab.content, shikiTheme, mode]);
 
+  const isEditMode = mode === "edit";
+
   return (
-    <>
+    <div
+      style={
+        isEditMode
+          ? { display: "flex", flexDirection: "column", height: "100%" }
+          : undefined
+      }
+    >
       {/* Sticky toggle bar */}
       <div
         style={{
-          position: "sticky",
+          position: isEditMode ? "relative" : "sticky",
           top: 0,
           zIndex: 10,
           display: "flex",
@@ -161,6 +170,7 @@ export function MarkdownViewer({ tab }: Props) {
           padding: "8px 48px",
           background: "var(--color-bg)",
           borderBottom: "1px solid var(--color-border-muted, var(--color-border))",
+          flexShrink: 0,
         }}
       >
         <div
@@ -172,7 +182,7 @@ export function MarkdownViewer({ tab }: Props) {
             fontSize: 12,
           }}
         >
-          {(["preview", "source"] as ViewMode[]).map((m) => (
+          {(["preview", "source", "edit"] as ViewMode[]).map((m) => (
             <button
               key={m}
               onClick={() => setMode(m)}
@@ -195,7 +205,9 @@ export function MarkdownViewer({ tab }: Props) {
       </div>
 
       {/* Content */}
-      {mode === "preview" ? (
+      {mode === "edit" ? (
+        <MarkdownEditor tab={tab} />
+      ) : mode === "preview" ? (
         <div className="markdown-body selectable fade-in">
           <ReactMarkdown
             remarkPlugins={[remarkGfm, remarkMath]}
@@ -216,6 +228,6 @@ export function MarkdownViewer({ tab }: Props) {
           </pre>
         </div>
       )}
-    </>
+    </div>
   );
 }
