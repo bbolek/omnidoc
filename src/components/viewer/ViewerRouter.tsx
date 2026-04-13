@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { getFileType, getFileExtension } from "../../utils/fileUtils";
 import { pluginManager } from "../../plugins/pluginManager";
@@ -12,6 +12,26 @@ import { TextViewer } from "./TextViewer";
 import { PdfViewer } from "./PdfViewer";
 import type { Tab } from "../../types";
 import type { ViewerRegistration } from "../../plugins/api";
+
+// Office viewers are lazy-loaded so their heavy parsing libraries
+// (docx-preview, xlsx, pptx-preview) only ship to users who open these files.
+const DocxViewer = lazy(() =>
+  import("./DocxViewer").then((m) => ({ default: m.DocxViewer }))
+);
+const XlsxViewer = lazy(() =>
+  import("./XlsxViewer").then((m) => ({ default: m.XlsxViewer }))
+);
+const PptxViewer = lazy(() =>
+  import("./PptxViewer").then((m) => ({ default: m.PptxViewer }))
+);
+
+function OfficeFallback({ label }: { label: string }) {
+  return (
+    <div style={{ padding: 24, fontSize: 13, color: "var(--color-text-muted)" }}>
+      Loading {label}…
+    </div>
+  );
+}
 
 interface Props {
   tab: Tab;
@@ -57,6 +77,21 @@ function BuiltinViewer({ tab, ext }: { tab: Tab; ext: string }) {
       {fileType === "toml" && <YamlTomlViewer tab={tab} format="toml" />}
       {fileType === "csv" && <CsvViewer tab={tab} />}
       {fileType === "pdf" && <PdfViewer tab={tab} />}
+      {fileType === "docx" && (
+        <Suspense fallback={<OfficeFallback label="document" />}>
+          <DocxViewer tab={tab} />
+        </Suspense>
+      )}
+      {fileType === "xlsx" && (
+        <Suspense fallback={<OfficeFallback label="workbook" />}>
+          <XlsxViewer tab={tab} />
+        </Suspense>
+      )}
+      {fileType === "pptx" && (
+        <Suspense fallback={<OfficeFallback label="presentation" />}>
+          <PptxViewer tab={tab} />
+        </Suspense>
+      )}
       {fileType === "text" && <TextViewer tab={tab} />}
       {fileType === "unknown" && <TextViewer tab={tab} />}
     </>
