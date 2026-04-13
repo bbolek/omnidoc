@@ -39,7 +39,17 @@ export function XlsxViewer({ tab }: Props) {
 
         // Lazy import to keep SheetJS out of the main bundle.
         const XLSX = await import("xlsx");
-        const workbook = XLSX.read(new Uint8Array(buffer), { type: "array" });
+        // Preserve number formats, dates and styles so that
+        // `sheet_to_html` renders formatted text values (e.g. dates,
+        // currency, percentages, leading zeros on text-formatted cells)
+        // instead of raw underlying values.
+        const workbook = XLSX.read(new Uint8Array(buffer), {
+          type: "array",
+          cellNF: true,
+          cellDates: true,
+          cellStyles: true,
+          cellHTML: true,
+        });
         if (cancelled) return;
 
         const out: SheetHtml[] = workbook.SheetNames.map((name) => ({
