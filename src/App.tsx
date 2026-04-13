@@ -17,6 +17,7 @@ import { KeyboardShortcuts } from "./components/ui/KeyboardShortcuts";
 import { ToastContainer } from "./components/ui/Toast";
 import { SearchOverlay } from "./components/search/SearchOverlay";
 import { QuickOpen } from "./components/search/QuickOpen";
+import { PresentationMode } from "./components/viewer/PresentationMode";
 import { getFileName, loadFileForOpen } from "./utils/fileUtils";
 import { showToast } from "./components/ui/Toast";
 
@@ -93,6 +94,7 @@ function AppInner() {
       <QuickOpen />
       <KeyboardShortcuts />
       <ToastContainer />
+      <PresentationMode />
       <SessionLoader visible={isRestoring} />
     </>
   );

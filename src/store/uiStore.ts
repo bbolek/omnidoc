@@ -16,6 +16,7 @@ interface UiState {
   pendingFindQuery: string | null;
   showLineNumbers: boolean;
   zenMode: boolean;
+  presentationVisible: boolean;
 
   setSidebarPosition: (pos: SidebarPosition) => void;
   toggleSidebar: () => void;
@@ -36,6 +37,7 @@ interface UiState {
   setShowLineNumbers: (v: boolean) => void;
   toggleZenMode: () => void;
   setZenMode: (v: boolean) => void;
+  setPresentationVisible: (v: boolean) => void;
 }
 
 export const useUiStore = create<UiState>()(
@@ -54,6 +56,7 @@ export const useUiStore = create<UiState>()(
       pendingFindQuery: null,
       showLineNumbers: false,
       zenMode: false,
+      presentationVisible: false,
 
       setSidebarPosition: (pos) => set({ sidebarPosition: pos }),
       toggleSidebar: () => set((s) => ({ sidebarVisible: !s.sidebarVisible })),
@@ -75,6 +78,7 @@ export const useUiStore = create<UiState>()(
       setShowLineNumbers: (v) => set({ showLineNumbers: v }),
       toggleZenMode: () => set((s) => ({ zenMode: !s.zenMode })),
       setZenMode: (v) => set({ zenMode: v }),
+      setPresentationVisible: (v) => set({ presentationVisible: v }),
     }),
     {
       name: "omnidoc-ui",

@@ -16,12 +16,23 @@ export function useGlobalKeyboard() {
     searchVisible, increaseZoom, decreaseZoom, resetZoom,
     setQuickOpenVisible, setActiveSidebarPanel,
     toggleZenMode, setZenMode, zenMode,
+    setPresentationVisible, presentationVisible,
   } = useUiStore();
 
   const handler = useCallback(
     (e: KeyboardEvent) => {
       const isMac = navigator.platform.toUpperCase().includes("MAC");
       const ctrl = isMac ? e.metaKey : e.ctrlKey;
+
+      // While presenting, PresentationMode owns the keyboard — let only the
+      // Ctrl+Shift+P toggle through so the user can still dismiss by shortcut.
+      if (presentationVisible) {
+        if (ctrl && e.shiftKey && (e.key === "P" || e.key === "p")) {
+          e.preventDefault();
+          setPresentationVisible(false);
+        }
+        return;
+      }
 
       // ── Tab navigation ───────────────────────────────────────────────────
 
@@ -89,6 +100,27 @@ export function useGlobalKeyboard() {
       if (ctrl && e.shiftKey && (e.key === "Z" || e.key === "z")) {
         e.preventDefault();
         toggleZenMode();
+        return;
+      }
+
+      // Ctrl+Shift+P → enter presentation mode (markdown files only)
+      if (ctrl && e.shiftKey && (e.key === "P" || e.key === "p")) {
+        e.preventDefault();
+        if (presentationVisible) {
+          setPresentationVisible(false);
+          return;
+        }
+        const tab = tabs.find((t) => t.id === activeTabId);
+        if (!tab) {
+          showToast({ message: "Open a Markdown file to present", type: "info" });
+          return;
+        }
+        const ext = getFileExtension(tab.path);
+        if (getFileType(ext) !== "markdown") {
+          showToast({ message: "Presentation mode is for Markdown files", type: "info" });
+          return;
+        }
+        setPresentationVisible(true);
         return;
       }
 
@@ -204,6 +236,7 @@ export function useGlobalKeyboard() {
       tabs, updateTabContent, nextTab, prevTab, searchVisible,
       increaseZoom, decreaseZoom, resetZoom, setQuickOpenVisible, setActiveSidebarPanel,
       toggleZenMode, setZenMode, zenMode,
+      setPresentationVisible, presentationVisible,
     ]
   );
 
