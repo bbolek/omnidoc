@@ -19,6 +19,7 @@ pub fn run() {
             commands::fs::create_directory,
             commands::fs::rename_path,
             commands::fs::delete_path,
+            commands::fs::show_in_folder,
             commands::fs::get_git_status,
             commands::fs::is_git_repo,
             commands::watcher::watch_path,

@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { Reorder, AnimatePresence } from "framer-motion";
+import { invoke } from "@tauri-apps/api/core";
 import { useFileStore } from "../../store/fileStore";
 import { getFileExtension } from "../../utils/fileUtils";
 import { FileIcon } from "../ui/FileIcon";
@@ -112,33 +113,57 @@ export function TabBar() {
         </Reorder.Group>
       </div>
 
-      {contextMenu && (
-        <ContextMenu x={contextMenu.x} y={contextMenu.y} onClose={closeMenu}>
-          <ContextMenuItem
-            label="Close"
-            onClick={() => { closeTab(contextMenu.tabId); closeMenu(); }}
-          />
-          <ContextMenuItem
-            label="Close Others"
-            onClick={() => { closeOtherTabs(contextMenu.tabId); closeMenu(); }}
-          />
-          <ContextMenuSeparator />
-          <ContextMenuItem
-            label="Close to the Left"
-            onClick={() => { closeTabsToLeft(contextMenu.tabId); closeMenu(); }}
-          />
-          <ContextMenuItem
-            label="Close to the Right"
-            onClick={() => { closeTabsToRight(contextMenu.tabId); closeMenu(); }}
-          />
-          <ContextMenuSeparator />
-          <ContextMenuItem
-            label="Close All"
-            danger
-            onClick={() => { closeAllTabs(); closeMenu(); }}
-          />
-        </ContextMenu>
-      )}
+      {contextMenu && (() => {
+        const menuTab = tabs.find((t) => t.id === contextMenu.tabId);
+        return (
+          <ContextMenu x={contextMenu.x} y={contextMenu.y} onClose={closeMenu}>
+            <ContextMenuItem
+              label="Close"
+              onClick={() => { closeTab(contextMenu.tabId); closeMenu(); }}
+            />
+            <ContextMenuItem
+              label="Close Others"
+              onClick={() => { closeOtherTabs(contextMenu.tabId); closeMenu(); }}
+            />
+            <ContextMenuSeparator />
+            <ContextMenuItem
+              label="Close to the Left"
+              onClick={() => { closeTabsToLeft(contextMenu.tabId); closeMenu(); }}
+            />
+            <ContextMenuItem
+              label="Close to the Right"
+              onClick={() => { closeTabsToRight(contextMenu.tabId); closeMenu(); }}
+            />
+            {menuTab && (
+              <>
+                <ContextMenuSeparator />
+                <ContextMenuItem
+                  label="Show in Folder"
+                  onClick={() => {
+                    invoke("show_in_folder", { path: menuTab.path }).catch((err) =>
+                      console.error("show_in_folder failed:", err)
+                    );
+                    closeMenu();
+                  }}
+                />
+                <ContextMenuItem
+                  label="Copy Path"
+                  onClick={() => {
+                    navigator.clipboard.writeText(menuTab.path);
+                    closeMenu();
+                  }}
+                />
+              </>
+            )}
+            <ContextMenuSeparator />
+            <ContextMenuItem
+              label="Close All"
+              danger
+              onClick={() => { closeAllTabs(); closeMenu(); }}
+            />
+          </ContextMenu>
+        );
+      })()}
     </>
   );
 }
