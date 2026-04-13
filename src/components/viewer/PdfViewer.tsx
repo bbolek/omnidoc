@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { ChevronLeft, ChevronRight, Maximize2, ZoomIn, ZoomOut } from "lucide-react";
+import { ChevronLeft, ChevronRight, Maximize2 } from "lucide-react";
 import * as pdfjsLib from "pdfjs-dist";
 import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
 // Vite-friendly worker import: bundled as an asset URL
 // eslint-disable-next-line import/no-unresolved
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import type { Tab } from "../../types";
+import { useUiStore } from "../../store/uiStore";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
 
@@ -16,8 +17,6 @@ interface Props {
 
 type FitMode = "actual" | "width";
 
-const MIN_SCALE = 0.25;
-const MAX_SCALE = 4;
 const PAGE_GAP = 16;
 const CONTAINER_PADDING = 24;
 
@@ -32,7 +31,8 @@ export function PdfViewer({ tab }: Props) {
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [scale, setScale] = useState(1);
+  // Use the global zoom so the status-bar controls and Ctrl+wheel apply here.
+  const zoomLevel = useUiStore((s) => s.zoomLevel);
   const [fitMode, setFitMode] = useState<FitMode>("width");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageInput, setPageInput] = useState("1");
@@ -155,18 +155,21 @@ export function PdfViewer({ tab }: Props) {
     }
   };
 
-  const zoomIn = () => {
-    setFitMode("actual");
-    setScale((s) => Math.min(MAX_SCALE, +(s + 0.25).toFixed(2)));
-  };
-  const zoomOut = () => {
-    setFitMode("actual");
-    setScale((s) => Math.max(MIN_SCALE, +(s - 0.25).toFixed(2)));
-  };
   const fitWidth = () => {
     setFitMode("width");
-    setScale(1);
   };
+
+  // Any global zoom change (status-bar buttons, keyboard, Ctrl+wheel) should
+  // exit fit-to-width mode so the user sees the explicit zoom they asked for.
+  // Skip the initial mount so freshly-opened PDFs stay in fit mode.
+  const isFirstZoomRun = useRef(true);
+  useEffect(() => {
+    if (isFirstZoomRun.current) {
+      isFirstZoomRun.current = false;
+      return;
+    }
+    setFitMode("actual");
+  }, [zoomLevel]);
 
   const pageItems = useMemo(
     () => Array.from({ length: numPages }, (_, i) => i + 1),
@@ -239,15 +242,6 @@ export function PdfViewer({ tab }: Props) {
 
         <div style={{ flex: 1 }} />
 
-        <button onClick={zoomOut} disabled={!pdf} title="Zoom out" style={toolbarButtonStyle(false)}>
-          <ZoomOut size={14} />
-        </button>
-        <span style={{ minWidth: 44, textAlign: "center", fontVariantNumeric: "tabular-nums" }}>
-          {fitMode === "width" ? "Fit" : `${Math.round(scale * 100)}%`}
-        </span>
-        <button onClick={zoomIn} disabled={!pdf} title="Zoom in" style={toolbarButtonStyle(false)}>
-          <ZoomIn size={14} />
-        </button>
         <button
           onClick={fitWidth}
           disabled={!pdf}
@@ -297,7 +291,7 @@ export function PdfViewer({ tab }: Props) {
               key={`${tab.path}:${p}`}
               pdf={pdf}
               pageNumber={p}
-              scale={scale}
+              scale={zoomLevel}
               fitMode={fitMode}
               // Subtract horizontal container padding; ResizeObserver keeps this live.
               availableWidth={Math.max(0, containerWidth - CONTAINER_PADDING * 2)}
