@@ -1,0 +1,7 @@
+{
+  "id": "obsidian-toolkit",
+  "name": "Obsidian Toolkit",
+  "version": "1.0.0",
+  "description": "Obsidian-style note-taking helpers: wiki-link navigation, outgoing-links panel, reading time, backlink copy, and frontmatter extraction.",
+  "author": "Omnidoc"
+}
