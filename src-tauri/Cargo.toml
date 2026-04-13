@@ -1,14 +1,14 @@
 [package]
-name = "md-viewer"
+name = "omnidoc"
 version = "0.1.0"
-description = "A beautiful markdown and file viewer"
+description = "A beautiful universal document viewer"
 authors = []
 license = "MIT"
 repository = ""
 edition = "2021"
 
 [lib]
-name = "md_viewer_lib"
+name = "omnidoc_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

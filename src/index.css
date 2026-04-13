@@ -625,12 +625,12 @@ body {
 }
 
 /* ─── Spinner ─────────────────────────────────────────────────────────── */
-@keyframes md-viewer-spin {
+@keyframes omnidoc-spin {
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
 }
 .spin {
-  animation: md-viewer-spin 1s linear infinite;
+  animation: omnidoc-spin 1s linear infinite;
 }
 
 /* ─── Breadcrumb ──────────────────────────────────────────────────────── */

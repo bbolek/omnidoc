@@ -1,8 +1,8 @@
 /**
- * Example md-viewer plugin
+ * Example Omnidoc plugin
  *
  * This file is executed by the app when the plugin is loaded.
- * The `api` argument (and `window.__mdViewerAPI`) expose the full Plugin API.
+ * The `api` argument (and `window.__omnidocAPI`) expose the full Plugin API.
  *
  * To install:
  *   1. Copy this folder into  <app_data_dir>/plugins/example-plugin/
@@ -175,4 +175,4 @@
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;");
   }
-})(window.__mdViewerAPI);
+})(window.__omnidocAPI);

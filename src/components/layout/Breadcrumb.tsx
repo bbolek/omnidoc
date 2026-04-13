@@ -60,7 +60,7 @@ export function Breadcrumb() {
     setActiveSidebarPanel("tree");
     // Dispatch a custom event that FileTree listens for to expand/scroll.
     window.dispatchEvent(
-      new CustomEvent("md-viewer:reveal-path", { detail: { path } })
+      new CustomEvent("omnidoc:reveal-path", { detail: { path } })
     );
   };
 

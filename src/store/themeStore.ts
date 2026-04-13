@@ -127,7 +127,7 @@ export const useThemeStore = create<ThemeState>()(
       },
     }),
     {
-      name: "md-viewer-theme",
+      name: "omnidoc-theme",
       partialize: (state) => ({
         themeName: state.themeName,
         colorScheme: state.colorScheme,

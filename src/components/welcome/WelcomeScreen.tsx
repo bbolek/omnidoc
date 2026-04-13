@@ -110,10 +110,10 @@ export function WelcomeScreen() {
             letterSpacing: "-0.02em",
           }}
         >
-          MD Viewer
+          Omnidoc
         </h1>
         <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--color-text-muted)" }}>
-          A beautiful file viewer for Markdown and more
+          A beautiful universal document viewer
         </p>
       </div>
 

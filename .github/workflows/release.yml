@@ -61,7 +61,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: v__VERSION__
-          releaseName: "MD Viewer v__VERSION__"
+          releaseName: "Omnidoc v__VERSION__"
           releaseBody: |
             ## What's new
             See commit history for changes in this release.

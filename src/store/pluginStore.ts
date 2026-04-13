@@ -88,7 +88,7 @@ export const usePluginStore = create<PluginState>()(
       },
     }),
     {
-      name: "md-viewer-plugins",
+      name: "omnidoc-plugins",
       // Only persist the user's enable/disable choices
       partialize: (state) => ({ enabled: state.enabled }),
     }
