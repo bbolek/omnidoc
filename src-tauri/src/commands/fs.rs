@@ -338,7 +338,6 @@ fn git_command(folder: &str, args: &[&str]) -> tokio::process::Command {
     cmd.args(args).current_dir(folder);
     #[cfg(windows)]
     {
-        use std::os::windows::process::CommandExt;
         cmd.creation_flags(0x0800_0000);
     }
     cmd

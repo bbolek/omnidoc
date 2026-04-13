@@ -55,7 +55,7 @@ Windows, macOS (Intel + Apple Silicon), and Linux.
 | **YAML**        | `.yaml`, `.yml`                                                            | `js-yaml` + syntax-highlighted tree  |
 | **TOML**        | `.toml`                                                                    | `smol-toml` + syntax-highlighted tree|
 | **HTML / SVG**  | `.html`, `.htm`, `.svg`                                                    | Sandboxed iframe                     |
-| **Images**      | `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.bmp`, `.ico`, `.avif`          | Native image with zoom/fit           |
+| **Images**      | `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.bmp`, `.ico`, `.avif`, `.svg`  | Dedicated viewer — wheel-zoom, pan, fit/100% |
 | **Subtitles**   | `.vtt`, `.srt`                                                             | Cue-by-cue viewer                    |
 | **Code**        | `.ts`, `.tsx`, `.js`, `.jsx`, `.py`, `.rs`, `.go`, `.java`, `.cpp`, `.c`, `.rb`, `.php`, `.sh`, `.css`, `.scss`, `.sql`, `.swift`, `.kt`, `.dart`, `.lua`, `.r`, `.hs`, `.ex`, `.clj`, `.vue`, `.svelte`, …          | Shiki syntax highlighting, 100+ languages |
 | **Plain text**  | `.txt`, `.log`, `.env`, `.gitignore`, …                                    | Monospace viewer with line numbers   |
@@ -114,6 +114,15 @@ Within Markdown, Omnidoc additionally renders:
 - **DOCX** — styled rendering close to the original document
 - **XLSX** — sheet tabs, cell styles preserved
 - **PPTX** — slide-by-slide viewer
+
+### Images
+
+- Dedicated **ImageViewer** with its own independent zoom state (5%–1600%)
+- **Wheel zoom** anchored on the cursor position, **+/- toolbar buttons**, and a **100%** button to reset to actual size
+- **Fit** button to refit the image to the viewport
+- **Click-and-drag pan** once the image overflows the viewport
+- Pixel-art rendering kicks in past 200% so small icons stay crisp
+- Info panel shows file name, dimensions, file size, and format; SVGs without intrinsic dimensions get a sensible default size
 
 ### Themes & typography
 
