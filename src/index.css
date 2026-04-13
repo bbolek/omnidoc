@@ -1391,6 +1391,33 @@ body.resizing {
   border-radius: 4px;
 }
 
+/* ─── VTT viewer speaker filter dropdown ──────────────────────────────
+   Native <select> popups don't inherit transparent backgrounds reliably
+   across themes (notably GitHub Light), so we pin explicit theme colors
+   on both the closed control and its <option> popup items. */
+.vtt-speaker-select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0 18px 0 0;
+  background-image: linear-gradient(45deg, transparent 50%, var(--color-text-muted) 50%),
+    linear-gradient(135deg, var(--color-text-muted) 50%, transparent 50%);
+  background-position: right 6px top 50%, right 2px top 50%;
+  background-size: 4px 4px, 4px 4px;
+  background-repeat: no-repeat;
+}
+.vtt-speaker-select option {
+  background-color: var(--color-bg-overlay);
+  color: var(--color-text);
+}
+
 /* ─── Office viewers (docx / xlsx / pptx) ─────────────────────────────── */
 
 /* docx-preview wraps each rendered page in an .docx-wrapper > section.
