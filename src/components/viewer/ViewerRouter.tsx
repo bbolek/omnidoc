@@ -12,6 +12,7 @@ import { TextViewer } from "./TextViewer";
 import { PdfViewer } from "./PdfViewer";
 import { ImageViewer } from "./ImageViewer";
 import { VideoViewer } from "./VideoViewer";
+import { ArchiveViewer } from "./ArchiveViewer";
 import { VttViewer } from "./VttViewer";
 import type { Tab } from "../../types";
 import type { ViewerRegistration } from "../../plugins/api";
@@ -83,6 +84,7 @@ function BuiltinViewer({ tab, ext }: { tab: Tab; ext: string }) {
       {fileType === "pdf" && <PdfViewer tab={tab} />}
       {fileType === "image" && <ImageViewer tab={tab} />}
       {fileType === "video" && <VideoViewer tab={tab} />}
+      {fileType === "archive" && <ArchiveViewer tab={tab} />}
       {fileType === "docx" && (
         <Suspense fallback={<OfficeFallback label="document" />}>
           <DocxViewer tab={tab} />

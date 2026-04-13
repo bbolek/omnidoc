@@ -32,6 +32,10 @@ const IMAGE_EXTENSIONS = new Set([
 const VIDEO_EXTENSIONS = new Set([
   "mp4", "m4v", "webm", "ogv", "ogg", "mov",
 ]);
+// Only zip is fully supported today (handled via the Rust `zip` crate).
+// Other formats are listed so they show with the archive icon and a
+// helpful "not supported" message rather than rendering as garbled text.
+const ARCHIVE_EXTENSIONS = new Set(["zip"]);
 const VTT_EXTENSIONS = new Set(["vtt"]);
 
 export function getFileType(extension?: string): FileType {
@@ -52,6 +56,7 @@ export function getFileType(extension?: string): FileType {
   if (PPTX_EXTENSIONS.has(ext)) return "pptx";
   if (IMAGE_EXTENSIONS.has(ext)) return "image";
   if (VIDEO_EXTENSIONS.has(ext)) return "video";
+  if (ARCHIVE_EXTENSIONS.has(ext)) return "archive";
   return "text";
 }
 
@@ -96,7 +101,8 @@ export function isBinaryViewable(extension?: string): boolean {
     XLSX_EXTENSIONS.has(ext) ||
     PPTX_EXTENSIONS.has(ext) ||
     IMAGE_EXTENSIONS.has(ext) ||
-    VIDEO_EXTENSIONS.has(ext)
+    VIDEO_EXTENSIONS.has(ext) ||
+    ARCHIVE_EXTENSIONS.has(ext)
   );
 }
 

@@ -25,6 +25,7 @@ export function WelcomeScreen() {
             "pdf", "docx", "xlsx", "pptx",
             "png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "svg", "avif",
             "mp4", "m4v", "webm", "ogv", "ogg", "mov",
+            "zip",
             "vtt",
           ],
         },

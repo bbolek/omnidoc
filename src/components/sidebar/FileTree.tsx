@@ -5,11 +5,12 @@ import { open } from "@tauri-apps/plugin-dialog";
 import {
   ChevronRight, ChevronDown, FolderOpen, Folder, FolderPlus,
   ChevronsDownUp, Search, X, FilePlus, Star, Pencil, Trash2,
-  ExternalLink,
+  ExternalLink, Copy, Scissors, Clipboard,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useFileStore } from "../../store/fileStore";
 import { useStarredStore } from "../../store/starredStore";
+import { useFileClipboardStore } from "../../store/fileClipboardStore";
 import { getFileName, isOpenable, loadFileForOpen } from "../../utils/fileUtils";
 import { FileIcon } from "../ui/FileIcon";
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from "../ui/ContextMenu";
@@ -73,6 +74,62 @@ function getFolderStatus(folderPath: string, gitStatus: Map<string, string>): st
     }
   }
   return best;
+}
+
+// ─── Clipboard paste helper ──────────────────────────────────────────────────
+
+/**
+ * Resolve a unique destination path under `destFolder` for `sourceName`,
+ * appending " (copy)", " (copy 2)", etc. on collisions.
+ */
+async function uniqueDestination(
+  destFolder: string,
+  sourceName: string
+): Promise<string> {
+  const dot = sourceName.lastIndexOf(".");
+  // Treat dot files (".env") as having no extension.
+  const hasExt = dot > 0;
+  const base = hasExt ? sourceName.slice(0, dot) : sourceName;
+  const ext = hasExt ? sourceName.slice(dot) : "";
+
+  for (let i = 0; i < 1000; i++) {
+    const suffix = i === 0 ? "" : i === 1 ? " (copy)" : ` (copy ${i})`;
+    const candidate = `${destFolder}/${base}${suffix}${ext}`;
+    const exists = await invoke<unknown>("get_file_info", { path: candidate })
+      .then(() => true)
+      .catch(() => false);
+    if (!exists) return candidate;
+  }
+  throw new Error("Could not find a unique destination name");
+}
+
+interface PasteContext {
+  refreshFolder: (path: string) => void;
+  updateTabPath: (oldPath: string, newPath: string, newName: string) => void;
+}
+
+async function pasteInto(
+  destFolder: string,
+  ctx: PasteContext
+): Promise<void> {
+  const item = useFileClipboardStore.getState().item;
+  if (!item) return;
+  const sourceName = item.path.split(/[/\\]/).pop() ?? item.path;
+  const target = await uniqueDestination(destFolder, sourceName);
+  const targetName = target.split(/[/\\]/).pop() ?? target;
+
+  if (item.mode === "copy") {
+    await invoke("copy_path", { from: item.path, to: target });
+    ctx.refreshFolder(destFolder);
+  } else {
+    // Cut → move
+    await invoke("rename_path", { from: item.path, to: target });
+    ctx.updateTabPath(item.path, target, targetName);
+    const sourceParent = item.path.substring(0, item.path.lastIndexOf("/"));
+    if (sourceParent && sourceParent !== destFolder) ctx.refreshFolder(sourceParent);
+    ctx.refreshFolder(destFolder);
+    useFileClipboardStore.getState().clear();
+  }
 }
 
 // ─── Inline input (new file / new folder) ────────────────────────────────────
@@ -152,6 +209,9 @@ function TreeNode({ entry, depth, collapseKey, parentPath }: TreeNodeProps) {
 
   const { openFile, tabs, activeTabId, updateTabPath, closeTabsByPath } = useFileStore();
   const { toggleStar, isStarred } = useStarredStore();
+  const clipboardItem = useFileClipboardStore((s) => s.item);
+  const clipboardCopy = useFileClipboardStore((s) => s.copy);
+  const clipboardCut = useFileClipboardStore((s) => s.cut);
   const navCtx = useContext(TreeNavContext);
 
   const isActive   = tabs.some((t) => t.path === entry.path && t.id === activeTabId);
@@ -321,6 +381,40 @@ function TreeNode({ entry, depth, collapseKey, parentPath }: TreeNodeProps) {
     }
   };
 
+  // ── clipboard ────────────────────────────────────────────────────────────
+
+  const handleCopy = () => {
+    setContextMenu(null);
+    clipboardCopy(entry.path);
+  };
+
+  const handleCut = () => {
+    setContextMenu(null);
+    clipboardCut(entry.path);
+  };
+
+  const handlePaste = async () => {
+    setContextMenu(null);
+    if (!clipboardItem || !navCtx) return;
+    // Paste into this folder if it's a directory; otherwise into its parent.
+    const dest = entry.is_dir
+      ? entry.path
+      : entry.path.substring(0, entry.path.lastIndexOf("/"));
+    if (!dest) return;
+    if (entry.is_dir && !expanded) await handleExpand();
+    try {
+      await pasteInto(dest, {
+        refreshFolder: navCtx.refreshFolder,
+        updateTabPath,
+      });
+    } catch (err) {
+      console.error("Paste failed:", err);
+      window.alert(
+        `Paste failed: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  };
+
   // ─────────────────────────────────────────────────────────────────────────
 
   return (
@@ -465,6 +559,16 @@ function TreeNode({ entry, depth, collapseKey, parentPath }: TreeNodeProps) {
               <ContextMenuSeparator />
             </>
           )}
+          <ContextMenuItem label="Cut" icon={<Scissors size={13} />} onClick={handleCut} />
+          <ContextMenuItem label="Copy" icon={<Copy size={13} />} onClick={handleCopy} />
+          {clipboardItem && (
+            <ContextMenuItem
+              label={`Paste${entry.is_dir ? ` into ${entry.name}` : ""}`}
+              icon={<Clipboard size={13} />}
+              onClick={handlePaste}
+            />
+          )}
+          <ContextMenuSeparator />
           <ContextMenuItem label="Rename" icon={<Pencil size={13} />} onClick={startRename} />
           <ContextMenuItem label="Delete" icon={<Trash2 size={13} />} danger onClick={handleDelete} />
           <ContextMenuSeparator />
@@ -867,10 +971,61 @@ export function FileTree() {
     const navKeys = ["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Enter", "Home", "End"];
     const isNav = navKeys.includes(e.key);
     const isAction = e.key === "F2" || e.key === "Delete" || e.key === "Backspace";
-    if (!isNav && !isAction) return;
+    const isMod = e.ctrlKey || e.metaKey;
+    const isClipboard =
+      isMod && !e.shiftKey && !e.altKey && ["c", "x", "v"].includes(e.key.toLowerCase());
+    if (!isNav && !isAction && !isClipboard) return;
 
     const container = treeContainerRef.current;
     if (!container) return;
+
+    // Ctrl/Cmd + C / X / V — file clipboard. Skip when the user is typing
+    // in an input (search box, rename field) so regular text shortcuts work.
+    const target = e.target as HTMLElement | null;
+    const inEditableField =
+      target?.tagName === "INPUT" ||
+      target?.tagName === "TEXTAREA" ||
+      target?.isContentEditable === true;
+    if (isClipboard && inEditableField) return;
+    if (isClipboard) {
+      const key = e.key.toLowerCase();
+      if ((key === "c" || key === "x") && focusedPath) {
+        e.preventDefault();
+        const store = useFileClipboardStore.getState();
+        if (key === "c") store.copy(focusedPath);
+        else store.cut(focusedPath);
+        return;
+      }
+      if (key === "v") {
+        const item = useFileClipboardStore.getState().item;
+        if (!item) return;
+        e.preventDefault();
+        let dest = currentFolder ?? "";
+        if (focusedPath) {
+          const el = container.querySelector<HTMLElement>(
+            `[data-path="${CSS.escape(focusedPath)}"]`
+          );
+          if (el) {
+            const isDir = el.dataset.isDir === "true";
+            dest = isDir
+              ? focusedPath
+              : focusedPath.substring(0, focusedPath.lastIndexOf("/"));
+          }
+        }
+        if (!dest) return;
+        pasteInto(dest, {
+          refreshFolder,
+          updateTabPath: useFileStore.getState().updateTabPath,
+        }).catch((err) => {
+          console.error("Paste failed:", err);
+          window.alert(
+            `Paste failed: ${err instanceof Error ? err.message : String(err)}`
+          );
+        });
+        return;
+      }
+      return;
+    }
 
     // F2 — rename focused item
     if (e.key === "F2") {
@@ -940,7 +1095,7 @@ export function FileTree() {
       return;
     }
     if (e.key === "Enter") { current.click(); return; }
-  }, [focusedPath, closeTabsByPath, refreshFolder, refreshRoot]);
+  }, [focusedPath, closeTabsByPath, refreshFolder, refreshRoot, currentFolder]);
 
   // ── inline create at root level ───────────────────────────────────────────
 
