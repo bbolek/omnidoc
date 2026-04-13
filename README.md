@@ -36,7 +36,7 @@ Windows, macOS (Intel + Apple Silicon), and Linux.
 - 📚 **Universal format support** — 20+ file types, from Markdown to `.xlsx` to `.pdf`.
 - 🎨 **7 built-in themes** — GitHub Light/Dark, Dracula, Nord, Tokyo Night, Solarized Light, Catppuccin Mocha — plus custom themes via plugins.
 - 🧩 **Plugin API** — register custom viewers, commands, sidebar panels, status-bar items, and themes with a tiny JS file.
-- ⚡ **Built for keyboards** — full keyboard navigation, command palette, fuzzy file search, arrow-key tree navigation.
+- ⚡ **Built for keyboards** — full keyboard navigation, fuzzy file search, arrow-key tree navigation.
 - 🧘 **Zen mode** — hide all chrome, center the content, focus on the reading.
 - 📝 **Markdown editing** — not just viewing. Formatting toolbar, live preview, dirty indicator.
 - 🔌 **Live file watching** — files change on disk, Omnidoc reloads them.
@@ -151,7 +151,6 @@ Within Markdown, Omnidoc additionally renders:
 
 ### Productivity
 
-- **Command palette** (`Ctrl+Shift+P`) — run any command, including plugin-registered ones
 - **Zen mode** (`Ctrl+Shift+Z`) — hides all chrome, centers content
 - **Split view** (via `allotment`) — sidebar and viewer resizable
 - **Session restore** — reopens your tabs and workspace on startup, with a loader overlay so the UI doesn't flash through each tab
@@ -167,7 +166,7 @@ A minimal, powerful plugin API inspired by Obsidian. Drop a folder into
 A plugin can register:
 
 - **Viewers** for new extensions (HTML-string `render` or a React component)
-- **Commands** (optionally bound to a shortcut, always available in the command palette)
+- **Commands** (optionally bound to a shortcut)
 - **Sidebar panels** (icon + mount function, full DOM access)
 - **Status-bar items**
 - **Themes**
@@ -279,7 +278,7 @@ omnidoc/
 │   │   ├── sidebar/            # File tree, TOC, tags, frontmatter, plugins
 │   │   ├── layout/             # Titlebar, breadcrumb, status bar, tabs
 │   │   ├── editor/             # Markdown editor + toolbar
-│   │   ├── search/             # Command palette, fuzzy file search
+│   │   ├── search/             # Fuzzy file search
 │   │   ├── welcome/            # Welcome screen
 │   │   └── ui/                 # Shared primitives (Toast, Dialog, …)
 │   ├── store/                  # Zustand stores (files, theme, UI, plugins, starred)
