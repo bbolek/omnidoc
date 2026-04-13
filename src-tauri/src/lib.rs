@@ -18,6 +18,7 @@ pub fn run() {
             commands::fs::create_file,
             commands::fs::create_directory,
             commands::fs::rename_path,
+            commands::fs::copy_path,
             commands::fs::delete_path,
             commands::fs::show_in_folder,
             commands::fs::get_git_status,
@@ -34,6 +35,9 @@ pub fn run() {
             commands::plugins::read_plugin_file,
             commands::plugins::get_plugins_dir,
             commands::search::search_in_files,
+            commands::archive::list_archive_entries,
+            commands::archive::read_archive_entry_bytes,
+            commands::archive::extract_archive,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

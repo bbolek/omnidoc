@@ -24,6 +24,8 @@ export function WelcomeScreen() {
             "js", "ts", "py", "rs", "go", "csv",
             "pdf", "docx", "xlsx", "pptx",
             "png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "svg", "avif",
+            "mp4", "m4v", "webm", "ogv", "ogg", "mov",
+            "zip",
             "vtt",
           ],
         },

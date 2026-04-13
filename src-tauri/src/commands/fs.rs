@@ -171,6 +171,65 @@ pub async fn rename_path(from: String, to: String) -> Result<(), String> {
         .map_err(|e| format!("Failed to rename: {e}"))
 }
 
+/// Recursively copy a file or directory. Refuses to overwrite an
+/// existing destination, and refuses to copy a directory into itself.
+#[tauri::command]
+pub async fn copy_path(from: String, to: String) -> Result<(), String> {
+    let src = std::path::PathBuf::from(&from);
+    let dst = std::path::PathBuf::from(&to);
+
+    if dst.exists() {
+        return Err("A file or folder with that name already exists".to_string());
+    }
+
+    let meta = tokio::fs::metadata(&src)
+        .await
+        .map_err(|e| format!("Failed to get metadata: {e}"))?;
+
+    if meta.is_dir() {
+        // Refuse to copy a directory into itself or its descendants.
+        if let (Ok(s), Ok(d_parent)) = (src.canonicalize(), dst.parent().map(|p| p.canonicalize()).transpose()) {
+            if let Some(d) = d_parent {
+                if d.starts_with(&s) {
+                    return Err("Cannot copy a folder into itself".to_string());
+                }
+            }
+        }
+        tokio::task::spawn_blocking(move || copy_dir_recursive(&src, &dst))
+            .await
+            .map_err(|e| format!("join error: {e}"))?
+    } else {
+        if let Some(parent) = dst.parent() {
+            tokio::fs::create_dir_all(parent)
+                .await
+                .map_err(|e| format!("Failed to create destination: {e}"))?;
+        }
+        tokio::fs::copy(&src, &dst)
+            .await
+            .map(|_| ())
+            .map_err(|e| format!("Failed to copy file: {e}"))
+    }
+}
+
+fn copy_dir_recursive(src: &std::path::Path, dst: &std::path::Path) -> Result<(), String> {
+    std::fs::create_dir_all(dst).map_err(|e| format!("Failed to create dir: {e}"))?;
+    for entry in std::fs::read_dir(src).map_err(|e| format!("Failed to read dir: {e}"))? {
+        let entry = entry.map_err(|e| format!("Failed to read entry: {e}"))?;
+        let ty = entry.file_type().map_err(|e| format!("Failed to read type: {e}"))?;
+        let from = entry.path();
+        let to = dst.join(entry.file_name());
+        if ty.is_dir() {
+            copy_dir_recursive(&from, &to)?;
+        } else if ty.is_symlink() {
+            // Best-effort: copy as a regular file (follows the link).
+            std::fs::copy(&from, &to).map_err(|e| format!("Failed to copy {from:?}: {e}"))?;
+        } else {
+            std::fs::copy(&from, &to).map_err(|e| format!("Failed to copy {from:?}: {e}"))?;
+        }
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn delete_path(path: String) -> Result<(), String> {
     let meta = tokio::fs::metadata(&path)

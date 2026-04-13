@@ -1,3 +1,4 @@
+pub mod archive;
 pub mod export;
 pub mod fs;
 pub mod plugins;

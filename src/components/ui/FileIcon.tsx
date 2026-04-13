@@ -1,6 +1,6 @@
 import {
   FileText, FileCode, FileJson, FileSpreadsheet,
-  File, Image, Archive, Presentation,
+  File, Film, Image, Archive, Presentation,
 } from "lucide-react";
 
 interface Props extends React.HTMLAttributes<SVGElement> {
@@ -15,7 +15,8 @@ export function FileIcon({ extension, size = 16, ...rest }: Props) {
   const codeExts = ["js", "jsx", "ts", "tsx", "py", "rs", "go", "java", "c", "cpp", "h", "cs", "rb", "php", "lua", "sh", "bash", "css", "scss", "html", "xml", "sql", "vim", "r", "swift", "kt"];
   const jsonExts = ["json", "jsonc", "json5"];
   const csvExts = ["csv", "tsv"];
-  const imgExts = ["png", "jpg", "jpeg", "gif", "svg", "webp", "bmp", "ico"];
+  const imgExts = ["png", "jpg", "jpeg", "gif", "svg", "webp", "bmp", "ico", "avif"];
+  const videoExts = ["mp4", "m4v", "webm", "ogv", "ogg", "mov"];
   const archiveExts = ["zip", "tar", "gz", "7z", "rar"];
 
   const props = { size, ...rest } as Parameters<typeof FileText>[0];
@@ -27,6 +28,7 @@ export function FileIcon({ extension, size = 16, ...rest }: Props) {
   if (ext === "pptx" || ext === "ppt") return <Presentation {...props} style={{ color: "#d24726", ...rest.style }} />;
   if (codeExts.includes(ext)) return <FileCode {...props} style={{ color: "#8957e5", ...rest.style }} />;
   if (imgExts.includes(ext)) return <Image {...props} style={{ color: "#e26b4f", ...rest.style }} />;
+  if (videoExts.includes(ext)) return <Film {...props} style={{ color: "#a23bd1", ...rest.style }} />;
   if (archiveExts.includes(ext)) return <Archive {...props} style={{ color: "#888", ...rest.style }} />;
   return <File {...props} style={{ color: "var(--color-text-muted)", ...rest.style }} />;
 }
