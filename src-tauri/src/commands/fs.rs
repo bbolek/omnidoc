@@ -187,6 +187,84 @@ pub async fn delete_path(path: String) -> Result<(), String> {
     }
 }
 
+/// Reveal `path` in the OS file manager, highlighting the item when the
+/// platform supports it. Falls back to opening the containing directory.
+#[tauri::command]
+pub async fn show_in_folder(path: String) -> Result<(), String> {
+    // Make sure the target exists so the explorer doesn't pop up an error
+    // dialog on a missing file.
+    let exists = tokio::fs::try_exists(&path)
+        .await
+        .map_err(|e| format!("Failed to check path: {e}"))?;
+    if !exists {
+        return Err(format!("Path does not exist: {path}"));
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        // `explorer /select,<path>` highlights the item in its parent folder.
+        // Explorer's exit code is non-zero even on success, so we don't
+        // inspect the status — spawning is enough.
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        let mut cmd = std::process::Command::new("explorer");
+        cmd.arg(format!("/select,{path}"));
+        cmd.creation_flags(CREATE_NO_WINDOW);
+        cmd.spawn()
+            .map_err(|e| format!("Failed to open Explorer: {e}"))?;
+        return Ok(());
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .args(["-R", &path])
+            .spawn()
+            .map_err(|e| format!("Failed to open Finder: {e}"))?;
+        return Ok(());
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        // Most Linux file managers don't support "select item" via xdg-open.
+        // Try the freedesktop DBus ShowItems interface first (works for
+        // Nautilus, Dolphin, Nemo, Thunar, etc.), then fall back to xdg-open
+        // on the parent directory.
+        let uri = format!("file://{path}");
+        let dbus_ok = std::process::Command::new("dbus-send")
+            .args([
+                "--session",
+                "--dest=org.freedesktop.FileManager1",
+                "--type=method_call",
+                "/org/freedesktop/FileManager1",
+                "org.freedesktop.FileManager1.ShowItems",
+                &format!("array:string:{uri}"),
+                "string:",
+            ])
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        if dbus_ok {
+            return Ok(());
+        }
+        let parent = std::path::Path::new(&path)
+            .parent()
+            .map(|p| p.to_string_lossy().into_owned())
+            .unwrap_or(path.clone());
+        std::process::Command::new("xdg-open")
+            .arg(parent)
+            .spawn()
+            .map_err(|e| format!("Failed to open file manager: {e}"))?;
+        return Ok(());
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "macos", unix)))]
+    {
+        let _ = path;
+        Err("show_in_folder is not supported on this platform".into())
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GitStatusEntry {
     pub path: String,

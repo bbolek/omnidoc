@@ -1428,9 +1428,9 @@ body.resizing {
 }
 
 /* pptx-preview renders slides as absolutely positioned divs inside a
-   wrapper. Center the wrapper and add some breathing room. */
+   wrapper. The component scales this host via CSS transform, so keep it a
+   plain block — flex / padding here would fight the transform-origin and
+   the sized wrapper that reserves scroll space. */
 .pptx-host {
-  display: flex;
-  justify-content: center;
-  padding: 16px;
+  display: block;
 }

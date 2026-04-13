@@ -5,6 +5,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import {
   ChevronRight, ChevronDown, FolderOpen, Folder, FolderPlus,
   ChevronsDownUp, Search, X, FilePlus, Star, Pencil, Trash2,
+  ExternalLink,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useFileStore } from "../../store/fileStore";
@@ -471,6 +472,17 @@ function TreeNode({ entry, depth, collapseKey, parentPath }: TreeNodeProps) {
             label={starred ? "Remove from Starred" : "Add to Starred"}
             icon={<Star size={13} />}
             onClick={() => { toggleStar(entry.path); setContextMenu(null); }}
+          />
+          <ContextMenuSeparator />
+          <ContextMenuItem
+            label="Show in Folder"
+            icon={<ExternalLink size={13} />}
+            onClick={() => {
+              invoke("show_in_folder", { path: entry.path }).catch((err) =>
+                console.error("show_in_folder failed:", err)
+              );
+              setContextMenu(null);
+            }}
           />
           <ContextMenuSeparator />
           <ContextMenuItem label="Copy Path" onClick={() => { navigator.clipboard.writeText(entry.path); setContextMenu(null); }} />
