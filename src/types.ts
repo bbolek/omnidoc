@@ -58,6 +58,7 @@ export type FileType =
   | "xlsx"
   | "pptx"
   | "image"
+  | "video"
   | "vtt"
   | "unknown";
 

@@ -25,6 +25,13 @@ const PPTX_EXTENSIONS = new Set(["pptx"]);
 const IMAGE_EXTENSIONS = new Set([
   "png", "jpg", "jpeg", "gif", "bmp", "ico", "webp", "svg", "avif",
 ]);
+// Container formats the system webview's <video> element can play
+// without any extra dependencies. Codec support varies by platform —
+// mp4 (H.264/AAC) and webm (VP8/VP9) are the safe bets; the rest are
+// best-effort.
+const VIDEO_EXTENSIONS = new Set([
+  "mp4", "m4v", "webm", "ogv", "ogg", "mov",
+]);
 const VTT_EXTENSIONS = new Set(["vtt"]);
 
 export function getFileType(extension?: string): FileType {
@@ -44,6 +51,7 @@ export function getFileType(extension?: string): FileType {
   if (XLSX_EXTENSIONS.has(ext)) return "xlsx";
   if (PPTX_EXTENSIONS.has(ext)) return "pptx";
   if (IMAGE_EXTENSIONS.has(ext)) return "image";
+  if (VIDEO_EXTENSIONS.has(ext)) return "video";
   return "text";
 }
 
@@ -62,6 +70,18 @@ export function getImageMimeType(extension?: string): string {
   }
 }
 
+export function getVideoMimeType(extension?: string): string {
+  switch (extension?.toLowerCase()) {
+    case "mp4":
+    case "m4v": return "video/mp4";
+    case "webm": return "video/webm";
+    case "ogv":
+    case "ogg": return "video/ogg";
+    case "mov": return "video/quicktime";
+    default: return "application/octet-stream";
+  }
+}
+
 /**
  * Binary file types that are viewable but should not be loaded as text.
  * The corresponding viewer is responsible for fetching the bytes itself
@@ -75,7 +95,8 @@ export function isBinaryViewable(extension?: string): boolean {
     DOCX_EXTENSIONS.has(ext) ||
     XLSX_EXTENSIONS.has(ext) ||
     PPTX_EXTENSIONS.has(ext) ||
-    IMAGE_EXTENSIONS.has(ext)
+    IMAGE_EXTENSIONS.has(ext) ||
+    VIDEO_EXTENSIONS.has(ext)
   );
 }
 
@@ -159,7 +180,7 @@ export function isTextReadable(extension?: string): boolean {
     "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
     "zip", "tar", "gz", "7z", "rar",
     "exe", "bin", "dll", "so", "dylib",
-    "mp3", "mp4", "wav", "avi", "mkv",
+    "mp3", "mp4", "m4v", "wav", "avi", "mkv", "webm", "ogv", "ogg", "mov",
     "ttf", "otf", "woff", "woff2",
   ]);
   return !binary.has(extension.toLowerCase());
