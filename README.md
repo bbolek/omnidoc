@@ -56,6 +56,8 @@ Windows, macOS (Intel + Apple Silicon), and Linux.
 | **TOML**        | `.toml`                                                                    | `smol-toml` + syntax-highlighted tree|
 | **HTML / SVG**  | `.html`, `.htm`, `.svg`                                                    | Sandboxed iframe                     |
 | **Images**      | `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.bmp`, `.ico`, `.avif`, `.svg`  | Dedicated viewer — wheel-zoom, pan, fit/100% |
+| **Video**       | `.mp4`, `.webm`, `.ogv`, `.mov`, `.m4v`                                    | Native `<video>` with controls       |
+| **Archives**    | `.zip`                                                                     | Tree of contents + one-click Extract |
 | **Subtitles**   | `.vtt`, `.srt`                                                             | Cue-by-cue viewer                    |
 | **Code**        | `.ts`, `.tsx`, `.js`, `.jsx`, `.py`, `.rs`, `.go`, `.java`, `.cpp`, `.c`, `.rb`, `.php`, `.sh`, `.css`, `.scss`, `.sql`, `.swift`, `.kt`, `.dart`, `.lua`, `.r`, `.hs`, `.ex`, `.clj`, `.vue`, `.svelte`, …          | Shiki syntax highlighting, 100+ languages |
 | **Plain text**  | `.txt`, `.log`, `.env`, `.gitignore`, …                                    | Monospace viewer with line numbers   |
@@ -79,6 +81,7 @@ Within Markdown, Omnidoc additionally renders:
 - **Folder explorer** with git status indicators (modified/untracked/staged/renamed/deleted/ignored), polled every 5 s
 - **Arrow-key tree navigation** — Up/Down, Left/Right to collapse/expand, Home/End, Enter to open
 - **File tree operations** — create file/folder, rename (F2), delete (with confirm)
+- **Cut / Copy / Paste** in the file tree — `Ctrl/Cmd+X`, `Ctrl/Cmd+C`, `Ctrl/Cmd+V` or the context menu. Paste auto-renames on collisions (`name (copy).ext`); Cut moves and updates any open tab paths
 - **Starred files** — collapsible "Starred" section, persisted
 - **Tabs** — pinnable, reorderable, session-restored on startup
 - **Breadcrumb** — shows the active file's path; click a folder segment to reveal it in the tree; click the filename to copy the path
@@ -123,6 +126,19 @@ Within Markdown, Omnidoc additionally renders:
 - **Click-and-drag pan** once the image overflows the viewport
 - Pixel-art rendering kicks in past 200% so small icons stay crisp
 - Info panel shows file name, dimensions, file size, and format; SVGs without intrinsic dimensions get a sensible default size
+
+### Video
+
+- Native HTML5 `<video>` playback with the host webview's built-in controls
+- Codec support follows the platform webview (H.264/AAC `.mp4` and VP8/VP9 `.webm` everywhere; Apple codecs on macOS)
+- Toolbar shows filename, dimensions, duration, file size, and format
+
+### Archives
+
+- **Zip viewer** renders a collapsible directory tree of the archive contents
+- Totals panel: files, folders, uncompressed size, and compression ratio
+- **Extract** toolbar button prompts for a destination folder and unpacks everything there
+- Zip-slip protection enforced server-side (entries with absolute or parent-traversal paths are skipped)
 
 ### Themes & typography
 
