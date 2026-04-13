@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Rebranded from `md-viewer` to `Omnidoc`.** Reflects the app's expanded scope — it now handles PDFs, Office documents (DOCX/XLSX/PPTX), data formats (CSV/JSON/YAML/TOML), code, images, and more in addition to Markdown. Product name, crate/package name, window title, Tauri identifier (`com.omnidoc.app`), persisted store keys (`omnidoc-*`), CSS keyframes, plugin API globals (`window.__omnidocAPI`), and custom events (`omnidoc:*`) have all been renamed. **Note:** because persisted `localStorage` keys changed, user preferences (theme, pinned tabs, starred files, plugin enable state, recent files) will reset on first launch after upgrading.
+
 ### Added
 - Titlebar now shows the currently opened workspace folder (name + folder icon, full path on hover) next to the active file name, so it's always clear which folder the session is rooted in. Falls back gracefully to just the file name when a single file is opened without a workspace.
 - Startup loader overlay covers the app while the previous session's tabs are being re-opened, so the UI no longer flashes through each tab as it mounts.

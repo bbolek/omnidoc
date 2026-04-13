@@ -105,7 +105,7 @@ export function Titlebar() {
             flexShrink: 0,
           }}
         >
-          MD Viewer
+          Omnidoc
         </span>
         {folderName && (
           <>

@@ -257,7 +257,7 @@ export const useFileStore = create<FileState>()(
       },
     }),
     {
-      name: "md-viewer-files",
+      name: "omnidoc-files",
       partialize: (state) => ({
         recentFiles: state.recentFiles,
         openFolder: state.openFolder,

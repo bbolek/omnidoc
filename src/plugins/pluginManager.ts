@@ -57,7 +57,7 @@ class PluginManager {
   /**
    * Execute plugin code string in a minimal sandbox and register everything
    * it contributes.  The plugin receives an `api` object as its first argument
-   * AND via `window.__mdViewerAPI` (for IIFE-style plugins).
+   * AND via `window.__omnidocAPI` (for IIFE-style plugins).
    */
   loadPlugin(pluginId: string, code: string): void {
     // Remove stale registrations from a previous load of this plugin
@@ -67,7 +67,7 @@ class PluginManager {
 
     // Make the API available on window so IIFE plugins can reference it without
     // receiving it as an argument (mirrors Obsidian's pattern).
-    (window as unknown as Record<string, unknown>)["__mdViewerAPI"] = api;
+    (window as unknown as Record<string, unknown>)["__omnidocAPI"] = api;
 
     try {
       // eslint-disable-next-line no-new-func

@@ -77,7 +77,7 @@ export const useUiStore = create<UiState>()(
       setZenMode: (v) => set({ zenMode: v }),
     }),
     {
-      name: "md-viewer-ui",
+      name: "omnidoc-ui",
       partialize: (state) => ({
         sidebarPosition: state.sidebarPosition,
         sidebarVisible: state.sidebarVisible,

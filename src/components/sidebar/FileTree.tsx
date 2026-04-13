@@ -842,8 +842,8 @@ export function FileTree() {
         }
       }, 80);
     };
-    window.addEventListener("md-viewer:reveal-path", handler);
-    return () => window.removeEventListener("md-viewer:reveal-path", handler);
+    window.addEventListener("omnidoc:reveal-path", handler);
+    return () => window.removeEventListener("omnidoc:reveal-path", handler);
   }, [currentFolder]);
 
   // ── open folder ───────────────────────────────────────────────────────────

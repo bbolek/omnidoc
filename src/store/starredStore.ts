@@ -25,6 +25,6 @@ export const useStarredStore = create<StarredState>()(
 
       isStarred: (path) => get().starredPaths.includes(path),
     }),
-    { name: "md-viewer-starred" }
+    { name: "omnidoc-starred" }
   )
 );
