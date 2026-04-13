@@ -55,7 +55,7 @@ Windows, macOS (Intel + Apple Silicon), and Linux.
 | **YAML**        | `.yaml`, `.yml`                                                            | `js-yaml` + syntax-highlighted tree  |
 | **TOML**        | `.toml`                                                                    | `smol-toml` + syntax-highlighted tree|
 | **HTML / SVG**  | `.html`, `.htm`, `.svg`                                                    | Sandboxed iframe                     |
-| **Images**      | `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.bmp`, `.ico`, `.avif`, `.svg`  | Dedicated viewer — wheel-zoom, pan, fit/100% |
+| **Images**      | `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.bmp`, `.ico`, `.avif`, `.svg`  | Dedicated viewer — Fit/Actual, drag-pan       |
 | **Video**       | `.mp4`, `.webm`, `.ogv`, `.mov`, `.m4v`                                    | Native `<video>` with controls       |
 | **Archives**    | `.zip`                                                                     | Tree of contents + one-click Extract |
 | **Subtitles**   | `.vtt`, `.srt`                                                             | Cue-by-cue viewer                    |
@@ -98,6 +98,7 @@ Within Markdown, Omnidoc additionally renders:
 - **Tags panel** — crawls the workspace for `#tags` and frontmatter tags, with filter and file drill-down
 - **Folding** — chevron toggles on H1–H4 headings, per-file fold state, `Ctrl+Click` to toggle all
 - **Export to PDF** via print stylesheet (hides chrome, serif typography, page break before h1)
+- **Presentation mode** (`Ctrl+Shift+P` or the "Present" toolbar button) — renders the document as a fullscreen slide deck split on `---` horizontal rules. Arrow/space keys navigate, `Escape` exits, the first heading on each slide becomes the centered title, and YAML frontmatter / `---` inside fenced code blocks are not treated as slide breaks. The Tauri window enters fullscreen on start and restores its previous state on exit.
 - **Callouts** — Obsidian-style `> [!TYPE]` blockquotes (`NOTE`, `TIP`, `IMPORTANT`, `WARNING`, `DANGER`, `CAUTION`, `SUCCESS`, `INFO`, `QUOTE`, `EXAMPLE`) with icons, custom titles, and `[!TYPE]-` for collapsible
 - **KaTeX math** and **Mermaid** rendering
 
@@ -120,12 +121,11 @@ Within Markdown, Omnidoc additionally renders:
 
 ### Images
 
-- Dedicated **ImageViewer** with its own independent zoom state (5%–1600%)
-- **Wheel zoom** anchored on the cursor position, **+/- toolbar buttons**, and a **100%** button to reset to actual size
-- **Fit** button to refit the image to the viewport
+- **Fit / Actual size** toggle in the toolbar
 - **Click-and-drag pan** once the image overflows the viewport
-- Pixel-art rendering kicks in past 200% so small icons stay crisp
-- Info panel shows file name, dimensions, file size, and format; SVGs without intrinsic dimensions get a sensible default size
+- Global content zoom (`Ctrl+=` / `Ctrl+-` / `Ctrl+0`) applies on top of either mode
+- Info panel shows file name, dimensions, file size, and format
+- Subtle checkerboard background so transparent images are visible
 
 ### Video
 
@@ -139,6 +139,7 @@ Within Markdown, Omnidoc additionally renders:
 - Totals panel: files, folders, uncompressed size, and compression ratio
 - **Extract** toolbar button prompts for a destination folder and unpacks everything there
 - Zip-slip protection enforced server-side (entries with absolute or parent-traversal paths are skipped)
+- `deflate`-only — password-protected (ZipCrypto/AES) and `zstd`/`bzip2` archives are not supported
 
 ### Themes & typography
 
@@ -254,7 +255,7 @@ Linux and uploads signed draft release artifacts.
 | `Ctrl+Shift+O`     | Open folder                            |
 | `Ctrl+W`           | Close tab                              |
 | `Ctrl+Tab`         | Next tab                               |
-| `Ctrl+Shift+P`     | Command palette                        |
+| `Ctrl+Shift+P`     | Presentation mode (Markdown slide deck) |
 | `Ctrl+P`           | Fuzzy file search                      |
 | `Ctrl+F`           | Find in current document               |
 | `Ctrl+S`           | Save (in edit mode)                    |
