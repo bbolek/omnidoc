@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Titlebar now shows the currently opened workspace folder (name + folder icon, full path on hover) next to the active file name, so it's always clear which folder the session is rooted in. Falls back gracefully to just the file name when a single file is opened without a workspace.
 - Startup loader overlay covers the app while the previous session's tabs are being re-opened, so the UI no longer flashes through each tab as it mounts.
 
 ### Fixed

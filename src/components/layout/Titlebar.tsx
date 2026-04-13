@@ -73,8 +73,9 @@ function handleExportPdf(title: string | null) {
 export function Titlebar() {
   const platform = useUiStore((s) => s.platform);
   const toggleZenMode = useUiStore((s) => s.toggleZenMode);
-  const { openFile, setFolder, setTree, tabs, activeTabId } = useFileStore();
+  const { openFile, setFolder, setTree, tabs, activeTabId, openFolder } = useFileStore();
   const activeTab = tabs.find((t) => t.id === activeTabId);
+  const folderName = openFolder ? getFileName(openFolder) : null;
 
   const isMac = platform === "macos";
 
@@ -105,12 +106,42 @@ export function Titlebar() {
         >
           MD Viewer
         </span>
+        {folderName && (
+          <>
+            <span style={{ color: "var(--color-text-muted)", fontSize: 12, opacity: 0.6 }}>
+              —
+            </span>
+            <span
+              title={openFolder ?? undefined}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                color: "var(--color-titlebar-text)",
+                fontSize: 12,
+                fontWeight: 500,
+                opacity: 0.85,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                flexShrink: 0,
+                maxWidth: 240,
+              }}
+            >
+              <FolderOpen size={12} style={{ flexShrink: 0, opacity: 0.8 }} />
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                {folderName}
+              </span>
+            </span>
+          </>
+        )}
         {activeTab && (
           <>
             <span style={{ color: "var(--color-text-muted)", fontSize: 12, opacity: 0.6 }}>
               —
             </span>
             <span
+              title={activeTab.path}
               style={{
                 color: "var(--color-titlebar-text)",
                 fontSize: 12,
