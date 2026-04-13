@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Maximize2, ZoomIn, ZoomOut } from "lucide-react";
+import { Maximize2, Minimize2 } from "lucide-react";
 import type { Tab } from "../../types";
+import { useUiStore } from "../../store/uiStore";
 import {
   formatFileSize,
   getFileExtension,
@@ -13,39 +14,29 @@ interface Props {
   tab: Tab;
 }
 
-const MIN_ZOOM = 0.05;
-const MAX_ZOOM = 16;
-const WHEEL_STEP = 1.1;
-const BUTTON_STEP = 1.25;
+type FitMode = "actual" | "fit";
 
 /**
- * Image viewer with independent zoom/pan. Bytes are fetched via the
- * existing `read_file_bytes` Tauri command and wrapped in a Blob URL.
- *
- * Controls:
- *  - Mouse wheel  → zoom in/out (centered on the cursor)
- *  - +/- buttons  → zoom in/out
- *  - "Fit"        → fit image inside the viewport
- *  - "100%"       → show at native pixel size
- *  - Drag         → pan when the image is larger than the viewport
+ * Displays raster and vector images. Bytes are fetched via the
+ * existing `read_file_bytes` Tauri command and wrapped in a Blob URL
+ * (no `convertFileSrc`/asset-protocol setup required). The global zoom
+ * applies on top of the chosen fit mode, and the image can be panned
+ * by dragging when it overflows the viewport.
  */
 export function ImageViewer({ tab }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-
+  const imgRef = useRef<HTMLImageElement | null>(null);
   const [url, setUrl] = useState<string | null>(null);
   const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
+  const [renderedSize, setRenderedSize] = useState<{ w: number; h: number } | null>(null);
   const [containerSize, setContainerSize] = useState<{ w: number; h: number } | null>(null);
   const [byteSize, setByteSize] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-
-  // Zoom + pan state. zoom is the scale factor; offset is the translation
-  // applied to the image relative to the centred position.
-  const [zoom, setZoom] = useState(1);
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
-  const [fitOnLayout, setFitOnLayout] = useState(true);
+  const [fitMode, setFitMode] = useState<FitMode>("fit");
   const [isDragging, setIsDragging] = useState(false);
-  const dragRef = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
+  const dragRef = useRef<{ x: number; y: number; sl: number; st: number } | null>(null);
+  const zoomLevel = useUiStore((s) => s.zoomLevel);
 
   const ext = getFileExtension(tab.path);
   const fileName = getFileName(tab.path);
@@ -59,9 +50,6 @@ export function ImageViewer({ tab }: Props) {
       setLoading(true);
       setError(null);
       setNaturalSize(null);
-      setZoom(1);
-      setOffset({ x: 0, y: 0 });
-      setFitOnLayout(true);
       try {
         const bytes = await invoke<ArrayBuffer>("read_file_bytes", {
           path: tab.path,
@@ -88,118 +76,51 @@ export function ImageViewer({ tab }: Props) {
     };
   }, [tab.path, ext]);
 
-  // ── Track container size for fit calculations ───────────────────────────
+  // ── Track container + rendered-image sizes for pan detection ────────────
   useLayoutEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     const update = () => {
       setContainerSize({ w: el.clientWidth, h: el.clientHeight });
+      const img = imgRef.current;
+      if (img) {
+        setRenderedSize({
+          w: img.getBoundingClientRect().width,
+          h: img.getBoundingClientRect().height,
+        });
+      }
     };
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
+    if (imgRef.current) ro.observe(imgRef.current);
     return () => ro.disconnect();
-  }, []);
+  }, [url, fitMode, zoomLevel, naturalSize]);
 
-  // Compute the zoom factor that fits the image inside the container.
-  const computeFitZoom = useCallback(() => {
-    if (!naturalSize || !containerSize) return 1;
-    const { w: nw, h: nh } = naturalSize;
-    if (nw === 0 || nh === 0) return 1;
-    const PADDING = 32;
-    const aw = Math.max(1, containerSize.w - PADDING);
-    const ah = Math.max(1, containerSize.h - PADDING);
-    return Math.min(1, aw / nw, ah / nh);
-  }, [naturalSize, containerSize]);
-
-  // Auto-fit on first layout (or on a window resize before the user has
-  // touched the zoom controls).
-  useEffect(() => {
-    if (!fitOnLayout) return;
-    if (!naturalSize || !containerSize) return;
-    const fz = computeFitZoom();
-    setZoom(fz);
-    setOffset({ x: 0, y: 0 });
-  }, [fitOnLayout, naturalSize, containerSize, computeFitZoom]);
-
-  // ── Zoom helpers ────────────────────────────────────────────────────────
-  const clampZoom = (z: number) => Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, z));
-
-  // Zoom around an anchor point (in container-local pixel coordinates).
-  // Keeps the pixel under the anchor stationary by adjusting the offset.
-  const zoomAround = useCallback(
-    (nextZoomRaw: number, anchorX?: number, anchorY?: number) => {
-      const el = containerRef.current;
-      if (!el || !naturalSize) return;
-      const nextZoom = clampZoom(nextZoomRaw);
-      if (nextZoom === zoom) return;
-      const cx = el.clientWidth / 2;
-      const cy = el.clientHeight / 2;
-      const ax = anchorX ?? cx;
-      const ay = anchorY ?? cy;
-      // The image is centred in the container, then translated by `offset`
-      // and scaled around its centre. The displacement of the anchor from
-      // the image centre scales with the zoom, so adjust offset to keep
-      // the anchor pixel fixed.
-      const dx = ax - cx - offset.x;
-      const dy = ay - cy - offset.y;
-      const k = nextZoom / zoom;
-      setOffset({ x: offset.x - dx * (k - 1), y: offset.y - dy * (k - 1) });
-      setZoom(nextZoom);
-      setFitOnLayout(false);
-    },
-    [zoom, offset, naturalSize]
-  );
-
-  const zoomIn = useCallback(() => zoomAround(zoom * BUTTON_STEP), [zoomAround, zoom]);
-  const zoomOut = useCallback(() => zoomAround(zoom / BUTTON_STEP), [zoomAround, zoom]);
-  const setActualSize = useCallback(() => {
-    setZoom(1);
-    setOffset({ x: 0, y: 0 });
-    setFitOnLayout(false);
-  }, []);
-  const fitToWindow = useCallback(() => {
-    setOffset({ x: 0, y: 0 });
-    setFitOnLayout(true);
-  }, []);
-
-  // ── Wheel zoom ──────────────────────────────────────────────────────────
-  // Attached imperatively so we can pass {passive: false} and call
-  // preventDefault, which React's synthetic onWheel does not allow.
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const onWheel = (e: WheelEvent) => {
-      if (!naturalSize) return;
-      e.preventDefault();
-      const rect = el.getBoundingClientRect();
-      const ax = e.clientX - rect.left;
-      const ay = e.clientY - rect.top;
-      const factor = e.deltaY < 0 ? WHEEL_STEP : 1 / WHEEL_STEP;
-      zoomAround(zoom * factor, ax, ay);
-    };
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
-  }, [zoomAround, zoom, naturalSize]);
-
-  // ── Pan via drag ────────────────────────────────────────────────────────
-  const isPannable = !!naturalSize && !!containerSize && (
-    naturalSize.w * zoom > containerSize.w - 32 ||
-    naturalSize.h * zoom > containerSize.h - 32
+  // ── Pan via drag (uses the scroll container) ────────────────────────────
+  const isPannable = !!containerSize && !!renderedSize && (
+    renderedSize.w > containerSize.w + 1 || renderedSize.h > containerSize.h + 1
   );
 
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isPannable) return;
-    if (e.button !== 0) return;
-    e.currentTarget.setPointerCapture(e.pointerId);
-    dragRef.current = { x: e.clientX, y: e.clientY, ox: offset.x, oy: offset.y };
+    if (!isPannable || e.button !== 0) return;
+    const el = e.currentTarget;
+    el.setPointerCapture(e.pointerId);
+    dragRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      sl: el.scrollLeft,
+      st: el.scrollTop,
+    };
     setIsDragging(true);
   };
 
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     const d = dragRef.current;
     if (!d) return;
-    setOffset({ x: d.ox + (e.clientX - d.x), y: d.oy + (e.clientY - d.y) });
+    const el = e.currentTarget;
+    el.scrollLeft = d.sl - (e.clientX - d.x);
+    el.scrollTop = d.st - (e.clientY - d.y);
   };
 
   const endDrag = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -233,21 +154,25 @@ export function ImageViewer({ tab }: Props) {
 
   if (!url) return null;
 
-  const cursor = isDragging ? "grabbing" : isPannable ? "grab" : "default";
+  // Style the <img>: in "fit" mode it scales down to the container, in
+  // "actual" mode it shows at native pixel size. The global zoom
+  // multiplies on top of either mode.
+  const imgStyle: React.CSSProperties =
+    fitMode === "fit"
+      ? {
+          maxWidth: `${100 * zoomLevel}%`,
+          maxHeight: `${100 * zoomLevel}%`,
+          objectFit: "contain",
+          // SVGs without intrinsic dimensions get a sensible size in fit mode
+          width: "auto",
+          height: "auto",
+        }
+      : {
+          transform: `scale(${zoomLevel})`,
+          transformOrigin: "top left",
+        };
 
-  const buttonStyle: React.CSSProperties = {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 4,
-    background: "transparent",
-    border: "1px solid var(--color-border-muted)",
-    borderRadius: "var(--radius-sm)",
-    color: "var(--color-text-muted)",
-    padding: "3px 8px",
-    fontSize: 12,
-    cursor: "pointer",
-    fontFamily: "Inter, sans-serif",
-  };
+  const cursor = isDragging ? "grabbing" : isPannable ? "grab" : "default";
 
   return (
     <div
@@ -269,34 +194,31 @@ export function ImageViewer({ tab }: Props) {
         }}
       >
         <button
-          onClick={zoomOut}
-          title="Zoom out"
-          disabled={zoom <= MIN_ZOOM + 1e-6}
-          style={{ ...buttonStyle, opacity: zoom <= MIN_ZOOM + 1e-6 ? 0.4 : 1 }}
+          onClick={() => setFitMode((m) => (m === "fit" ? "actual" : "fit"))}
+          title={fitMode === "fit" ? "Show at actual size" : "Fit to window"}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+            background: "transparent",
+            border: "1px solid var(--color-border-muted)",
+            borderRadius: "var(--radius-sm)",
+            color: "var(--color-text-muted)",
+            padding: "3px 8px",
+            fontSize: 12,
+            cursor: "pointer",
+            fontFamily: "Inter, sans-serif",
+          }}
         >
-          <ZoomOut size={12} />
-        </button>
-        <button
-          onClick={setActualSize}
-          title="Actual size (100%)"
-          style={{ ...buttonStyle, minWidth: 56, justifyContent: "center" }}
-        >
-          {Math.round(zoom * 100)}%
-        </button>
-        <button
-          onClick={zoomIn}
-          title="Zoom in"
-          disabled={zoom >= MAX_ZOOM - 1e-6}
-          style={{ ...buttonStyle, opacity: zoom >= MAX_ZOOM - 1e-6 ? 0.4 : 1 }}
-        >
-          <ZoomIn size={12} />
-        </button>
-        <button
-          onClick={fitToWindow}
-          title="Fit to window"
-          style={buttonStyle}
-        >
-          <Maximize2 size={12} /> Fit
+          {fitMode === "fit" ? (
+            <>
+              <Maximize2 size={12} /> Actual size
+            </>
+          ) : (
+            <>
+              <Minimize2 size={12} /> Fit
+            </>
+          )}
         </button>
         <span
           style={{
@@ -336,14 +258,16 @@ export function ImageViewer({ tab }: Props) {
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
-        onDoubleClick={fitToWindow}
         style={{
           flex: 1,
           minHeight: 0,
-          overflow: "hidden",
-          position: "relative",
+          overflow: "auto",
+          display: "flex",
+          alignItems: fitMode === "fit" ? "center" : "flex-start",
+          justifyContent: fitMode === "fit" ? "center" : "flex-start",
+          padding: fitMode === "fit" ? 16 : 0,
           cursor,
-          touchAction: "none",
+          touchAction: isPannable ? "none" : "auto",
           userSelect: "none",
           // Subtle checkerboard so transparent images are visible against the bg
           backgroundImage:
@@ -353,40 +277,24 @@ export function ImageViewer({ tab }: Props) {
             "linear-gradient(-45deg, transparent 75%, var(--color-border-muted) 75%)",
           backgroundSize: "16px 16px",
           backgroundPosition: "0 0, 0 8px, 8px -8px, -8px 0",
+          opacity: 1,
         }}
       >
         <img
+          ref={imgRef}
           src={url}
           alt={fileName}
           draggable={false}
           onLoad={(e) => {
             const t = e.currentTarget;
-            // SVGs without intrinsic dimensions report 0 — fall back to
-            // a sensible default so they still render.
-            const w = t.naturalWidth || 300;
-            const h = t.naturalHeight || 300;
-            setNaturalSize((prev) =>
-              prev && prev.w === w && prev.h === h ? prev : { w, h }
-            );
+            setNaturalSize({ w: t.naturalWidth, h: t.naturalHeight });
+            setRenderedSize({
+              w: t.getBoundingClientRect().width,
+              h: t.getBoundingClientRect().height,
+            });
           }}
-          style={{
-            position: "absolute",
-            left: "50%",
-            top: "50%",
-            width: naturalSize ? naturalSize.w : "auto",
-            height: naturalSize ? naturalSize.h : "auto",
-            transform: naturalSize
-              ? `translate(-50%, -50%) translate(${offset.x}px, ${offset.y}px) scale(${zoom})`
-              : "translate(-50%, -50%)",
-            transformOrigin: "center center",
-            imageRendering: zoom >= 2 ? "pixelated" : "auto",
-            pointerEvents: "none",
-            maxWidth: "none",
-            maxHeight: "none",
-            visibility: naturalSize ? "visible" : "hidden",
-          }}
+          style={{ ...imgStyle, pointerEvents: "none" }}
         />
-
       </div>
     </div>
   );
