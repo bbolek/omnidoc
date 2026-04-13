@@ -5,9 +5,9 @@ import { FileText, FolderOpen, Clock, Keyboard } from "lucide-react";
 import { motion } from "framer-motion";
 import { useFileStore } from "../../store/fileStore";
 import { useUiStore } from "../../store/uiStore";
-import { getFileName } from "../../utils/fileUtils";
+import { getFileName, loadFileForOpen } from "../../utils/fileUtils";
 import { FileIcon } from "../ui/FileIcon";
-import type { FileEntry, FileInfo } from "../../types";
+import type { FileEntry } from "../../types";
 
 export function WelcomeScreen() {
   const { openFile, recentFiles, setFolder, setTree } = useFileStore();
@@ -17,14 +17,21 @@ export function WelcomeScreen() {
     const selected = await open({
       multiple: false,
       filters: [
-        { name: "All supported", extensions: ["md", "mdx", "txt", "json", "yaml", "yml", "toml", "js", "ts", "py", "rs", "go", "csv"] },
+        {
+          name: "All supported",
+          extensions: [
+            "md", "mdx", "txt", "json", "yaml", "yml", "toml",
+            "js", "ts", "py", "rs", "go", "csv",
+            "pdf", "docx", "xlsx", "pptx",
+          ],
+        },
       ],
     });
     if (typeof selected === "string") {
-      const [content, info] = await Promise.all([
-        invoke<string>("read_file", { path: selected }),
-        invoke<FileInfo>("get_file_info", { path: selected }),
-      ]);
+      // loadFileForOpen handles both text and binary-viewable formats
+      // (PDF, docx, xlsx, pptx) — binary formats get an empty content
+      // string and the dedicated viewer fetches its own bytes.
+      const { content, info } = await loadFileForOpen(selected);
       openFile(selected, getFileName(selected), content, info);
     }
   }, [openFile]);
@@ -40,10 +47,7 @@ export function WelcomeScreen() {
 
   const handleRecentOpen = async (path: string, name: string) => {
     try {
-      const [content, info] = await Promise.all([
-        invoke<string>("read_file", { path }),
-        invoke<FileInfo>("get_file_info", { path }),
-      ]);
+      const { content, info } = await loadFileForOpen(path);
       openFile(path, name, content, info);
     } catch {
       // File might have been moved/deleted
@@ -59,10 +63,7 @@ export function WelcomeScreen() {
         const path = (file as File & { path?: string }).path ?? "";
         if (!path) continue;
         try {
-          const [content, info] = await Promise.all([
-            invoke<string>("read_file", { path }),
-            invoke<FileInfo>("get_file_info", { path }),
-          ]);
+          const { content, info } = await loadFileForOpen(path);
           openFile(path, file.name, content, info);
         } catch {
           // Skip files that can't be read
@@ -133,7 +134,7 @@ export function WelcomeScreen() {
           </div>
         </div>
         <div style={{ fontSize: 11, marginTop: 4, color: "var(--color-text-muted)" }}>
-          MD, JSON, YAML, TOML, CSV, code files, and more
+          MD, PDF, Word, Excel, PowerPoint, JSON, YAML, CSV, code, and more
         </div>
       </div>
 

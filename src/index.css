@@ -1390,3 +1390,52 @@ body.resizing {
   background-color: rgba(180, 0, 170, 0.25);
   border-radius: 4px;
 }
+
+/* ─── Office viewers (docx / xlsx / pptx) ─────────────────────────────── */
+
+/* docx-preview wraps each rendered page in an .docx-wrapper > section.
+   Give pages a paper look that matches the PDF viewer so the two feel
+   like siblings. */
+.docx-wrapper {
+  background: transparent;
+  padding: 0;
+}
+.docx-wrapper > section.docx {
+  background: var(--color-bg);
+  box-shadow: var(--shadow-sm);
+  border-radius: var(--radius-sm);
+  margin: 0 auto 16px;
+  padding: 48px 64px;
+  color: #000;
+}
+
+/* SheetJS-generated tables. Mirror the .csv-table look so spreadsheets
+   feel native to the app. */
+.xlsx-sheet table {
+  border-collapse: collapse;
+  font-size: 13px;
+  font-family: "Inter", sans-serif;
+  background: var(--color-bg);
+}
+.xlsx-sheet td,
+.xlsx-sheet th {
+  border: 1px solid var(--color-border-muted);
+  padding: 4px 8px;
+  color: var(--color-text);
+  white-space: nowrap;
+}
+.xlsx-sheet tr:first-child td {
+  background: var(--color-bg-subtle);
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+/* pptx-preview renders slides as absolutely positioned divs inside a
+   wrapper. Center the wrapper and add some breathing room. */
+.pptx-host {
+  display: flex;
+  justify-content: center;
+  padding: 16px;
+}

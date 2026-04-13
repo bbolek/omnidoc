@@ -1,6 +1,6 @@
 import {
   FileText, FileCode, FileJson, FileSpreadsheet,
-  File, Image, Archive,
+  File, Image, Archive, Presentation,
 } from "lucide-react";
 
 interface Props extends React.HTMLAttributes<SVGElement> {
@@ -22,7 +22,9 @@ export function FileIcon({ extension, size = 16, ...rest }: Props) {
 
   if (mdExts.includes(ext)) return <FileText {...props} style={{ color: "var(--color-accent)", ...rest.style }} />;
   if (jsonExts.includes(ext) || ext === "yaml" || ext === "yml" || ext === "toml") return <FileJson {...props} style={{ color: "#f0a500", ...rest.style }} />;
-  if (csvExts.includes(ext)) return <FileSpreadsheet {...props} style={{ color: "#2da44e", ...rest.style }} />;
+  if (csvExts.includes(ext) || ext === "xlsx" || ext === "xls") return <FileSpreadsheet {...props} style={{ color: "#2da44e", ...rest.style }} />;
+  if (ext === "docx" || ext === "doc") return <FileText {...props} style={{ color: "#2b5fb0", ...rest.style }} />;
+  if (ext === "pptx" || ext === "ppt") return <Presentation {...props} style={{ color: "#d24726", ...rest.style }} />;
   if (codeExts.includes(ext)) return <FileCode {...props} style={{ color: "#8957e5", ...rest.style }} />;
   if (imgExts.includes(ext)) return <Image {...props} style={{ color: "#e26b4f", ...rest.style }} />;
   if (archiveExts.includes(ext)) return <Archive {...props} style={{ color: "#888", ...rest.style }} />;

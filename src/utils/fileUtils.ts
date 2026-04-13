@@ -19,6 +19,9 @@ const YAML_EXTENSIONS = new Set(["yaml", "yml"]);
 const TOML_EXTENSIONS = new Set(["toml"]);
 const TEXT_EXTENSIONS = new Set(["txt", "log", "text", "ini", "cfg", "conf", "env"]);
 const PDF_EXTENSIONS = new Set(["pdf"]);
+const DOCX_EXTENSIONS = new Set(["docx"]);
+const XLSX_EXTENSIONS = new Set(["xlsx"]);
+const PPTX_EXTENSIONS = new Set(["pptx"]);
 
 export function getFileType(extension?: string): FileType {
   if (!extension) return "text";
@@ -32,6 +35,9 @@ export function getFileType(extension?: string): FileType {
   if (CODE_EXTENSIONS.has(ext)) return "code";
   if (TEXT_EXTENSIONS.has(ext)) return "text";
   if (PDF_EXTENSIONS.has(ext)) return "pdf";
+  if (DOCX_EXTENSIONS.has(ext)) return "docx";
+  if (XLSX_EXTENSIONS.has(ext)) return "xlsx";
+  if (PPTX_EXTENSIONS.has(ext)) return "pptx";
   return "text";
 }
 
@@ -42,7 +48,13 @@ export function getFileType(extension?: string): FileType {
  */
 export function isBinaryViewable(extension?: string): boolean {
   if (!extension) return false;
-  return PDF_EXTENSIONS.has(extension.toLowerCase());
+  const ext = extension.toLowerCase();
+  return (
+    PDF_EXTENSIONS.has(ext) ||
+    DOCX_EXTENSIONS.has(ext) ||
+    XLSX_EXTENSIONS.has(ext) ||
+    PPTX_EXTENSIONS.has(ext)
+  );
 }
 
 /**
@@ -122,7 +134,7 @@ export function isTextReadable(extension?: string): boolean {
   if (!extension) return true;
   const binary = new Set([
     "png", "jpg", "jpeg", "gif", "bmp", "ico", "webp", "svg",
-    "pdf", "doc", "docx", "xls", "xlsx",
+    "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
     "zip", "tar", "gz", "7z", "rar",
     "exe", "bin", "dll", "so", "dylib",
     "mp3", "mp4", "wav", "avi", "mkv",

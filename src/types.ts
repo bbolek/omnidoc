@@ -54,6 +54,9 @@ export type FileType =
   | "csv"
   | "text"
   | "pdf"
+  | "docx"
+  | "xlsx"
+  | "pptx"
   | "unknown";
 
 export interface SearchMatch {
