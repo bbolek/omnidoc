@@ -23,6 +23,7 @@ async function handleOpenFile(openFileFn: (path: string, name: string, content: 
           "c", "cpp", "h", "cs", "rb", "php", "lua", "sh",
           "css", "scss", "html", "xml", "sql",
           "csv", "tsv", "txt", "log",
+          "vtt",
         ],
       },
     ],

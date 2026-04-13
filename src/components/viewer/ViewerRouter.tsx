@@ -11,6 +11,7 @@ import { CsvViewer } from "./CsvViewer";
 import { TextViewer } from "./TextViewer";
 import { PdfViewer } from "./PdfViewer";
 import { ImageViewer } from "./ImageViewer";
+import { VttViewer } from "./VttViewer";
 import type { Tab } from "../../types";
 import type { ViewerRegistration } from "../../plugins/api";
 
@@ -70,6 +71,7 @@ function BuiltinViewer({ tab, ext }: { tab: Tab; ext: string }) {
   const fileType = getFileType(ext);
   return (
     <>
+      {fileType === "vtt" && <VttViewer tab={tab} />}
       {fileType === "markdown" && <MarkdownViewer tab={tab} />}
       {fileType === "html" && <HtmlViewer tab={tab} />}
       {fileType === "code" && <CodeViewer tab={tab} ext={ext} />}
