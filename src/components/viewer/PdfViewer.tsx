@@ -259,25 +259,26 @@ export function PdfViewer({ tab }: Props) {
         </button>
       </div>
 
-      {/* Content */}
+      {/* Content. Block layout (not flex) — a flex scroller fights the
+          browser on both axes: children can shrink below their height on
+          the main axis unless pinned, and `align-items: center` hides the
+          overflow-start edge from scroll on the cross axis. Plain block
+          with `overflow: auto` scrolls both directions without either
+          hazard, and pages are horizontally centred via `margin: 0 auto`. */}
       <div
         ref={containerRef}
         tabIndex={0}
         className="selectable fade-in"
         style={{
           flex: 1,
-          // Without this the default `min-height: auto` lets the flex item
-          // grow to fit all pages, defeating `overflow: auto` and pushing
-          // the scroll up to the outer `.content-scroll` wrapper.
+          // Without this the default `min-height: auto` lets this flex
+          // item grow to fit its content, defeating `overflow: auto` and
+          // pushing scroll up to the outer `.content-scroll` wrapper.
           minHeight: 0,
           overflow: "auto",
           background: "var(--color-bg-subtle)",
           outline: "none",
           padding: CONTAINER_PADDING,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: PAGE_GAP,
         }}
       >
         {loading && (
@@ -447,10 +448,9 @@ function PdfPage({
         overflow: "hidden",
         width: dims ? dims.w : undefined,
         height: dims ? dims.h : undefined,
-        // Without this, flex-direction: column on the scroll container lets
-        // each page shrink vertically to fit, so every page collapses to a
-        // thin strip that shows only the top of its canvas.
-        flexShrink: 0,
+        // Block-layout scroller: centre horizontally and space pages
+        // vertically without flex (see rationale on the scroll container).
+        margin: `0 auto ${PAGE_GAP}px`,
       }}
     >
       <canvas
