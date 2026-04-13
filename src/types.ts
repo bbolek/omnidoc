@@ -57,6 +57,7 @@ export type FileType =
   | "docx"
   | "xlsx"
   | "pptx"
+  | "image"
   | "unknown";
 
 export interface SearchMatch {

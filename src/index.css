@@ -1409,8 +1409,10 @@ body.resizing {
   color: #000;
 }
 
-/* SheetJS-generated tables. Mirror the .csv-table look so spreadsheets
-   feel native to the app. */
+/* xlsx-js-style-rendered tables. Per-cell font/fill/border/alignment
+   come through as inline styles set by `renderSheet` in XlsxViewer, so
+   these rules only provide gentle defaults for cells without their own
+   styling. Inline styles take precedence and are not overridden. */
 .xlsx-sheet table {
   border-collapse: collapse;
   font-size: 13px;
@@ -1423,13 +1425,6 @@ body.resizing {
   padding: 4px 8px;
   color: var(--color-text);
   white-space: nowrap;
-}
-.xlsx-sheet tr:first-child td {
-  background: var(--color-bg-subtle);
-  font-weight: 600;
-  position: sticky;
-  top: 0;
-  z-index: 1;
 }
 
 /* pptx-preview renders slides as absolutely positioned divs inside a
