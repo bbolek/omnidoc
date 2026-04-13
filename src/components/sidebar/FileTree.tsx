@@ -1027,22 +1027,24 @@ export function FileTree() {
         </div>
 
         {/* Search input */}
-        <div style={{ padding: "0 6px 6px", position: "relative" }}>
-          <Search size={12} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "var(--color-text-muted)", pointerEvents: "none" }} />
-          <input
-            ref={searchInputRef}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search files…"
-            style={{ width: "100%", boxSizing: "border-box", background: "var(--color-bg-inset)", border: "1px solid var(--color-border-muted)", borderRadius: "var(--radius-sm)", padding: "4px 24px", fontSize: 12, color: "var(--color-text)", fontFamily: "Inter, sans-serif", outline: "none" }}
-            onFocus={(e) => { e.currentTarget.style.borderColor = "var(--color-accent)"; }}
-            onBlur={(e)  => { e.currentTarget.style.borderColor = "var(--color-border-muted)"; }}
-          />
-          {query && (
-            <button onClick={() => setQuery("")} style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", padding: 0, cursor: "pointer", color: "var(--color-text-muted)", display: "flex", alignItems: "center" }}>
-              <X size={11} />
-            </button>
-          )}
+        <div style={{ padding: "0 6px 6px" }}>
+          <div style={{ position: "relative" }}>
+            <Search size={12} style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", color: "var(--color-text-muted)", pointerEvents: "none" }} />
+            <input
+              ref={searchInputRef}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search files…"
+              style={{ width: "100%", boxSizing: "border-box", background: "var(--color-bg-inset)", border: "1px solid var(--color-border-muted)", borderRadius: "var(--radius-sm)", padding: "4px 24px", fontSize: 12, color: "var(--color-text)", fontFamily: "Inter, sans-serif", outline: "none" }}
+              onFocus={(e) => { e.currentTarget.style.borderColor = "var(--color-accent)"; }}
+              onBlur={(e)  => { e.currentTarget.style.borderColor = "var(--color-border-muted)"; }}
+            />
+            {query && (
+              <button onClick={() => setQuery("")} style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", padding: 0, cursor: "pointer", color: "var(--color-text-muted)", display: "flex", alignItems: "center" }}>
+                <X size={11} />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Scrollable tree area */}
