@@ -15,7 +15,10 @@ export function AppShell() {
       <Titlebar />
 
       <div className="app-body">
-        {sidebarPosition === "left" && (
+        {/* Skip the sidebar/activity chrome entirely in zen mode — CSS hides
+            the inner elements, but the motion wrapper keeps its inline
+            `width: sidebarWidth` and would still push content off-centre. */}
+        {!zenMode && sidebarPosition === "left" && (
           <>
             <ActivityBar position="left" />
             <AnimatePresence initial={false}>
@@ -40,7 +43,7 @@ export function AppShell() {
 
         <MainArea />
 
-        {sidebarPosition === "right" && (
+        {!zenMode && sidebarPosition === "right" && (
           <>
             <AnimatePresence initial={false}>
               {sidebarVisible && (
