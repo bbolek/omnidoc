@@ -206,14 +206,7 @@ export function VttViewer({ tab }: Props) {
             <select
               value={speakerFilter ?? ""}
               onChange={(e) => setSpeakerFilter(e.target.value || null)}
-              style={{
-                border: "none",
-                outline: "none",
-                background: "transparent",
-                color: "var(--color-text)",
-                fontSize: 13,
-                cursor: "pointer",
-              }}
+              className="vtt-speaker-select"
             >
               <option value="">All speakers</option>
               {parsed.speakers.map((s) => (
