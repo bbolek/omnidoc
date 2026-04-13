@@ -23,8 +23,16 @@ const SHORTCUTS = [
     { keys: [`${mod}+B`], description: "Toggle sidebar" },
     { keys: [`${mod}+\\`], description: "Toggle split view" },
     { keys: [`${mod}+Shift+Z`], description: "Toggle Zen / Focus mode" },
+    { keys: [`${mod}+Shift+P`], description: "Present Markdown as slides" },
     { keys: ["F11"], description: "Toggle fullscreen" },
     { keys: ["?"], description: "Keyboard shortcuts" },
+  ]},
+  { group: "Presentation", items: [
+    { keys: ["→", "Space"], description: "Next slide" },
+    { keys: ["←"], description: "Previous slide" },
+    { keys: ["Home"], description: "First slide" },
+    { keys: ["End"], description: "Last slide" },
+    { keys: ["Escape"], description: "Exit presentation" },
   ]},
   { group: "Zoom", items: [
     { keys: [`${mod}+=`], description: "Zoom in" },

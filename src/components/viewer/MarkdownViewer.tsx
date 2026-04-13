@@ -5,7 +5,7 @@ import remarkBreaks from "remark-breaks";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import rehypeRaw from "rehype-raw";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, Play } from "lucide-react";
 import type { Components } from "react-markdown";
 import { useThemeStore } from "../../store/themeStore";
 import { useUiStore } from "../../store/uiStore";
@@ -32,7 +32,7 @@ function escapeHtml(str: string): string {
 }
 
 // Shiki-powered code block
-const CodeBlock = memo(function CodeBlock({
+export const CodeBlock = memo(function CodeBlock({
   className,
   children,
   node: _node,
@@ -198,7 +198,7 @@ const components: Components = {
 
 export function MarkdownViewer({ tab }: Props) {
   const { themeName } = useThemeStore();
-  const { showLineNumbers } = useUiStore();
+  const { showLineNumbers, setPresentationVisible } = useUiStore();
   const [mode, setMode] = useState<ViewMode>("preview");
   const [sourceHtml, setSourceHtml] = useState("");
   const [foldedSlugs, setFoldedSlugs] = useState<Set<string>>(new Set());
@@ -335,6 +335,15 @@ export function MarkdownViewer({ tab }: Props) {
             </button>
           ))}
         </div>
+        <button
+          type="button"
+          className="present-toggle-btn"
+          onClick={() => setPresentationVisible(true)}
+          title="Present (Ctrl+Shift+P)"
+        >
+          <Play size={12} />
+          Present
+        </button>
       </div>
 
       {/* Content */}
