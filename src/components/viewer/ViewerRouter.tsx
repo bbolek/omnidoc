@@ -10,6 +10,7 @@ import { YamlTomlViewer } from "./YamlTomlViewer";
 import { CsvViewer } from "./CsvViewer";
 import { TextViewer } from "./TextViewer";
 import { PdfViewer } from "./PdfViewer";
+import { ImageViewer } from "./ImageViewer";
 import type { Tab } from "../../types";
 import type { ViewerRegistration } from "../../plugins/api";
 
@@ -77,6 +78,7 @@ function BuiltinViewer({ tab, ext }: { tab: Tab; ext: string }) {
       {fileType === "toml" && <YamlTomlViewer tab={tab} format="toml" />}
       {fileType === "csv" && <CsvViewer tab={tab} />}
       {fileType === "pdf" && <PdfViewer tab={tab} />}
+      {fileType === "image" && <ImageViewer tab={tab} />}
       {fileType === "docx" && (
         <Suspense fallback={<OfficeFallback label="document" />}>
           <DocxViewer tab={tab} />

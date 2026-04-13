@@ -9,7 +9,7 @@ const CODE_EXTENSIONS = new Set([
   "c", "cpp", "cc", "cxx", "h", "hpp",
   "cs", "php", "lua", "r", "m", "sh", "bash", "zsh",
   "sql", "graphql", "gql", "proto",
-  "xml", "svg",
+  "xml",
   "css", "scss", "sass", "less",
   "vim", "dockerfile",
 ]);
@@ -22,6 +22,9 @@ const PDF_EXTENSIONS = new Set(["pdf"]);
 const DOCX_EXTENSIONS = new Set(["docx"]);
 const XLSX_EXTENSIONS = new Set(["xlsx"]);
 const PPTX_EXTENSIONS = new Set(["pptx"]);
+const IMAGE_EXTENSIONS = new Set([
+  "png", "jpg", "jpeg", "gif", "bmp", "ico", "webp", "svg", "avif",
+]);
 
 export function getFileType(extension?: string): FileType {
   if (!extension) return "text";
@@ -38,7 +41,23 @@ export function getFileType(extension?: string): FileType {
   if (DOCX_EXTENSIONS.has(ext)) return "docx";
   if (XLSX_EXTENSIONS.has(ext)) return "xlsx";
   if (PPTX_EXTENSIONS.has(ext)) return "pptx";
+  if (IMAGE_EXTENSIONS.has(ext)) return "image";
   return "text";
+}
+
+export function getImageMimeType(extension?: string): string {
+  switch (extension?.toLowerCase()) {
+    case "png": return "image/png";
+    case "jpg":
+    case "jpeg": return "image/jpeg";
+    case "gif": return "image/gif";
+    case "bmp": return "image/bmp";
+    case "ico": return "image/x-icon";
+    case "webp": return "image/webp";
+    case "svg": return "image/svg+xml";
+    case "avif": return "image/avif";
+    default: return "application/octet-stream";
+  }
 }
 
 /**
@@ -53,7 +72,8 @@ export function isBinaryViewable(extension?: string): boolean {
     PDF_EXTENSIONS.has(ext) ||
     DOCX_EXTENSIONS.has(ext) ||
     XLSX_EXTENSIONS.has(ext) ||
-    PPTX_EXTENSIONS.has(ext)
+    PPTX_EXTENSIONS.has(ext) ||
+    IMAGE_EXTENSIONS.has(ext)
   );
 }
 

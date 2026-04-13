@@ -23,6 +23,7 @@ export function WelcomeScreen() {
             "md", "mdx", "txt", "json", "yaml", "yml", "toml",
             "js", "ts", "py", "rs", "go", "csv",
             "pdf", "docx", "xlsx", "pptx",
+            "png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "svg", "avif",
           ],
         },
       ],
