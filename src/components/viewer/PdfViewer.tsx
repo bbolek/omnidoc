@@ -447,6 +447,10 @@ function PdfPage({
         overflow: "hidden",
         width: dims ? dims.w : undefined,
         height: dims ? dims.h : undefined,
+        // Without this, flex-direction: column on the scroll container lets
+        // each page shrink vertically to fit, so every page collapses to a
+        // thin strip that shows only the top of its canvas.
+        flexShrink: 0,
       }}
     >
       <canvas
