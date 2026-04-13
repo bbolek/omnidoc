@@ -25,10 +25,12 @@ const PPTX_EXTENSIONS = new Set(["pptx"]);
 const IMAGE_EXTENSIONS = new Set([
   "png", "jpg", "jpeg", "gif", "bmp", "ico", "webp", "svg", "avif",
 ]);
+const VTT_EXTENSIONS = new Set(["vtt"]);
 
 export function getFileType(extension?: string): FileType {
   if (!extension) return "text";
   const ext = extension.toLowerCase();
+  if (VTT_EXTENSIONS.has(ext)) return "vtt";
   if (MD_EXTENSIONS.has(ext)) return "markdown";
   if (HTML_EXTENSIONS.has(ext)) return "html";
   if (JSON_EXTENSIONS.has(ext)) return "json";
