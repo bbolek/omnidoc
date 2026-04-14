@@ -17,6 +17,7 @@ export function useGlobalKeyboard() {
     setQuickOpenVisible, setActiveSidebarPanel,
     toggleZenMode, setZenMode, zenMode,
     setPresentationVisible, presentationVisible,
+    toggleMinimap,
   } = useUiStore();
 
   const handler = useCallback(
@@ -100,6 +101,13 @@ export function useGlobalKeyboard() {
       if (ctrl && e.shiftKey && (e.key === "Z" || e.key === "z")) {
         e.preventDefault();
         toggleZenMode();
+        return;
+      }
+
+      // Ctrl+Shift+M → toggle minimap
+      if (ctrl && e.shiftKey && (e.key === "M" || e.key === "m")) {
+        e.preventDefault();
+        toggleMinimap();
         return;
       }
 
@@ -237,6 +245,7 @@ export function useGlobalKeyboard() {
       increaseZoom, decreaseZoom, resetZoom, setQuickOpenVisible, setActiveSidebarPanel,
       toggleZenMode, setZenMode, zenMode,
       setPresentationVisible, presentationVisible,
+      toggleMinimap,
     ]
   );
 

@@ -23,6 +23,7 @@ const SHORTCUTS = [
     { keys: [`${mod}+B`], description: "Toggle sidebar" },
     { keys: [`${mod}+\\`], description: "Toggle split view" },
     { keys: [`${mod}+Shift+Z`], description: "Toggle Zen / Focus mode" },
+    { keys: [`${mod}+Shift+M`], description: "Toggle minimap" },
     { keys: [`${mod}+Shift+P`], description: "Present Markdown as slides" },
     { keys: ["F11"], description: "Toggle fullscreen" },
     { keys: ["?"], description: "Keyboard shortcuts" },

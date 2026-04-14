@@ -18,6 +18,7 @@ interface UiState {
   zenMode: boolean;
   presentationVisible: boolean;
   livePreviewEnabled: boolean;
+  minimapVisible: boolean;
 
   setSidebarPosition: (pos: SidebarPosition) => void;
   toggleSidebar: () => void;
@@ -41,6 +42,8 @@ interface UiState {
   setPresentationVisible: (v: boolean) => void;
   toggleLivePreview: () => void;
   setLivePreview: (v: boolean) => void;
+  toggleMinimap: () => void;
+  setMinimapVisible: (v: boolean) => void;
 }
 
 export const useUiStore = create<UiState>()(
@@ -61,6 +64,7 @@ export const useUiStore = create<UiState>()(
       zenMode: false,
       presentationVisible: false,
       livePreviewEnabled: false,
+      minimapVisible: false,
 
       setSidebarPosition: (pos) => set({ sidebarPosition: pos }),
       toggleSidebar: () => set((s) => ({ sidebarVisible: !s.sidebarVisible })),
@@ -85,6 +89,8 @@ export const useUiStore = create<UiState>()(
       setPresentationVisible: (v) => set({ presentationVisible: v }),
       toggleLivePreview: () => set((s) => ({ livePreviewEnabled: !s.livePreviewEnabled })),
       setLivePreview: (v) => set({ livePreviewEnabled: v }),
+      toggleMinimap: () => set((s) => ({ minimapVisible: !s.minimapVisible })),
+      setMinimapVisible: (v) => set({ minimapVisible: v }),
     }),
     {
       name: "omnidoc-ui",
@@ -97,6 +103,7 @@ export const useUiStore = create<UiState>()(
         globalSearchQuery: state.globalSearchQuery,
         showLineNumbers: state.showLineNumbers,
         livePreviewEnabled: state.livePreviewEnabled,
+        minimapVisible: state.minimapVisible,
       }),
     }
   )

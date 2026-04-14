@@ -2,6 +2,8 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { getFileType, getFileExtension } from "../../utils/fileUtils";
 import { pluginManager } from "../../plugins/pluginManager";
+import { useUiStore } from "../../store/uiStore";
+import { Minimap } from "./Minimap";
 import { MarkdownViewer } from "./MarkdownViewer";
 import { HtmlViewer } from "./HtmlViewer";
 import { CodeViewer } from "./CodeViewer";
@@ -48,22 +50,28 @@ export function ViewerRouter({ tab }: Props) {
 
   const ext = getFileExtension(tab.path);
   const pluginViewer = pluginManager.getViewerForExtension(ext);
+  const minimapVisible = useUiStore((s) => s.minimapVisible);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   return (
-    <motion.div
-      key={tab.id}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.15 }}
-      className="content-scroll"
-      style={{ height: "100%" }}
-    >
-      {pluginViewer ? (
-        <PluginViewer registration={pluginViewer} tab={tab} />
-      ) : (
-        <BuiltinViewer tab={tab} ext={ext} />
-      )}
-    </motion.div>
+    <div style={{ position: "relative", height: "100%" }}>
+      <motion.div
+        key={tab.id}
+        ref={scrollRef}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.15 }}
+        className="content-scroll"
+        style={{ height: "100%", paddingRight: minimapVisible ? 60 : undefined }}
+      >
+        {pluginViewer ? (
+          <PluginViewer registration={pluginViewer} tab={tab} />
+        ) : (
+          <BuiltinViewer tab={tab} ext={ext} />
+        )}
+      </motion.div>
+      {minimapVisible && <Minimap scrollRef={scrollRef} />}
+    </div>
   );
 }
 
