@@ -194,7 +194,7 @@ See [`docs/plugin-example/main.js`](docs/plugin-example/main.js) for a full work
 ## Install
 
 Grab the latest installer for your platform from the
-[Releases page](https://github.com/bbolek/md-viewer/releases):
+[Releases page](https://github.com/bbolek/omnidoc/releases):
 
 | Platform            | File                                |
 |---------------------|-------------------------------------|
@@ -202,9 +202,6 @@ Grab the latest installer for your platform from the
 | macOS (Intel)       | `.dmg` (x86_64)                     |
 | macOS (Apple Silicon) | `.dmg` (aarch64)                  |
 | Linux               | `.AppImage` (portable) or `.deb`    |
-
-> **Note:** the repository is currently hosted at `bbolek/md-viewer`.
-> If/when it's renamed to match the new project name, GitHub will redirect automatically.
 
 ## Development
 
