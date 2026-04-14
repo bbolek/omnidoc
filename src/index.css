@@ -1584,3 +1584,84 @@ body.resizing {
   background: var(--color-bg-inset);
   color: var(--color-text);
 }
+
+/* ─── Minimap ──────────────────────────────────────────────────────────── */
+.minimap {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 60px;
+  background: var(--color-bg-subtle);
+  border-left: 1px solid var(--color-border-muted);
+  overflow: hidden;
+  cursor: pointer;
+  user-select: none;
+  z-index: 5;
+  transition: background 0.12s ease;
+}
+.minimap:hover {
+  background: var(--color-bg-inset);
+}
+
+.minimap-structure {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.minimap-block {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  background: var(--color-text-muted);
+  opacity: 0.28;
+  border-radius: 1px;
+}
+
+.minimap-heading {
+  position: absolute;
+  right: 4px;
+  height: 3px;
+  background: var(--color-accent);
+  opacity: 0.85;
+  border-radius: 1px;
+}
+.minimap-heading-1 {
+  height: 4px;
+  width: 44px;
+}
+.minimap-heading-2 {
+  height: 3px;
+  width: 36px;
+  opacity: 0.7;
+}
+.minimap-heading-3 {
+  height: 2px;
+  width: 28px;
+  opacity: 0.55;
+}
+.minimap-heading-4 {
+  height: 2px;
+  width: 22px;
+  opacity: 0.4;
+}
+
+.minimap-viewport {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: var(--color-accent);
+  opacity: 0.18;
+  border-top: 1px solid var(--color-accent);
+  border-bottom: 1px solid var(--color-accent);
+  pointer-events: none;
+  transition: opacity 0.1s ease;
+}
+.minimap:hover .minimap-viewport {
+  opacity: 0.28;
+}
+
+.app-shell.zen-mode .minimap {
+  display: none;
+}

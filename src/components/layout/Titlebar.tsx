@@ -2,7 +2,7 @@ import React from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
-import { FolderOpen, File, X, Minus, Square, Focus, Printer } from "lucide-react";
+import { FolderOpen, File, X, Minus, Square, Focus, Printer, Map } from "lucide-react";
 import { useUiStore } from "../../store/uiStore";
 import { useFileStore } from "../../store/fileStore";
 import { getFileName } from "../../utils/fileUtils";
@@ -74,6 +74,8 @@ function handleExportPdf(title: string | null) {
 export function Titlebar() {
   const platform = useUiStore((s) => s.platform);
   const toggleZenMode = useUiStore((s) => s.toggleZenMode);
+  const minimapVisible = useUiStore((s) => s.minimapVisible);
+  const toggleMinimap = useUiStore((s) => s.toggleMinimap);
   const { openFile, setFolder, setTree, tabs, activeTabId, openFolder } = useFileStore();
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const folderName = openFolder ? getFileName(openFolder) : null;
@@ -179,6 +181,12 @@ export function Titlebar() {
           onClick={() => handleExportPdf(activeTab?.name ?? null)}
         />
         <TitlebarButton
+          icon={<Map size={14} />}
+          title={minimapVisible ? "Hide Minimap (Ctrl+Shift+M)" : "Show Minimap (Ctrl+Shift+M)"}
+          onClick={toggleMinimap}
+          active={minimapVisible}
+        />
+        <TitlebarButton
           icon={<Focus size={14} />}
           title="Zen Mode (Ctrl+Shift+Z)"
           onClick={toggleZenMode}
@@ -214,11 +222,15 @@ function TitlebarButton({
   icon,
   title,
   onClick,
+  active,
 }: {
   icon: React.ReactNode;
   title: string;
   onClick: () => void;
+  active?: boolean;
 }) {
+  const baseOpacity = active ? "1" : "0.6";
+  const baseBg = active ? "var(--color-sidebar-hover)" : "none";
   return (
     <button
       title={title}
@@ -227,13 +239,13 @@ function TitlebarButton({
         width: 28,
         height: 24,
         border: "none",
-        background: "none",
+        background: baseBg,
         borderRadius: "var(--radius-sm)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        color: "var(--color-titlebar-text)",
-        opacity: 0.6,
+        color: active ? "var(--color-accent)" : "var(--color-titlebar-text)",
+        opacity: baseOpacity,
         cursor: "pointer",
         transition: "opacity 100ms, background-color 100ms",
       }}
@@ -242,8 +254,8 @@ function TitlebarButton({
         (e.currentTarget as HTMLElement).style.background = "var(--color-sidebar-hover)";
       }}
       onMouseLeave={(e) => {
-        (e.currentTarget as HTMLElement).style.opacity = "0.6";
-        (e.currentTarget as HTMLElement).style.background = "none";
+        (e.currentTarget as HTMLElement).style.opacity = baseOpacity;
+        (e.currentTarget as HTMLElement).style.background = baseBg;
       }}
     >
       {icon}
