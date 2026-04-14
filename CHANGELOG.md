@@ -66,7 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Windows build: enabled tokio `process` feature required by `get_git_status` (#43).
 - Zen mode: collapsed app-shell grid rows so hidden chrome no longer reserves empty space; hid breadcrumb in zen mode (#44).
 
-[Unreleased]: https://github.com/bbolek/md-viewer/compare/v0.2.0...HEAD
-[0.2.0]: https://github.com/bbolek/md-viewer/compare/v0.1.1...v0.2.0
-[0.1.1]: https://github.com/bbolek/md-viewer/compare/v0.1.0...v0.1.1
-[0.1.0]: https://github.com/bbolek/md-viewer/releases/tag/v0.1.0
+[Unreleased]: https://github.com/bbolek/omnidoc/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/bbolek/omnidoc/compare/v0.1.1...v0.2.0
+[0.1.1]: https://github.com/bbolek/omnidoc/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/bbolek/omnidoc/releases/tag/v0.1.0
