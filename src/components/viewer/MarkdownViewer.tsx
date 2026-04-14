@@ -185,7 +185,7 @@ function CalloutBlockquote({
   return <blockquote {...props}>{children}</blockquote>;
 }
 
-const components: Components = {
+export const components: Components = {
   code: CodeBlock as Components["code"],
   h1: makeHeadingComponent(1) as Components["h1"],
   h2: makeHeadingComponent(2) as Components["h2"],

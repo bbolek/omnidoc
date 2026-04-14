@@ -16,8 +16,18 @@ import {
   Minus,
   Save,
   RotateCcw,
+  Columns2,
 } from "lucide-react";
+import { Allotment } from "allotment";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import remarkBreaks from "remark-breaks";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import rehypeRaw from "rehype-raw";
 import { useFileStore } from "../../store/fileStore";
+import { useUiStore } from "../../store/uiStore";
+import { components as markdownComponents } from "../viewer/MarkdownViewer";
 import type { Tab } from "../../types";
 
 interface Props {
@@ -301,6 +311,7 @@ function insertLink(
 
 export function MarkdownEditor({ tab }: Props) {
   const { updateTabContent, saveTabContent, discardTabChanges } = useFileStore();
+  const { livePreviewEnabled, toggleLivePreview } = useUiStore();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [saving, setSaving] = useState(false);
 
@@ -461,6 +472,14 @@ export function MarkdownEditor({ tab }: Props) {
           <Minus size={14} />
         </TooltipButton>
 
+        <TooltipButton
+          tooltip={livePreviewEnabled ? "Hide live preview" : "Show live preview"}
+          onClick={toggleLivePreview}
+          accent={livePreviewEnabled}
+        >
+          <Columns2 size={14} />
+        </TooltipButton>
+
         {/* Push save/discard to the right */}
         <div style={{ flex: 1 }} />
 
@@ -483,30 +502,80 @@ export function MarkdownEditor({ tab }: Props) {
         </TooltipButton>
       </div>
 
-      {/* ── Textarea ───────────────────────────────────────────────── */}
-      <textarea
-        ref={textareaRef}
-        defaultValue={tab.content}
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={onKeyDown}
-        spellCheck={false}
-        style={{
-          flex: 1,
-          width: "100%",
-          resize: "none",
-          border: "none",
-          outline: "none",
-          background: "var(--color-bg)",
-          color: "var(--color-text)",
-          fontFamily: "'Fira Code', 'Cascadia Code', 'Consolas', monospace",
-          fontSize: 13,
-          lineHeight: 1.7,
-          padding: "24px 48px",
-          boxSizing: "border-box",
-          overflowY: "auto",
-          caretColor: "var(--color-accent)",
-        }}
-      />
+      {/* ── Textarea (+ optional live preview) ────────────────────── */}
+      {livePreviewEnabled ? (
+        <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
+          <Allotment defaultSizes={[1, 1]}>
+            <Allotment.Pane minSize={200}>
+              <textarea
+                ref={textareaRef}
+                defaultValue={tab.content}
+                onChange={(e) => onChange(e.target.value)}
+                onKeyDown={onKeyDown}
+                spellCheck={false}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  resize: "none",
+                  border: "none",
+                  outline: "none",
+                  background: "var(--color-bg)",
+                  color: "var(--color-text)",
+                  fontFamily: "'Fira Code', 'Cascadia Code', 'Consolas', monospace",
+                  fontSize: 13,
+                  lineHeight: 1.7,
+                  padding: "24px 48px",
+                  boxSizing: "border-box",
+                  overflowY: "auto",
+                  caretColor: "var(--color-accent)",
+                }}
+              />
+            </Allotment.Pane>
+            <Allotment.Pane minSize={200}>
+              <div
+                className="markdown-body selectable"
+                style={{
+                  height: "100%",
+                  overflow: "auto",
+                  borderLeft: "1px solid var(--color-border-muted, var(--color-border))",
+                }}
+              >
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]}
+                  rehypePlugins={[rehypeKatex, rehypeRaw]}
+                  components={markdownComponents}
+                >
+                  {tab.content}
+                </ReactMarkdown>
+              </div>
+            </Allotment.Pane>
+          </Allotment>
+        </div>
+      ) : (
+        <textarea
+          ref={textareaRef}
+          defaultValue={tab.content}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={onKeyDown}
+          spellCheck={false}
+          style={{
+            flex: 1,
+            width: "100%",
+            resize: "none",
+            border: "none",
+            outline: "none",
+            background: "var(--color-bg)",
+            color: "var(--color-text)",
+            fontFamily: "'Fira Code', 'Cascadia Code', 'Consolas', monospace",
+            fontSize: 13,
+            lineHeight: 1.7,
+            padding: "24px 48px",
+            boxSizing: "border-box",
+            overflowY: "auto",
+            caretColor: "var(--color-accent)",
+          }}
+        />
+      )}
     </div>
   );
 }
