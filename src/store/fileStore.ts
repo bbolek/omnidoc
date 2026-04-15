@@ -105,6 +105,22 @@ interface FileState {
 let tabCounter = 0;
 const genId = () => `tab-${Date.now()}-${tabCounter++}`;
 
+// Wrap a promise with a timeout so a hung Tauri `invoke` (stale network path,
+// unresponsive backend, etc.) can't keep `isRestoring` pinned to `true` and
+// leave the app stuck on the "Restoring session…" loader.
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`restoreSession: ${label} timed out after ${ms}ms`)),
+      ms,
+    );
+    p.then(
+      (v) => { clearTimeout(timer); resolve(v); },
+      (e) => { clearTimeout(timer); reject(e); },
+    );
+  });
+}
+
 // Pick which workspace folder owns a given file path by longest-prefix match.
 function resolveFolderForPath(
   folders: WorkspaceFolder[],
@@ -476,14 +492,35 @@ export const useFileStore = create<FileState>()(
 
       restoreSession: async () => {
         const { lastSession, folders } = get();
+        // Per-call timeout: any single invoke that exceeds this is abandoned.
+        const PER_CALL_MS = 5000;
+        // Global watchdog: guarantees `isRestoring` is cleared even if something
+        // truly unexpected (e.g. an unhandled rejection path) keeps the try
+        // block from completing.
+        const WATCHDOG_MS = 30000;
+        let settled = false;
+        const watchdog = setTimeout(() => {
+          if (!settled) {
+            // eslint-disable-next-line no-console
+            console.warn(
+              `restoreSession: watchdog fired after ${WATCHDOG_MS}ms; clearing loader`,
+            );
+            set({ isRestoring: false });
+          }
+        }, WATCHDOG_MS);
+
         try {
           // Re-fetch each folder's tree (only paths + color were persisted).
           for (const f of folders) {
             try {
-              const entries = await invoke<FileEntry[]>("list_directory", { path: f.path });
+              const entries = await withTimeout(
+                invoke<FileEntry[]>("list_directory", { path: f.path }),
+                PER_CALL_MS,
+                `list_directory ${f.path}`,
+              );
               get().setFolderTree(f.path, entries);
             } catch {
-              // Folder may have been deleted/moved — leave tree empty.
+              // Folder may have been deleted/moved or backend hung — skip.
             }
           }
 
@@ -491,13 +528,17 @@ export const useFileStore = create<FileState>()(
 
           for (const { path, name, folderPath } of lastSession.tabs) {
             try {
-              const [content, info] = await Promise.all([
-                invoke<string>("read_file", { path }),
-                invoke<FileInfo>("get_file_info", { path }),
-              ]);
+              const [content, info] = await withTimeout(
+                Promise.all([
+                  invoke<string>("read_file", { path }),
+                  invoke<FileInfo>("get_file_info", { path }),
+                ]),
+                PER_CALL_MS,
+                `read ${path}`,
+              );
               get().openFile(path, name, content as string, info as FileInfo, folderPath);
             } catch {
-              // File deleted or moved — skip silently
+              // File deleted, moved, or backend hung — skip silently.
             }
           }
 
@@ -506,6 +547,8 @@ export const useFileStore = create<FileState>()(
             if (active) get().setActiveTab(active.id);
           }
         } finally {
+          settled = true;
+          clearTimeout(watchdog);
           set({ isRestoring: false });
         }
       },
