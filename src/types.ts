@@ -33,6 +33,12 @@ export interface RecentFile {
   extension?: string;
 }
 
+export interface RecentFolder {
+  path: string;
+  name: string;
+  accessedAt: number;
+}
+
 export interface TocHeading {
   id: string;
   text: string;

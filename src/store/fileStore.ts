@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { invoke } from "@tauri-apps/api/core";
-import type { Tab, FileEntry, RecentFile, FileInfo } from "../types";
+import type { Tab, FileEntry, RecentFile, RecentFolder, FileInfo } from "../types";
 
 interface SessionTab {
   path: string;
@@ -14,6 +14,7 @@ interface FileState {
   tabs: Tab[];
   activeTabId: string | null;
   recentFiles: RecentFile[];
+  recentFolders: RecentFolder[];
   splitView: boolean;
   rightPaneTabId: string | null;
   /** Persisted last session for restore on startup. */
@@ -43,6 +44,9 @@ interface FileState {
   saveTabContent: (id: string) => Promise<void>;
   discardTabChanges: (id: string) => Promise<void>;
   addRecentFile: (file: RecentFile) => void;
+  addRecentFolder: (folder: RecentFolder) => void;
+  removeRecentFolder: (path: string) => void;
+  removeRecentFile: (path: string) => void;
   setSplitView: (enabled: boolean) => void;
   setRightPaneTab: (id: string | null) => void;
   getActiveTab: () => Tab | null;
@@ -61,12 +65,29 @@ export const useFileStore = create<FileState>()(
       tabs: [],
       activeTabId: null,
       recentFiles: [],
+      recentFolders: [],
       splitView: false,
       rightPaneTabId: null,
       lastSession: null,
       isRestoring: true,
 
-      setFolder: (path) => set({ openFolder: path, tree: [] }),
+      setFolder: (path) => {
+        const prev = get().openFolder;
+        // Opening a new folder closes all existing tabs so the workspace
+        // reflects just the newly-opened folder.
+        const folderChanged = path !== prev;
+        set({
+          openFolder: path,
+          tree: [],
+          ...(folderChanged
+            ? { tabs: [], activeTabId: null, rightPaneTabId: null }
+            : {}),
+        });
+        if (path) {
+          const name = path.split(/[/\\]/).filter(Boolean).pop() ?? path;
+          get().addRecentFolder({ path, name, accessedAt: Date.now() });
+        }
+      },
 
       setTree: (entries) => set({ tree: entries }),
 
@@ -221,6 +242,25 @@ export const useFileStore = create<FileState>()(
         });
       },
 
+      addRecentFolder: (folder) => {
+        set((state) => {
+          const filtered = state.recentFolders.filter((f) => f.path !== folder.path);
+          return { recentFolders: [folder, ...filtered].slice(0, 20) };
+        });
+      },
+
+      removeRecentFolder: (path) => {
+        set((state) => ({
+          recentFolders: state.recentFolders.filter((f) => f.path !== path),
+        }));
+      },
+
+      removeRecentFile: (path) => {
+        set((state) => ({
+          recentFiles: state.recentFiles.filter((f) => f.path !== path),
+        }));
+      },
+
       setSplitView: (enabled) => set({ splitView: enabled }),
 
       setRightPaneTab: (id) => set({ rightPaneTabId: id }),
@@ -260,6 +300,7 @@ export const useFileStore = create<FileState>()(
       name: "omnidoc-files",
       partialize: (state) => ({
         recentFiles: state.recentFiles,
+        recentFolders: state.recentFolders,
         openFolder: state.openFolder,
         lastSession: {
           tabs: state.tabs.map((t) => ({ path: t.path, name: t.name })),

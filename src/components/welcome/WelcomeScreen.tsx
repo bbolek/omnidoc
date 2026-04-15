@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
-import { FileText, FolderOpen, Clock, Keyboard } from "lucide-react";
+import { FileText, FolderOpen, Clock, Keyboard, X } from "lucide-react";
 import { motion } from "framer-motion";
 import { useFileStore } from "../../store/fileStore";
 import { useUiStore } from "../../store/uiStore";
@@ -10,7 +10,8 @@ import { FileIcon } from "../ui/FileIcon";
 import type { FileEntry } from "../../types";
 
 export function WelcomeScreen() {
-  const { openFile, recentFiles, setFolder, setTree } = useFileStore();
+  const { openFile, recentFiles, recentFolders, setFolder, setTree, removeRecentFolder, removeRecentFile } =
+    useFileStore();
   const { setShortcutsVisible } = useUiStore();
 
   const handleOpenFile = useCallback(async () => {
@@ -54,9 +55,25 @@ export function WelcomeScreen() {
       const { content, info } = await loadFileForOpen(path);
       openFile(path, name, content, info);
     } catch {
-      // File might have been moved/deleted
+      // File might have been moved/deleted — drop it from the list so the
+      // user doesn't keep clicking a dead entry.
+      removeRecentFile(path);
     }
   };
+
+  const handleRecentFolderOpen = useCallback(
+    async (path: string) => {
+      try {
+        const entries = await invoke<FileEntry[]>("list_directory", { path });
+        setFolder(path);
+        setTree(entries);
+      } catch {
+        // Folder might have been moved/deleted
+        removeRecentFolder(path);
+      }
+    },
+    [setFolder, setTree, removeRecentFolder]
+  );
 
   // Drag-and-drop handler
   const handleDrop = useCallback(
@@ -148,6 +165,74 @@ export function WelcomeScreen() {
         <QuickAction icon={<FolderOpen size={15} />} label="Open Folder" onClick={handleOpenFolder} />
         <QuickAction icon={<Keyboard size={15} />} label="Shortcuts" onClick={() => setShortcutsVisible(true)} />
       </div>
+
+      {/* Recent folders */}
+      {recentFolders.length > 0 && (
+        <div style={{ width: "100%", maxWidth: 400 }}>
+          <div
+            style={{
+              fontSize: 11,
+              fontWeight: 600,
+              textTransform: "uppercase",
+              letterSpacing: "0.06em",
+              color: "var(--color-text-muted)",
+              marginBottom: 8,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <FolderOpen size={12} />
+            Recent Folders
+          </div>
+          {recentFolders.slice(0, 5).map((folder) => (
+            <div
+              key={folder.path}
+              className="tree-item"
+              style={{ padding: "6px 10px", borderRadius: "var(--radius)" }}
+              onClick={() => handleRecentFolderOpen(folder.path)}
+              title={folder.path}
+            >
+              <FolderOpen size={14} style={{ flexShrink: 0, opacity: 0.7 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, color: "var(--color-text)", fontWeight: 500 }}>
+                  {folder.name}
+                </div>
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: "var(--color-text-muted)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {folder.path}
+                </div>
+              </div>
+              <button
+                aria-label="Remove from recent"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  removeRecentFolder(folder.path);
+                }}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "var(--color-text-muted)",
+                  cursor: "pointer",
+                  padding: 2,
+                  display: "flex",
+                  alignItems: "center",
+                  opacity: 0.6,
+                }}
+              >
+                <X size={12} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Recent files */}
       {recentFiles.length > 0 && (
