@@ -148,6 +148,7 @@ function makeFolder(path: string, colorIndex: number, collapsed = false): Worksp
     name: getFileName(path) || path,
     colorIndex,
     collapsed,
+    disabled: false,
     tree: [],
   };
 }
@@ -619,7 +620,7 @@ export const useFileStore = create<FileState>()(
       onRehydrateStorage: () => (state) => {
         if (!state) return;
         // Persisted `folders` lacks tree/name shape guarantees — ensure a tree field.
-        let folders = (state.folders ?? []).map((f) => ({
+        let folders: WorkspaceFolder[] = (state.folders ?? []).map((f) => ({
           path: f.path,
           name: f.name ?? getFileName(f.path) ?? f.path,
           colorIndex: f.colorIndex ?? 0,
