@@ -11,6 +11,7 @@ import {
   ContextMenuItem,
   ContextMenuSeparator,
 } from "../ui/ContextMenu";
+import type { Tab } from "../../types";
 
 interface TabContextMenu {
   x: number;
@@ -42,7 +43,27 @@ export function TabBar() {
     active?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
   }, [activeTabId]);
 
-  if (tabs.length === 0) return null;
+  // Tabs owned by a disabled workspace folder are filtered out of the bar.
+  // Loose tabs (no `folderPath`) are always visible.
+  const disabledFolderPaths = new Set(
+    folders.filter((f) => f.disabled).map((f) => f.path),
+  );
+  const isVisible = (t: Tab) =>
+    !t.folderPath || !disabledFolderPaths.has(t.folderPath);
+  const visibleTabs = tabs.filter(isVisible);
+
+  if (visibleTabs.length === 0) return null;
+
+  // Framer's Reorder gives us the new visible-tab ordering. Merge it back into
+  // the full `tabs` array so hidden tabs keep their absolute positions and the
+  // persisted session stays stable when the user re-enables a folder.
+  const handleReorder = (newVisible: Tab[]) => {
+    const slots: number[] = [];
+    tabs.forEach((t, i) => { if (isVisible(t)) slots.push(i); });
+    const next = tabs.slice();
+    slots.forEach((slot, k) => { next[slot] = newVisible[k]; });
+    reorderTabs(next);
+  };
 
   const closeMenu = () => setContextMenu(null);
 
@@ -51,13 +72,13 @@ export function TabBar() {
       <div className="tab-bar" ref={scrollRef}>
         <Reorder.Group
           axis="x"
-          values={tabs}
-          onReorder={reorderTabs}
+          values={visibleTabs}
+          onReorder={handleReorder}
           as="div"
           style={{ display: "contents" }}
         >
           <AnimatePresence initial={false}>
-            {tabs.map((tab) => {
+            {visibleTabs.map((tab) => {
               const folder = tab.folderPath
                 ? folders.find((f) => f.path === tab.folderPath)
                 : undefined;

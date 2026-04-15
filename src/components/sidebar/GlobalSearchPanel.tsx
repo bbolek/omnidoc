@@ -14,15 +14,29 @@ interface GroupedResult {
   matches: SearchMatch[];
 }
 
-function groupResults(matches: SearchMatch[], folder: string): GroupedResult[] {
+function groupResults(matches: SearchMatch[], folders: string[]): GroupedResult[] {
+  // Longest-prefix match so nested workspace folders still resolve correctly.
+  const sortedFolders = [...folders].sort((a, b) => b.length - a.length);
+  const relativize = (p: string) => {
+    for (const f of sortedFolders) {
+      if (p === f || p.startsWith(f + "/") || p.startsWith(f + "\\")) {
+        return p.slice(f.length).replace(/^[/\\]/, "");
+      }
+    }
+    return p;
+  };
+
   const map = new Map<string, GroupedResult>();
   for (const m of matches) {
     if (!map.has(m.path)) {
       const ext = m.filename.includes(".") ? m.filename.split(".").pop() ?? "" : "";
-      const rel = m.path.startsWith(folder)
-        ? m.path.slice(folder.length).replace(/^[/\\]/, "")
-        : m.path;
-      map.set(m.path, { path: m.path, filename: m.filename, extension: ext, relativePath: rel, matches: [] });
+      map.set(m.path, {
+        path: m.path,
+        filename: m.filename,
+        extension: ext,
+        relativePath: relativize(m.path),
+        matches: [],
+      });
     }
     map.get(m.path)!.matches.push(m);
   }
@@ -219,9 +233,13 @@ function FileGroup({
 }
 
 export function GlobalSearchPanel() {
-  const { openFolder } = useFileStore();
+  const folders = useFileStore((s) => s.folders);
   const { globalSearchQuery, setGlobalSearchQuery, setPendingFindQuery, setSearchVisible } = useUiStore();
   const { openFile } = useFileStore();
+
+  // Stable join so effect deps don't trigger on array identity changes alone.
+  const folderPaths = folders.map((f) => f.path);
+  const folderKey = folderPaths.join("\n");
 
   const [query, setQuery] = useState(globalSearchQuery);
   const [results, setResults] = useState<SearchMatch[]>([]);
@@ -251,19 +269,40 @@ export function GlobalSearchPanel() {
       setIsSearching(false);
       return;
     }
-    if (!openFolder) {
+    if (folderPaths.length === 0) {
       setResults([]);
       return;
     }
     debounceRef.current = setTimeout(async () => {
       setIsSearching(true);
       try {
-        const matches = await invoke<SearchMatch[]>("search_in_files", {
-          folder: openFolder,
-          query: query.trim(),
-        });
-        setResults(matches);
-        setTruncated(matches.length >= 500);
+        // Search every workspace folder in parallel and merge the results so
+        // the panel covers the whole workspace, not just the primary folder.
+        const settled = await Promise.allSettled(
+          folderPaths.map((folder) =>
+            invoke<SearchMatch[]>("search_in_files", { folder, query: query.trim() }),
+          ),
+        );
+        let anyTruncated = false;
+        const merged: SearchMatch[] = [];
+        const seen = new Set<string>();
+        for (const r of settled) {
+          if (r.status !== "fulfilled") {
+            console.error("Search failed:", r.reason);
+            continue;
+          }
+          if (r.value.length >= 500) anyTruncated = true;
+          for (const m of r.value) {
+            // De-dupe matches that would appear twice when one workspace
+            // folder is nested inside another.
+            const key = `${m.path}:${m.line_number}:${m.match_start}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            merged.push(m);
+          }
+        }
+        setResults(merged);
+        setTruncated(anyTruncated);
         setFocusedIdx(-1);
         setCollapsedFiles(new Set()); // expand all on new search
       } catch (err) {
@@ -276,9 +315,12 @@ export function GlobalSearchPanel() {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [query, openFolder]);
+    // `folderKey` captures the identity of `folderPaths` without re-running on
+    // every render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, folderKey]);
 
-  const grouped = openFolder ? groupResults(results, openFolder) : [];
+  const grouped = folderPaths.length > 0 ? groupResults(results, folderPaths) : [];
 
   // Flat list of all match indices for keyboard navigation
   const flatMatches = grouped.flatMap((g) =>
@@ -404,7 +446,7 @@ export function GlobalSearchPanel() {
       {/* Results area */}
       <div style={{ flex: 1, overflow: "auto" }}>
         {/* No folder open */}
-        {!openFolder && (
+        {folderPaths.length === 0 && (
           <div
             style={{
               display: "flex",
@@ -438,7 +480,7 @@ export function GlobalSearchPanel() {
         )}
 
         {/* No results */}
-        {!isSearching && openFolder && query.trim().length >= 2 && results.length === 0 && (
+        {!isSearching && folderPaths.length > 0 && query.trim().length >= 2 && results.length === 0 && (
           <div
             style={{
               padding: "24px 16px",

@@ -93,6 +93,7 @@ export function Titlebar() {
   const tabs = useFileStore((s) => s.tabs);
   const activeTabId = useFileStore((s) => s.activeTabId);
   const folders = useFileStore((s) => s.folders);
+  const setFolderDisabled = useFileStore((s) => s.setFolderDisabled);
   const activeTab = tabs.find((t) => t.id === activeTabId);
 
   const isMac = platform === "macos";
@@ -173,10 +174,17 @@ export function Titlebar() {
             >
               {folders.map((f) => {
                 const c = folderColor(f.colorIndex);
+                const disabled = !!f.disabled;
                 return (
-                  <span
+                  <button
                     key={f.path}
-                    title={f.path}
+                    type="button"
+                    title={
+                      disabled
+                        ? `${f.path}\n(Click to enable — tabs from this folder are hidden)`
+                        : `${f.path}\n(Click to disable — hides tabs from this folder)`
+                    }
+                    onClick={() => setFolderDisabled(f.path, !disabled)}
                     style={{
                       display: "inline-flex",
                       alignItems: "center",
@@ -184,8 +192,8 @@ export function Titlebar() {
                       fontSize: 12,
                       fontWeight: 500,
                       color: "var(--color-titlebar-text)",
-                      background: c.tint,
-                      border: `1px solid ${c.accent}`,
+                      background: disabled ? "transparent" : c.tint,
+                      border: `1px solid ${disabled ? "var(--color-border)" : c.accent}`,
                       borderRadius: "var(--radius-sm)",
                       padding: "1px 6px",
                       overflow: "hidden",
@@ -194,13 +202,25 @@ export function Titlebar() {
                       flexShrink: 1,
                       minWidth: 0,
                       maxWidth: 160,
+                      cursor: "pointer",
+                      opacity: disabled ? 0.5 : 1,
+                      textDecoration: disabled ? "line-through" : "none",
+                      fontFamily: "inherit",
+                      lineHeight: "inherit",
+                      transition: "opacity 100ms, background-color 100ms",
                     }}
                   >
-                    <FolderOpen size={11} style={{ flexShrink: 0, color: c.accent }} />
+                    <FolderOpen
+                      size={11}
+                      style={{
+                        flexShrink: 0,
+                        color: disabled ? "var(--color-text-muted)" : c.accent,
+                      }}
+                    />
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
                       {getFileName(f.path) || f.path}
                     </span>
-                  </span>
+                  </button>
                 );
               })}
             </div>

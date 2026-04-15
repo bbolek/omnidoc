@@ -24,6 +24,7 @@ interface PersistedFolder {
   name: string;
   colorIndex: number;
   collapsed: boolean;
+  disabled?: boolean;
 }
 
 interface FileState {
@@ -65,6 +66,12 @@ interface FileState {
   removeFolder: (path: string) => void;
   /** Toggle/set the expanded state of a specific folder's tree. */
   setFolderCollapsed: (path: string, collapsed: boolean) => void;
+  /**
+   * Enable or disable a folder. Disabled folders keep their tabs in state but
+   * those tabs are hidden from the tab bar. If the active tab lives in the
+   * folder being disabled, the active tab switches to the next visible one.
+   */
+  setFolderDisabled: (path: string, disabled: boolean) => void;
   /** Replace the root entries of a specific folder (after a `list_directory`). */
   setFolderTree: (path: string, entries: FileEntry[]) => void;
   /** Load a full workspace (from a `.omnidoc-workspace.json` file). */
@@ -104,6 +111,22 @@ interface FileState {
 
 let tabCounter = 0;
 const genId = () => `tab-${Date.now()}-${tabCounter++}`;
+
+// Wrap a promise with a timeout so a hung Tauri `invoke` (stale network path,
+// unresponsive backend, etc.) can't keep `isRestoring` pinned to `true` and
+// leave the app stuck on the "Restoring session…" loader.
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`restoreSession: ${label} timed out after ${ms}ms`)),
+      ms,
+    );
+    p.then(
+      (v) => { clearTimeout(timer); resolve(v); },
+      (e) => { clearTimeout(timer); reject(e); },
+    );
+  });
+}
 
 // Pick which workspace folder owns a given file path by longest-prefix match.
 function resolveFolderForPath(
@@ -242,6 +265,35 @@ export const useFileStore = create<FileState>()(
         }));
       },
 
+      setFolderDisabled: (path, disabled) => {
+        const { tabs, activeTabId, rightPaneTabId, folders } = get();
+        const nextFolders = folders.map((f) =>
+          f.path === path ? { ...f, disabled } : f,
+        );
+        // A tab is "visible" when its owning folder is enabled (or it has no
+        // folder at all — e.g. a loose file opened via Open File).
+        const disabledPaths = new Set(
+          nextFolders.filter((f) => f.disabled).map((f) => f.path),
+        );
+        const isVisible = (t: Tab) =>
+          !t.folderPath || !disabledPaths.has(t.folderPath);
+
+        const activeTab = tabs.find((t) => t.id === activeTabId);
+        const nextActiveId =
+          activeTab && !isVisible(activeTab)
+            ? tabs.find(isVisible)?.id ?? null
+            : activeTabId;
+        const rightTab = tabs.find((t) => t.id === rightPaneTabId);
+        const nextRightId =
+          rightTab && !isVisible(rightTab) ? null : rightPaneTabId;
+
+        set({
+          folders: nextFolders,
+          activeTabId: nextActiveId,
+          rightPaneTabId: nextRightId,
+        });
+      },
+
       setFolderTree: (path, entries) => {
         set((state) => {
           const folders = state.folders.map((f) =>
@@ -263,6 +315,7 @@ export const useFileStore = create<FileState>()(
 
         const folders = file.folders.map((f) => ({
           ...makeFolder(f.path, f.colorIndex, f.collapsed),
+          disabled: f.disabled ?? false,
         }));
         set({
           folders,
@@ -476,14 +529,35 @@ export const useFileStore = create<FileState>()(
 
       restoreSession: async () => {
         const { lastSession, folders } = get();
+        // Per-call timeout: any single invoke that exceeds this is abandoned.
+        const PER_CALL_MS = 5000;
+        // Global watchdog: guarantees `isRestoring` is cleared even if something
+        // truly unexpected (e.g. an unhandled rejection path) keeps the try
+        // block from completing.
+        const WATCHDOG_MS = 30000;
+        let settled = false;
+        const watchdog = setTimeout(() => {
+          if (!settled) {
+            // eslint-disable-next-line no-console
+            console.warn(
+              `restoreSession: watchdog fired after ${WATCHDOG_MS}ms; clearing loader`,
+            );
+            set({ isRestoring: false });
+          }
+        }, WATCHDOG_MS);
+
         try {
           // Re-fetch each folder's tree (only paths + color were persisted).
           for (const f of folders) {
             try {
-              const entries = await invoke<FileEntry[]>("list_directory", { path: f.path });
+              const entries = await withTimeout(
+                invoke<FileEntry[]>("list_directory", { path: f.path }),
+                PER_CALL_MS,
+                `list_directory ${f.path}`,
+              );
               get().setFolderTree(f.path, entries);
             } catch {
-              // Folder may have been deleted/moved — leave tree empty.
+              // Folder may have been deleted/moved or backend hung — skip.
             }
           }
 
@@ -491,13 +565,17 @@ export const useFileStore = create<FileState>()(
 
           for (const { path, name, folderPath } of lastSession.tabs) {
             try {
-              const [content, info] = await Promise.all([
-                invoke<string>("read_file", { path }),
-                invoke<FileInfo>("get_file_info", { path }),
-              ]);
+              const [content, info] = await withTimeout(
+                Promise.all([
+                  invoke<string>("read_file", { path }),
+                  invoke<FileInfo>("get_file_info", { path }),
+                ]),
+                PER_CALL_MS,
+                `read ${path}`,
+              );
               get().openFile(path, name, content as string, info as FileInfo, folderPath);
             } catch {
-              // File deleted or moved — skip silently
+              // File deleted, moved, or backend hung — skip silently.
             }
           }
 
@@ -506,6 +584,8 @@ export const useFileStore = create<FileState>()(
             if (active) get().setActiveTab(active.id);
           }
         } finally {
+          settled = true;
+          clearTimeout(watchdog);
           set({ isRestoring: false });
         }
       },
@@ -521,6 +601,7 @@ export const useFileStore = create<FileState>()(
           name: f.name,
           colorIndex: f.colorIndex,
           collapsed: f.collapsed,
+          disabled: f.disabled,
         })),
         // Backwards-compat / derived — mostly for older consumers reading
         // from the persisted store key directly.
@@ -543,6 +624,7 @@ export const useFileStore = create<FileState>()(
           name: f.name ?? getFileName(f.path) ?? f.path,
           colorIndex: f.colorIndex ?? 0,
           collapsed: f.collapsed ?? false,
+          disabled: f.disabled ?? false,
           tree: [] as FileEntry[],
         }));
         // One-shot migration from legacy single-folder persisted state.

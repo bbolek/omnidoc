@@ -45,6 +45,12 @@ export interface WorkspaceFolder {
   name: string;
   colorIndex: number;
   collapsed: boolean;
+  /**
+   * When `true`, tabs belonging to this folder are hidden from the tab bar.
+   * The folder, its tree, and its tabs are kept in state so toggling back to
+   * enabled restores them instantly. Defaults to `false` (enabled).
+   */
+  disabled?: boolean;
   tree: FileEntry[];
 }
 
@@ -61,7 +67,13 @@ export interface RecentFolder {
  */
 export interface WorkspaceFile {
   version: 1;
-  folders: Array<{ path: string; colorIndex: number; collapsed: boolean }>;
+  folders: Array<{
+    path: string;
+    colorIndex: number;
+    collapsed: boolean;
+    /** Optional (added later); missing = enabled. */
+    disabled?: boolean;
+  }>;
   tabs: Array<{ path: string; folderPath?: string }>;
   activePath: string | null;
 }
