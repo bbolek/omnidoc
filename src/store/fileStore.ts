@@ -24,6 +24,7 @@ interface PersistedFolder {
   name: string;
   colorIndex: number;
   collapsed: boolean;
+  disabled?: boolean;
 }
 
 interface FileState {
@@ -65,6 +66,12 @@ interface FileState {
   removeFolder: (path: string) => void;
   /** Toggle/set the expanded state of a specific folder's tree. */
   setFolderCollapsed: (path: string, collapsed: boolean) => void;
+  /**
+   * Enable or disable a folder. Disabled folders keep their tabs in state but
+   * those tabs are hidden from the tab bar. If the active tab lives in the
+   * folder being disabled, the active tab switches to the next visible one.
+   */
+  setFolderDisabled: (path: string, disabled: boolean) => void;
   /** Replace the root entries of a specific folder (after a `list_directory`). */
   setFolderTree: (path: string, entries: FileEntry[]) => void;
   /** Load a full workspace (from a `.omnidoc-workspace.json` file). */
@@ -256,6 +263,35 @@ export const useFileStore = create<FileState>()(
             f.path === path ? { ...f, collapsed } : f,
           ),
         }));
+      },
+
+      setFolderDisabled: (path, disabled) => {
+        const { tabs, activeTabId, rightPaneTabId, folders } = get();
+        const nextFolders = folders.map((f) =>
+          f.path === path ? { ...f, disabled } : f,
+        );
+        // A tab is "visible" when its owning folder is enabled (or it has no
+        // folder at all — e.g. a loose file opened via Open File).
+        const disabledPaths = new Set(
+          nextFolders.filter((f) => f.disabled).map((f) => f.path),
+        );
+        const isVisible = (t: Tab) =>
+          !t.folderPath || !disabledPaths.has(t.folderPath);
+
+        const activeTab = tabs.find((t) => t.id === activeTabId);
+        const nextActiveId =
+          activeTab && !isVisible(activeTab)
+            ? tabs.find(isVisible)?.id ?? null
+            : activeTabId;
+        const rightTab = tabs.find((t) => t.id === rightPaneTabId);
+        const nextRightId =
+          rightTab && !isVisible(rightTab) ? null : rightPaneTabId;
+
+        set({
+          folders: nextFolders,
+          activeTabId: nextActiveId,
+          rightPaneTabId: nextRightId,
+        });
       },
 
       setFolderTree: (path, entries) => {
@@ -564,6 +600,7 @@ export const useFileStore = create<FileState>()(
           name: f.name,
           colorIndex: f.colorIndex,
           collapsed: f.collapsed,
+          disabled: f.disabled,
         })),
         // Backwards-compat / derived — mostly for older consumers reading
         // from the persisted store key directly.
@@ -586,6 +623,7 @@ export const useFileStore = create<FileState>()(
           name: f.name ?? getFileName(f.path) ?? f.path,
           colorIndex: f.colorIndex ?? 0,
           collapsed: f.collapsed ?? false,
+          disabled: f.disabled ?? false,
           tree: [] as FileEntry[],
         }));
         // One-shot migration from legacy single-folder persisted state.
