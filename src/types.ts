@@ -67,7 +67,13 @@ export interface RecentFolder {
  */
 export interface WorkspaceFile {
   version: 1;
-  folders: Array<{ path: string; colorIndex: number; collapsed: boolean }>;
+  folders: Array<{
+    path: string;
+    colorIndex: number;
+    collapsed: boolean;
+    /** Optional (added later); missing = enabled. */
+    disabled?: boolean;
+  }>;
   tabs: Array<{ path: string; folderPath?: string }>;
   activePath: string | null;
 }

@@ -315,6 +315,7 @@ export const useFileStore = create<FileState>()(
 
         const folders = file.folders.map((f) => ({
           ...makeFolder(f.path, f.colorIndex, f.collapsed),
+          disabled: f.disabled ?? false,
         }));
         set({
           folders,

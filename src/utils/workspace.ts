@@ -36,6 +36,7 @@ export async function saveWorkspace(): Promise<void> {
       path: f.path,
       colorIndex: f.colorIndex,
       collapsed: f.collapsed,
+      disabled: f.disabled ?? false,
     })),
     tabs: state.tabs.map((t) => ({ path: t.path, folderPath: t.folderPath })),
     activePath: state.tabs.find((t) => t.id === state.activeTabId)?.path ?? null,
