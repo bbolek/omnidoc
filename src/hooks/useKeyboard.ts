@@ -5,6 +5,7 @@ import { useUiStore } from "../store/uiStore";
 import { getFileExtension, getFileType } from "../utils/fileUtils";
 import { canFormat, formatContent } from "../utils/formatUtils";
 import { showToast } from "../components/ui/Toast";
+import { saveWorkspace, openWorkspace } from "../utils/workspace";
 
 export function useGlobalKeyboard() {
   const {
@@ -78,6 +79,20 @@ export function useGlobalKeyboard() {
       if (ctrl && e.shiftKey && e.key === "W") {
         e.preventDefault();
         closeAllTabs();
+        return;
+      }
+
+      // Ctrl+Alt+S → save workspace (*.omnidoc-workspace.json)
+      if (ctrl && e.altKey && !e.shiftKey && (e.key === "s" || e.key === "S")) {
+        e.preventDefault();
+        void saveWorkspace();
+        return;
+      }
+
+      // Ctrl+Alt+O → open workspace
+      if (ctrl && e.altKey && !e.shiftKey && (e.key === "o" || e.key === "O")) {
+        e.preventDefault();
+        void openWorkspace();
         return;
       }
 

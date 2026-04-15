@@ -1,16 +1,14 @@
 import { useCallback, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { invoke } from "@tauri-apps/api/core";
 import { FileText, FolderOpen, Clock, Keyboard } from "lucide-react";
 import { motion } from "framer-motion";
 import { useFileStore } from "../../store/fileStore";
 import { useUiStore } from "../../store/uiStore";
 import { getFileName, loadFileForOpen } from "../../utils/fileUtils";
 import { FileIcon } from "../ui/FileIcon";
-import type { FileEntry } from "../../types";
 
 export function WelcomeScreen() {
-  const { openFile, recentFiles, setFolder, setTree } = useFileStore();
+  const { openFile, recentFiles, replaceFolders } = useFileStore();
   const { setShortcutsVisible } = useUiStore();
 
   const handleOpenFile = useCallback(async () => {
@@ -43,11 +41,9 @@ export function WelcomeScreen() {
   const handleOpenFolder = useCallback(async () => {
     const selected = await open({ directory: true, multiple: false });
     if (typeof selected === "string") {
-      setFolder(selected);
-      const entries = await invoke<FileEntry[]>("list_directory", { path: selected });
-      setTree(entries);
+      replaceFolders([selected]);
     }
-  }, [setFolder, setTree]);
+  }, [replaceFolders]);
 
   const handleRecentOpen = async (path: string, name: string) => {
     try {

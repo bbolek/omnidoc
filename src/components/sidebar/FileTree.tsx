@@ -14,7 +14,8 @@ import { useFileClipboardStore } from "../../store/fileClipboardStore";
 import { getFileName, isOpenable, loadFileForOpen } from "../../utils/fileUtils";
 import { FileIcon } from "../ui/FileIcon";
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from "../ui/ContextMenu";
-import type { FileEntry, FileInfo } from "../../types";
+import { folderColor } from "../../utils/folderColors";
+import type { FileEntry, FileInfo, WorkspaceFolder } from "../../types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -753,11 +754,106 @@ function StarredSection({ starredPaths, onToggleStar }: StarredSectionProps) {
   );
 }
 
-// ─── FileTree (root) ─────────────────────────────────────────────────────────
+// ─── FileTree (root): multi-folder workspace ─────────────────────────────────
 
+/**
+ * Top-level sidebar component. Renders a starred section, then one
+ * `<FolderSection>` per open workspace folder, and an "Add Folder" affordance.
+ * The empty state matches the legacy single-folder experience.
+ */
 export function FileTree() {
-  const { openFolder: currentFolder, tree, setFolder, setTree } = useFileStore();
+  const folders = useFileStore((s) => s.folders);
+  const addFolder = useFileStore((s) => s.addFolder);
+  const replaceFolders = useFileStore((s) => s.replaceFolders);
   const { starredPaths, toggleStar } = useStarredStore();
+
+  const handleOpenFolder = async () => {
+    const selected = await open({ directory: true, multiple: false });
+    if (typeof selected === "string") {
+      // Fresh workspace: closes existing tabs per contract.
+      replaceFolders([selected]);
+    }
+  };
+
+  const handleAddFolder = async () => {
+    const selected = await open({ directory: true, multiple: false });
+    if (typeof selected === "string") {
+      await addFolder(selected);
+    }
+  };
+
+  if (folders.length === 0) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", padding: 16, gap: 12, color: "var(--color-text-muted)", fontSize: 13, textAlign: "center" }}>
+        <FolderPlus size={32} strokeWidth={1.5} />
+        <div>No folder open</div>
+        <button
+          onClick={handleOpenFolder}
+          style={{ background: "var(--color-accent)", color: "var(--color-accent-fg)", border: "none", borderRadius: "var(--radius)", padding: "6px 14px", cursor: "pointer", fontSize: 13, fontFamily: "Inter, sans-serif" }}
+        >
+          Open Folder
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ flex: 1, overflow: "auto", display: "flex", flexDirection: "column" }}>
+      {/* Starred items shared across all folders */}
+      <StarredSection starredPaths={starredPaths} onToggleStar={toggleStar} />
+
+      {/* One section per open workspace folder */}
+      {folders.map((folder) => (
+        <FolderSection key={folder.path} folder={folder} />
+      ))}
+
+      {/* Add Folder affordance — adds a folder without closing tabs */}
+      <button
+        onClick={handleAddFolder}
+        title="Add Folder to Workspace"
+        style={{
+          margin: "6px 8px 10px",
+          padding: "5px 8px",
+          background: "transparent",
+          border: "1px dashed var(--color-border-muted)",
+          borderRadius: "var(--radius-sm)",
+          color: "var(--color-text-muted)",
+          cursor: "pointer",
+          fontSize: 12,
+          fontFamily: "Inter, sans-serif",
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          justifyContent: "center",
+        }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLElement).style.color = "var(--color-text)";
+          (e.currentTarget as HTMLElement).style.borderColor = "var(--color-accent)";
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLElement).style.color = "var(--color-text-muted)";
+          (e.currentTarget as HTMLElement).style.borderColor = "var(--color-border-muted)";
+        }}
+      >
+        <FolderPlus size={12} />
+        Add Folder to Workspace
+      </button>
+    </div>
+  );
+}
+
+// ─── FolderSection: one open workspace folder ───────────────────────────────
+
+interface FolderSectionProps {
+  folder: WorkspaceFolder;
+}
+
+function FolderSection({ folder }: FolderSectionProps) {
+  const currentFolder = folder.path;
+  const tree = folder.tree;
+  const setFolderTree = useFileStore((s) => s.setFolderTree);
+  const setFolderCollapsed = useFileStore((s) => s.setFolderCollapsed);
+  const removeFolder = useFileStore((s) => s.removeFolder);
 
   const [collapseKey, setCollapseKey]     = useState(0);
   const [query, setQuery]                 = useState("");
@@ -780,9 +876,9 @@ export function FileTree() {
   const refreshRoot = useCallback(() => {
     if (!currentFolder) return;
     invoke<FileEntry[]>("list_directory", { path: currentFolder })
-      .then(setTree)
+      .then((entries) => setFolderTree(currentFolder, entries))
       .catch(console.error);
-  }, [currentFolder, setTree]);
+  }, [currentFolder, setFolderTree]);
 
   const refreshFolder = useCallback((folderPath: string) => {
     if (folderPath === currentFolder) {
@@ -907,10 +1003,10 @@ export function FileTree() {
   useEffect(() => {
     if (currentFolder && tree.length === 0) {
       invoke<FileEntry[]>("list_directory", { path: currentFolder })
-        .then(setTree)
+        .then((entries) => setFolderTree(currentFolder, entries))
         .catch(console.error);
     }
-  }, [currentFolder, tree.length, setTree]);
+  }, [currentFolder, tree.length, setFolderTree]);
 
   // ── reveal-path event: expand folders and scroll to a path ────────────────
 
@@ -949,21 +1045,6 @@ export function FileTree() {
     window.addEventListener("omnidoc:reveal-path", handler);
     return () => window.removeEventListener("omnidoc:reveal-path", handler);
   }, [currentFolder]);
-
-  // ── open folder ───────────────────────────────────────────────────────────
-
-  const handleOpenFolder = async () => {
-    const selected = await open({ directory: true, multiple: false });
-    if (typeof selected === "string") {
-      setFolder(selected);
-      try {
-        const entries = await invoke<FileEntry[]>("list_directory", { path: selected });
-        setTree(entries);
-      } catch (err) {
-        console.error(err);
-      }
-    }
-  };
 
   // ── keyboard navigation ───────────────────────────────────────────────────
 
@@ -1124,24 +1205,11 @@ export function FileTree() {
 
   // ─────────────────────────────────────────────────────────────────────────
 
-  if (!currentFolder) {
-    return (
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", padding: 16, gap: 12, color: "var(--color-text-muted)", fontSize: 13, textAlign: "center" }}>
-        <FolderPlus size={32} strokeWidth={1.5} />
-        <div>No folder open</div>
-        <button
-          onClick={handleOpenFolder}
-          style={{ background: "var(--color-accent)", color: "var(--color-accent-fg)", border: "none", borderRadius: "var(--radius)", padding: "6px 14px", cursor: "pointer", fontSize: 13, fontFamily: "Inter, sans-serif" }}
-        >
-          Open Folder
-        </button>
-      </div>
-    );
-  }
-
-  const folderName = getFileName(currentFolder);
+  const folderName = folder.name || getFileName(currentFolder);
+  const color = folderColor(folder.colorIndex);
   const isFiltered = query.trim().length > 0;
   const rootInlineCreate = inlineCreate?.parentPath === currentFolder;
+  const collapsed = folder.collapsed;
 
   const treeNavContextValue = useMemo(
     () => ({ focusedPath, setFocusedPath, nodeHandlersRef, nodeRefreshersRef, renamingPath, setRenamingPath, gitStatus, inlineCreate, setInlineCreate, refreshFolder }),
@@ -1150,12 +1218,21 @@ export function FileTree() {
 
   return (
     <TreeNavContext.Provider value={treeNavContextValue}>
-      <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", paddingBottom: 8 }}>
+      <div style={{ display: "flex", flexDirection: "column", borderBottom: "1px solid var(--color-border-muted)", borderLeft: `3px solid ${color.accent}`, paddingBottom: collapsed ? 0 : 6 }}>
 
-        {/* Header: folder name + action buttons */}
-        <div style={{ padding: "4px 8px 6px", fontSize: 11, fontWeight: 600, color: "var(--color-text-muted)", letterSpacing: "0.05em", textTransform: "uppercase", borderBottom: "1px solid var(--color-border-muted)", marginBottom: 4, display: "flex", alignItems: "center", gap: 4 }}>
-          <FolderOpen size={13} style={{ flexShrink: 0 }} />
-          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+        {/* Header: collapse toggle + color chip + folder name + action buttons + close */}
+        <div style={{ padding: "4px 8px 6px", fontSize: 11, fontWeight: 600, color: "var(--color-text-muted)", letterSpacing: "0.05em", textTransform: "uppercase", background: color.tint, display: "flex", alignItems: "center", gap: 4 }}>
+          {/* Collapse toggle */}
+          <button
+            onClick={() => setFolderCollapsed(currentFolder, !collapsed)}
+            title={collapsed ? "Expand folder" : "Collapse folder"}
+            style={{ background: "none", border: "none", padding: "2px 2px", cursor: "pointer", color: "var(--color-text-muted)", display: "flex", alignItems: "center", flexShrink: 0 }}
+          >
+            {collapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
+          </button>
+
+          <FolderOpen size={13} style={{ flexShrink: 0, color: color.accent }} />
+          <span title={currentFolder} style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, color: "var(--color-text)" }}>
             {folderName}
           </span>
 
@@ -1181,7 +1258,7 @@ export function FileTree() {
             <FolderPlus size={13} />
           </button>
 
-          {/* Collapse All */}
+          {/* Collapse All children */}
           <button
             onClick={() => { setCollapseKey((k) => k + 1); setFocusedPath(null); }}
             title="Collapse All"
@@ -1191,10 +1268,31 @@ export function FileTree() {
           >
             <ChevronsDownUp size={13} />
           </button>
+
+          {/* Close folder */}
+          <button
+            onClick={() => removeFolder(currentFolder)}
+            title="Close Folder"
+            style={{ background: "none", border: "none", padding: "2px 3px", cursor: "pointer", color: "var(--color-text-muted)", display: "flex", alignItems: "center", borderRadius: "var(--radius-sm)", flexShrink: 0 }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "#cf222e"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--color-text-muted)"; }}
+          >
+            <X size={13} />
+          </button>
         </div>
 
+        <AnimatePresence initial={false}>
+        {!collapsed && (
+        <motion.div
+          key="body"
+          initial={{ height: 0, opacity: 0 }}
+          animate={{ height: "auto", opacity: 1 }}
+          exit={{ height: 0, opacity: 0 }}
+          transition={{ duration: 0.15 }}
+          style={{ overflow: "hidden" }}
+        >
         {/* Search input */}
-        <div style={{ padding: "0 6px 6px" }}>
+        <div style={{ padding: "6px 6px 6px" }}>
           <div style={{ position: "relative" }}>
             <Search size={12} style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", color: "var(--color-text-muted)", pointerEvents: "none" }} />
             <input
@@ -1214,18 +1312,13 @@ export function FileTree() {
           </div>
         </div>
 
-        {/* Scrollable tree area */}
+        {/* Tree area */}
         <div
           ref={treeContainerRef}
-          style={{ flex: 1, overflow: "auto", outline: "none" }}
+          style={{ outline: "none" }}
           tabIndex={0}
           onKeyDown={handleKeyDown}
         >
-          {/* Starred section */}
-          {!isFiltered && (
-            <StarredSection starredPaths={starredPaths} onToggleStar={toggleStar} />
-          )}
-
           {/* Tree or search results */}
           {isFiltered ? (
             isSearching ? (
@@ -1253,6 +1346,9 @@ export function FileTree() {
             </>
           )}
         </div>
+        </motion.div>
+        )}
+        </AnimatePresence>
       </div>
     </TreeNavContext.Provider>
   );
