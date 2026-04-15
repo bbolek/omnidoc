@@ -27,7 +27,7 @@ export function ActivityBar({ position }: Props) {
   const builtinPanels: { id: SidebarPanel; icon: React.ReactNode; title: string }[] = [
     { id: "tree", icon: <FolderTree size={18} />, title: "File Explorer" },
     { id: "toc", icon: <List size={18} />, title: "Table of Contents" },
-    { id: "recent", icon: <Clock size={18} />, title: "Recent Files" },
+    { id: "recent", icon: <Clock size={18} />, title: "Recent" },
     { id: "search", icon: <Search size={18} />, title: "Search (Ctrl+Shift+F)" },
     { id: "frontmatter", icon: <FileCode2 size={18} />, title: "Frontmatter" },
     { id: "tags", icon: <Hash size={18} />, title: "Tags" },
