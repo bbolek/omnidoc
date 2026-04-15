@@ -24,6 +24,8 @@ export interface Tab {
   content: string;
   isDirty: boolean;
   fileInfo?: FileInfo;
+  /** Absolute path of the workspace folder this tab belongs to, if any. */
+  folderPath?: string;
 }
 
 export interface RecentFile {
@@ -31,6 +33,37 @@ export interface RecentFile {
   name: string;
   accessedAt: number;
   extension?: string;
+}
+
+/**
+ * A folder open in the workspace sidebar. Multiple folders can be open at
+ * once (VS Code-style multi-root). `colorIndex` picks a stable palette entry
+ * for that folder; tabs of files inside it inherit the same color.
+ */
+export interface WorkspaceFolder {
+  path: string;
+  name: string;
+  colorIndex: number;
+  collapsed: boolean;
+  tree: FileEntry[];
+}
+
+export interface RecentFolder {
+  path: string;
+  name: string;
+  accessedAt: number;
+}
+
+/**
+ * Persisted workspace file format (`*.omnidoc-workspace.json`).
+ * Re-opens the same folders and tabs on load. `version` lets us evolve the
+ * schema later without breaking older files.
+ */
+export interface WorkspaceFile {
+  version: 1;
+  folders: Array<{ path: string; colorIndex: number; collapsed: boolean }>;
+  tabs: Array<{ path: string; folderPath?: string }>;
+  activePath: string | null;
 }
 
 export interface TocHeading {

@@ -41,7 +41,7 @@ function buildSegments(activeTabPath: string, openFolder: string): BreadcrumbSeg
 }
 
 export function Breadcrumb() {
-  const { openFolder, tabs, activeTabId } = useFileStore();
+  const { folders, tabs, activeTabId } = useFileStore();
   const { setActiveSidebarPanel } = useUiStore();
   const activeTab = tabs.find((t) => t.id === activeTabId);
 
@@ -52,9 +52,23 @@ export function Breadcrumb() {
     return () => clearTimeout(id);
   }, [copiedPath]);
 
-  if (!openFolder || !activeTab) return null;
+  if (!activeTab) return null;
 
-  const segments = buildSegments(activeTab.path, openFolder);
+  // Find the workspace folder that owns this tab (prefer the tab's stored
+  // folderPath; fall back to longest-prefix match for legacy tabs).
+  const owningFolder =
+    folders.find((f) => f.path === activeTab.folderPath) ??
+    folders
+      .filter(
+        (f) =>
+          activeTab.path === f.path ||
+          activeTab.path.startsWith(f.path + "/") ||
+          activeTab.path.startsWith(f.path + "\\"),
+      )
+      .sort((a, b) => b.path.length - a.path.length)[0];
+
+  if (!owningFolder) return null;
+  const segments = buildSegments(activeTab.path, owningFolder.path);
 
   const handleFolderClick = (path: string) => {
     setActiveSidebarPanel("tree");

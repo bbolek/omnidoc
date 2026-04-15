@@ -4,6 +4,7 @@ import { Reorder, AnimatePresence } from "framer-motion";
 import { invoke } from "@tauri-apps/api/core";
 import { useFileStore } from "../../store/fileStore";
 import { getFileExtension } from "../../utils/fileUtils";
+import { folderColor } from "../../utils/folderColors";
 import { FileIcon } from "../ui/FileIcon";
 import {
   ContextMenu,
@@ -29,6 +30,7 @@ export function TabBar() {
     closeOtherTabs,
     reorderTabs,
   } = useFileStore();
+  const folders = useFileStore((s) => s.folders);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const [contextMenu, setContextMenu] = useState<TabContextMenu | null>(null);
@@ -55,60 +57,73 @@ export function TabBar() {
           style={{ display: "contents" }}
         >
           <AnimatePresence initial={false}>
-            {tabs.map((tab) => (
-              <Reorder.Item
-                key={tab.id}
-                value={tab}
-                as="div"
-                data-tab-id={tab.id}
-                className={`tab-item ${tab.id === activeTabId ? "active" : ""}`}
-                initial={{ opacity: 0, scaleX: 0.8 }}
-                animate={{ opacity: 1, scaleX: 1 }}
-                exit={{ opacity: 0, scaleX: 0.8 }}
-                transition={{ duration: 0.15 }}
-                onClick={() => setActiveTab(tab.id)}
-                onContextMenu={(e: React.MouseEvent) => {
-                  e.preventDefault();
-                  setContextMenu({ x: e.clientX, y: e.clientY, tabId: tab.id });
-                }}
-                // Prevent text selection during drag; set background explicitly so
-                // framer-motion's style merging never shadows the CSS variable.
-                style={{
-                  userSelect: "none",
-                  background: tab.id === activeTabId ? "var(--color-tab-active)" : undefined,
-                }}
-              >
-                <FileIcon
-                  extension={getFileExtension(tab.path)}
-                  size={14}
-                  style={{ flexShrink: 0, opacity: 0.7 }}
-                />
-                <span className="tab-name" title={tab.path} style={{ display: "flex", alignItems: "center", gap: 3 }}>
-                  {tab.isDirty && (
-                    <span
-                      style={{
-                        width: 7,
-                        height: 7,
-                        borderRadius: "50%",
-                        background: "var(--color-accent)",
-                        flexShrink: 0,
-                        display: "inline-block",
-                      }}
-                    />
-                  )}
-                  {tab.name}
-                </span>
-                <span
-                  className="tab-close"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    closeTab(tab.id);
+            {tabs.map((tab) => {
+              const folder = tab.folderPath
+                ? folders.find((f) => f.path === tab.folderPath)
+                : undefined;
+              const color = folder ? folderColor(folder.colorIndex) : undefined;
+              const isActive = tab.id === activeTabId;
+              return (
+                <Reorder.Item
+                  key={tab.id}
+                  value={tab}
+                  as="div"
+                  data-tab-id={tab.id}
+                  className={`tab-item ${isActive ? "active" : ""}`}
+                  initial={{ opacity: 0, scaleX: 0.8 }}
+                  animate={{ opacity: 1, scaleX: 1 }}
+                  exit={{ opacity: 0, scaleX: 0.8 }}
+                  transition={{ duration: 0.15 }}
+                  onClick={() => setActiveTab(tab.id)}
+                  onContextMenu={(e: React.MouseEvent) => {
+                    e.preventDefault();
+                    setContextMenu({ x: e.clientX, y: e.clientY, tabId: tab.id });
+                  }}
+                  // Prevent text selection during drag; set background explicitly so
+                  // framer-motion's style merging never shadows the CSS variable.
+                  style={{
+                    userSelect: "none",
+                    background: isActive
+                      ? (color?.tint ?? "var(--color-tab-active)")
+                      : undefined,
+                    // 2px color rail at the top, brighter when active.
+                    borderTop: color
+                      ? `2px solid ${isActive ? color.accent : color.accent + "99"}`
+                      : undefined,
                   }}
                 >
-                  <X size={12} />
-                </span>
-              </Reorder.Item>
-            ))}
+                  <FileIcon
+                    extension={getFileExtension(tab.path)}
+                    size={14}
+                    style={{ flexShrink: 0, opacity: 0.7 }}
+                  />
+                  <span className="tab-name" title={tab.path} style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                    {tab.isDirty && (
+                      <span
+                        style={{
+                          width: 7,
+                          height: 7,
+                          borderRadius: "50%",
+                          background: color?.accent ?? "var(--color-accent)",
+                          flexShrink: 0,
+                          display: "inline-block",
+                        }}
+                      />
+                    )}
+                    {tab.name}
+                  </span>
+                  <span
+                    className="tab-close"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      closeTab(tab.id);
+                    }}
+                  >
+                    <X size={12} />
+                  </span>
+                </Reorder.Item>
+              );
+            })}
           </AnimatePresence>
         </Reorder.Group>
       </div>
