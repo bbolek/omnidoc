@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import React from "react";
 import { Loader2 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { platform } from "@tauri-apps/plugin-os";
@@ -147,6 +148,66 @@ function SessionLoader({ visible }: { visible: boolean }) {
   );
 }
 
+/**
+ * Catches any render / lifecycle error inside the app tree and displays the
+ * stack in a styled fallback view. Without this a throw inside a store hook
+ * or effect unmounts the whole tree silently and the webview stays black,
+ * which is exactly the kind of failure we can't otherwise diagnose remotely.
+ */
+class BootErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { error: Error | null }
+> {
+  state: { error: Error | null } = { error: null };
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    // eslint-disable-next-line no-console
+    console.error("[omnidoc] render crashed:", error, info);
+  }
+  render() {
+    if (!this.state.error) return this.props.children;
+    const err = this.state.error;
+    return (
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          padding: 24,
+          overflow: "auto",
+          fontFamily: "Inter, system-ui, sans-serif",
+          background: "#0d1117",
+          color: "#e6edf3",
+          zIndex: 99999,
+        }}
+      >
+        <h2 style={{ marginTop: 0, color: "#ff7b72" }}>Omnidoc crashed on startup</h2>
+        <p style={{ fontSize: 13, opacity: 0.8 }}>
+          The React tree threw an unrecoverable error. The stack trace below
+          (and any entries written to <code>%LOCALAPPDATA%\Omnidoc\omnidoc-startup.log</code>)
+          should point at the cause.
+        </p>
+        <pre
+          style={{
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+            background: "rgba(255,255,255,0.05)",
+            border: "1px solid rgba(255,255,255,0.1)",
+            padding: 12,
+            borderRadius: 6,
+            fontFamily: "Fira Code, Consolas, monospace",
+            fontSize: 12,
+            lineHeight: 1.5,
+          }}
+        >
+          {err.stack || err.message || String(err)}
+        </pre>
+      </div>
+    );
+  }
+}
+
 export default function App() {
   const setPlatform = useUiStore((s) => s.setPlatform);
 
@@ -172,5 +233,9 @@ export default function App() {
     return () => document.removeEventListener("contextmenu", handler);
   }, [setPlatform]);
 
-  return <AppInner />;
+  return (
+    <BootErrorBoundary>
+      <AppInner />
+    </BootErrorBoundary>
+  );
 }

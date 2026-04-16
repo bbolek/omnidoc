@@ -6,9 +6,97 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Omnidoc</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css" />
+    <style>
+      /* Pre-mount fallback so the window is never literally black: if the JS
+         bundle fails to load, throws at parse time, or main.tsx can't mount
+         React, this view stays visible and shows the error. React replaces
+         the #root children on its first successful commit, so this block
+         disappears automatically once the real UI is up. */
+      .omnidoc-boot {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        padding: 24px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter,
+          system-ui, sans-serif;
+        background: #ffffff;
+        color: #1f2328;
+      }
+      @media (prefers-color-scheme: dark) {
+        .omnidoc-boot { background: #0d1117; color: #e6edf3; }
+        .omnidoc-boot-error { color: #ff7b72 !important; border-color: #ff7b72 !important; }
+      }
+      .omnidoc-boot-title { font-size: 15px; font-weight: 600; }
+      .omnidoc-boot-hint { font-size: 12px; opacity: 0.7; text-align: center; max-width: 420px; }
+      .omnidoc-boot-error {
+        margin-top: 12px;
+        max-width: 720px;
+        width: 100%;
+        padding: 12px 14px;
+        background: rgba(207, 34, 46, 0.08);
+        border: 1px solid #cf222e;
+        border-radius: 6px;
+        font-family: "Fira Code", Consolas, monospace;
+        font-size: 11.5px;
+        line-height: 1.5;
+        white-space: pre-wrap;
+        word-break: break-word;
+        color: #cf222e;
+        overflow: auto;
+        max-height: 60vh;
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="omnidoc-boot" id="omnidoc-boot">
+        <div class="omnidoc-boot-title">Omnidoc is starting…</div>
+        <div class="omnidoc-boot-hint">
+          If this message stays visible for more than a few seconds, something
+          went wrong during startup. Any errors caught by the runtime will
+          appear below.
+        </div>
+        <pre class="omnidoc-boot-error" id="omnidoc-boot-error" style="display:none"></pre>
+      </div>
+    </div>
+    <script>
+      // Install global error handlers BEFORE the main bundle runs so any
+      // error during import, parse, or execution of /src/main.tsx surfaces
+      // in the fallback view instead of a silent black window.
+      (function () {
+        var box = document.getElementById("omnidoc-boot-error");
+        window.__omnidocShowBootError = function (msg) {
+          if (!box) return;
+          box.style.display = "block";
+          box.textContent =
+            (box.textContent ? box.textContent + "\n\n" : "") + msg;
+        };
+        window.addEventListener("error", function (e) {
+          var loc = e && e.filename
+            ? "\n  at " + e.filename + ":" + e.lineno + ":" + e.colno
+            : "";
+          window.__omnidocShowBootError(
+            "[window error] " +
+              (e && e.message ? e.message : String(e)) +
+              loc
+          );
+        });
+        window.addEventListener("unhandledrejection", function (e) {
+          var r = e && e.reason;
+          var msg =
+            r && r.stack
+              ? r.stack
+              : r && r.message
+                ? r.message
+                : String(r);
+          window.__omnidocShowBootError("[unhandled rejection] " + msg);
+        });
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
