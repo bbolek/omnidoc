@@ -11,7 +11,22 @@
  *
  * Plugin API reference:
  *   api.registerViewer({ extensions, label?, render?, component? })
- *   api.registerCommand({ id, label, shortcut?, handler })
+ *   api.registerCommand({
+ *       id, label, handler,
+ *       shortcut?,            // e.g. "Mod+Shift+Y" — Mod = ⌘ on mac, Ctrl elsewhere.
+ *                             // Conflicts with built-in shortcuts log a warning
+ *                             // and the binding is dropped (the command still
+ *                             // works from the menu / palette).
+ *       category?,            // groups the entry in the ? overlay (e.g. "Plugins")
+ *       keywords?,            // extra fuzzy-search terms for the command palette
+ *       when?,                // () => boolean — gate visibility / enabled state
+ *       additionalShortcuts?, // alternate bindings (not shown in UI)
+ *       menu?: {              // optional placement in the menu bar
+ *         path: string[],     // e.g. ["Plugins", "My Plugin Name"]
+ *         order?: number,
+ *         separatorBefore?: boolean
+ *       }
+ *   })
  *   api.registerSidebarPanel({ id, label, iconSvg?, mount })
  *   api.registerStatusBarItem({ id, mount })
  *   api.registerTheme(ThemeDefinition)
@@ -61,9 +76,15 @@
   });
 
   // ── 2. A simple command ──────────────────────────────────────────────────────
+  // The optional `category` and `menu` fields surface this command in the
+  // shortcuts overlay (`?`), the command palette (`Ctrl+Shift+P`), and under
+  // Plugins → Example Plugin in the menu bar.
   api.registerCommand({
     id: "example-plugin.word-count",
-    label: "Example: Show word count",
+    label: "Show word count",
+    category: "Plugins",
+    keywords: ["count", "stats"],
+    menu: { path: ["Plugins", "Example Plugin"] },
     handler: function () {
       var content = api.getActiveFileContent();
       if (!content) {

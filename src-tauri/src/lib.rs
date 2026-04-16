@@ -1,6 +1,7 @@
 pub mod commands;
 
 use commands::watcher::WatcherState;
+use tauri::Emitter;
 
 pub fn run() {
     tauri::Builder::default()
@@ -9,6 +10,12 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_os::init())
         .manage(WatcherState::default())
+        // Forward every native-menu click to the frontend as the command id;
+        // the frontend's command registry then dispatches it. Registered once
+        // here so handlers don't accumulate across `set_app_menu` calls.
+        .on_menu_event(|app, event| {
+            let _ = app.emit("menu:invoke", event.id().0.clone());
+        })
         .invoke_handler(tauri::generate_handler![
             commands::fs::read_file,
             commands::fs::read_file_bytes,
@@ -38,6 +45,7 @@ pub fn run() {
             commands::archive::list_archive_entries,
             commands::archive::read_archive_entry_bytes,
             commands::archive::extract_archive,
+            commands::menu::set_app_menu,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

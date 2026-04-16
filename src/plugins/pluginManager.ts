@@ -44,6 +44,60 @@ class PluginManager {
     return [...this.commands];
   }
 
+  getCommand(id: string): OwnedCommand | undefined {
+    return this.commands.find((c) => c.id === id);
+  }
+
+  /** Group commands by `category` (commands without one fall under "Other"). */
+  getCommandsByCategory(): Map<string, OwnedCommand[]> {
+    const out = new Map<string, OwnedCommand[]>();
+    for (const c of this.commands) {
+      const key = c.category ?? "Other";
+      const bucket = out.get(key) ?? [];
+      bucket.push(c);
+      out.set(key, bucket);
+    }
+    return out;
+  }
+
+  /**
+   * Look up a command and run it through its `when` gate. Errors are
+   * caught and surfaced as a toast so a bad plugin can't kill the app.
+   */
+  async executeCommand(id: string): Promise<void> {
+    const cmd = this.getCommand(id);
+    if (!cmd) {
+      console.warn(`[commands] unknown command: ${id}`);
+      return;
+    }
+    if (cmd.when && !cmd.when()) return;
+    try {
+      await cmd.handler();
+    } catch (err) {
+      console.error(`[commands] handler error for "${id}":`, err);
+      showToast({
+        message: `Command "${cmd.label}" failed: ${err instanceof Error ? err.message : String(err)}`,
+        type: "error",
+      });
+    }
+  }
+
+  /**
+   * Register a built-in (core) command. Same shape as a plugin command, but
+   * owned by `pluginId: "core"`. Returns an unregister fn.
+   */
+  registerCoreCommand(reg: CommandRegistration): () => void {
+    this.registerCommandInternal("core", reg);
+    this.notify();
+    return () => {
+      const before = this.commands.length;
+      this.commands = this.commands.filter(
+        (c) => !(c.pluginId === "core" && c.id === reg.id),
+      );
+      if (this.commands.length !== before) this.notify();
+    };
+  }
+
   getAllSidebarPanels(): OwnedSidebarPanel[] {
     return [...this.sidebarPanels];
   }
@@ -118,6 +172,27 @@ class PluginManager {
     this.listeners.forEach((l) => l());
   }
 
+  /**
+   * Push a command onto the registry, dropping its `shortcut` if a `core`
+   * command already claims the same key combo. Plugin authors get a console
+   * warning + toast so the conflict is visible.
+   */
+  private registerCommandInternal(pluginId: string, reg: CommandRegistration): void {
+    let shortcut = reg.shortcut;
+    if (shortcut && pluginId !== "core") {
+      const taken = this.commands.find(
+        (c) => c.pluginId === "core" && c.shortcut === shortcut,
+      );
+      if (taken) {
+        const msg = `Plugin "${pluginId}" tried to bind ${shortcut}, already taken by "${taken.label}"`;
+        console.warn(`[commands] ${msg}`);
+        showToast({ message: msg, type: "warning" });
+        shortcut = undefined;
+      }
+    }
+    this.commands.push({ ...reg, shortcut, pluginId });
+  }
+
   // ── API factory ────────────────────────────────────────────────────────────
 
   private createAPI(pluginId: string): PluginAPI {
@@ -129,7 +204,7 @@ class PluginManager {
       },
 
       registerCommand(reg) {
-        mgr.commands.push({ ...reg, pluginId });
+        mgr.registerCommandInternal(pluginId, reg);
       },
 
       registerSidebarPanel(reg) {
@@ -205,3 +280,11 @@ class PluginManager {
 }
 
 export const pluginManager = new PluginManager();
+
+/**
+ * Same instance as `pluginManager`, exported under a name that better
+ * describes its role for code outside `src/plugins/` — menus, the command
+ * palette, the shortcuts overlay, and the global keyboard handler all read
+ * from the registry, not from "the plugin manager" specifically.
+ */
+export const commandRegistry = pluginManager;

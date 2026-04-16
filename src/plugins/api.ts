@@ -29,16 +29,46 @@ export interface ViewerRegistration {
 }
 
 /**
- * A keyboard command contributed by a plugin.
+ * A keyboard command contributed by a plugin or by the app core.
+ *
+ * The optional fields below let a command participate in the shortcuts overlay
+ * grouping, the command palette search, the menu bar, and context gating —
+ * they're additive, so plugins that only set `id`/`label`/`handler` keep
+ * working unchanged.
  */
 export interface CommandRegistration {
   /** Unique id, prefixed by convention: "my-plugin.do-thing" */
   id: string;
-  /** Display label shown in the shortcuts overlay. */
+  /** Display label shown in menus, the palette, and the shortcuts overlay. */
   label: string;
-  /** Optional keyboard shortcut string for display purposes (e.g. "Ctrl+Shift+P"). */
+  /**
+   * Optional keyboard shortcut. Grammar:
+   *   `Mod+Shift+P`, `Ctrl+Tab`, `F11`, `Shift+Alt+F`, `?`
+   * `Mod` resolves to ⌘ on macOS and Ctrl elsewhere.
+   */
   shortcut?: string;
-  handler: () => void;
+  /**
+   * Alternate bindings that also fire the handler but are not shown in
+   * menus / palette. Useful when one action has multiple legacy keys
+   * (e.g. `Ctrl+W` and `Ctrl+F4` both close a tab).
+   */
+  additionalShortcuts?: string[];
+  /** Group label for the shortcuts overlay (e.g. "View", "File"). */
+  category?: string;
+  /** Extra fuzzy-search tokens for the command palette. */
+  keywords?: string[];
+  /**
+   * Visibility / enable gate. Re-evaluated on every keypress and on every
+   * palette / menu render, so keep this cheap.
+   */
+  when?: () => boolean;
+  /**
+   * Where to place this command in the menu bar. `path` is a chain of
+   * submenu labels (top-level first), e.g. `["File"]` or `["Plugins", "My Plugin"]`.
+   * Commands without a `menu` still appear in the palette but not the menu.
+   */
+  menu?: { path: string[]; order?: number; separatorBefore?: boolean };
+  handler: () => void | Promise<void>;
 }
 
 /**

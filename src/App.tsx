@@ -11,12 +11,15 @@ import { useAllFileWatchers } from "./hooks/useFileWatcher";
 import { useUiStore } from "./store/uiStore";
 import { useFileStore } from "./store/fileStore";
 import { pluginManager } from "./plugins/pluginManager";
+import { registerBuiltinCommands } from "./commands/builtin";
+import { applyAppMenu } from "./commands/applyMenu";
 import { resolveScheme } from "./themes";
 import { AppShell } from "./components/layout/AppShell";
 import { KeyboardShortcuts } from "./components/ui/KeyboardShortcuts";
 import { ToastContainer } from "./components/ui/Toast";
 import { SearchOverlay } from "./components/search/SearchOverlay";
 import { QuickOpen } from "./components/search/QuickOpen";
+import { CommandPalette } from "./components/search/CommandPalette";
 import { PresentationMode } from "./components/viewer/PresentationMode";
 import { getFileName, loadFileForOpen } from "./utils/fileUtils";
 import { showToast } from "./components/ui/Toast";
@@ -37,6 +40,12 @@ function AppInner() {
   const isRestoring = useFileStore((s) => s.isRestoring);
 
   useEffect(() => {
+    // Register built-in commands first so plugins loading later see existing
+    // shortcuts and can detect conflicts at registration time.
+    registerBuiltinCommands();
+    // Install the native macOS menu and the menu:invoke listener (no-op on
+    // Win/Linux, where the in-titlebar MenuBar handles it).
+    void applyAppMenu();
     // Load user themes first, then re-apply so user theme tokens are present
     loadUserThemes().then(() => applyCurrentTheme());
     // Discover and load installed plugins
@@ -92,6 +101,7 @@ function AppInner() {
       <AppShell />
       <SearchOverlay />
       <QuickOpen />
+      <CommandPalette />
       <KeyboardShortcuts />
       <ToastContainer />
       <PresentationMode />

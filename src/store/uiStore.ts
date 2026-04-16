@@ -10,6 +10,7 @@ interface UiState {
   searchVisible: boolean;
   shortcutsVisible: boolean;
   quickOpenVisible: boolean;
+  commandPaletteVisible: boolean;
   platform: "macos" | "windows" | "linux" | "unknown";
   zoomLevel: number;
   globalSearchQuery: string;
@@ -28,6 +29,7 @@ interface UiState {
   toggleSearch: () => void;
   setShortcutsVisible: (v: boolean) => void;
   setQuickOpenVisible: (v: boolean) => void;
+  setCommandPaletteVisible: (v: boolean) => void;
   setPlatform: (p: UiState["platform"]) => void;
   setZoomLevel: (z: number) => void;
   increaseZoom: () => void;
@@ -56,6 +58,7 @@ export const useUiStore = create<UiState>()(
       searchVisible: false,
       shortcutsVisible: false,
       quickOpenVisible: false,
+      commandPaletteVisible: false,
       platform: "unknown",
       zoomLevel: 1.0,
       globalSearchQuery: "",
@@ -75,6 +78,7 @@ export const useUiStore = create<UiState>()(
       toggleSearch: () => set((s) => ({ searchVisible: !s.searchVisible })),
       setShortcutsVisible: (v) => set({ shortcutsVisible: v }),
       setQuickOpenVisible: (v) => set({ quickOpenVisible: v }),
+      setCommandPaletteVisible: (v) => set({ commandPaletteVisible: v }),
       setPlatform: (p) => set({ platform: p }),
       setZoomLevel: (z) => set({ zoomLevel: Math.round(Math.max(0.5, Math.min(2.0, z)) * 10) / 10 }),
       increaseZoom: () => get().setZoomLevel(get().zoomLevel + 0.1),
