@@ -15,6 +15,7 @@ import { getFileName, isOpenable, loadFileForOpen } from "../../utils/fileUtils"
 import { FileIcon } from "../ui/FileIcon";
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from "../ui/ContextMenu";
 import { folderColor } from "../../utils/folderColors";
+import { ErrorBoundary } from "../ui/ErrorBoundary";
 import type { FileEntry, FileInfo, WorkspaceFolder } from "../../types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -802,9 +803,17 @@ export function FileTree() {
       {/* Starred items shared across all folders */}
       <StarredSection starredPaths={starredPaths} onToggleStar={toggleStar} />
 
-      {/* One section per open workspace folder */}
+      {/* One section per open workspace folder. Each section is isolated
+          behind its own ErrorBoundary so a render failure on one folder
+          (bad path, watcher crash, listing error) cannot take down the
+          rest of the sidebar — let alone the whole React tree. */}
       {folders.map((folder) => (
-        <FolderSection key={folder.path} folder={folder} />
+        <ErrorBoundary
+          key={folder.path}
+          label={`Folder "${folder.name || folder.path}"`}
+        >
+          <FolderSection folder={folder} />
+        </ErrorBoundary>
       ))}
 
       {/* Add Folder affordance — adds a folder without closing tabs */}

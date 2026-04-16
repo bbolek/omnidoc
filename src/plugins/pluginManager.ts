@@ -34,6 +34,28 @@ class PluginManager {
   /** Theme-change event subscribers keyed by plugin id. */
   private themeChangeHandlers = new Map<string, Set<(name: string, scheme: "light" | "dark") => void>>();
 
+  // ── Stable snapshots for `useSyncExternalStore` ───────────────────────────
+  //
+  // React's `useSyncExternalStore` calls `getSnapshot` on every render and
+  // bails out only when the result is referentially equal to the last call.
+  // Returning a fresh array each time would make React believe the store has
+  // changed on every render, retrigger a render, call `getSnapshot` again,
+  // etc., until React aborts with error #185 ("Maximum update depth
+  // exceeded") — crashing the entire app at boot. Cache one snapshot per
+  // collection and only invalidate it when the underlying data actually
+  // mutates (via `notify()`).
+  private snapshotsDirty = true;
+  private commandsSnapshot: OwnedCommand[] = [];
+  private sidebarPanelsSnapshot: OwnedSidebarPanel[] = [];
+  private statusBarItemsSnapshot: OwnedStatusBarItem[] = [];
+
+  private refreshSnapshots(): void {
+    this.commandsSnapshot = [...this.commands];
+    this.sidebarPanelsSnapshot = [...this.sidebarPanels];
+    this.statusBarItemsSnapshot = [...this.statusBarItems];
+    this.snapshotsDirty = false;
+  }
+
   // ── Registry queries ────────────────────────────────────────────────────────
 
   getViewerForExtension(ext: string): OwnedViewer | null {
@@ -42,7 +64,8 @@ class PluginManager {
   }
 
   getAllCommands(): OwnedCommand[] {
-    return [...this.commands];
+    if (this.snapshotsDirty) this.refreshSnapshots();
+    return this.commandsSnapshot;
   }
 
   getCommand(id: string): OwnedCommand | undefined {
@@ -104,11 +127,13 @@ class PluginManager {
   }
 
   getAllSidebarPanels(): OwnedSidebarPanel[] {
-    return [...this.sidebarPanels];
+    if (this.snapshotsDirty) this.refreshSnapshots();
+    return this.sidebarPanelsSnapshot;
   }
 
   getAllStatusBarItems(): OwnedStatusBarItem[] {
-    return [...this.statusBarItems];
+    if (this.snapshotsDirty) this.refreshSnapshots();
+    return this.statusBarItemsSnapshot;
   }
 
   // ── Plugin lifecycle ────────────────────────────────────────────────────────
@@ -189,6 +214,11 @@ class PluginManager {
   }
 
   private notify(): void {
+    // Mark snapshots stale so the next `getAll*` call rebuilds them. Doing
+    // this in `notify()` rather than at each mutation site keeps the contract
+    // simple: any code path that mutates the registry must ultimately call
+    // `notify()` (which all current callers do).
+    this.snapshotsDirty = true;
     this.listeners.forEach((l) => l());
   }
 
