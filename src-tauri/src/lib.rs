@@ -4,6 +4,43 @@ use commands::watcher::WatcherState;
 use tauri::Emitter;
 
 pub fn run() {
+    // Workarounds for a blank / black window on first launch. Both platforms
+    // share the same symptom (the native window appears, but the embedded
+    // webview never paints a frame), but the underlying cause and the
+    // mitigating env var differ. Each block is a no-op when the user has
+    // already set the relevant variable, so power users can opt out.
+
+    // Linux — WebKit2GTK 2.42+ enables a DMABUF-backed compositor by default
+    // that paints black on many setups (notably NVIDIA proprietary drivers
+    // and some Wayland compositors). Fall back to the software renderer.
+    //   https://github.com/tauri-apps/tauri/issues/9304
+    //   https://bugs.webkit.org/show_bug.cgi?id=264108
+    #[cfg(target_os = "linux")]
+    {
+        if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
+            std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+        }
+    }
+
+    // Windows — WebView2 renders a black client area on a subset of machines,
+    // typically when GPU hardware acceleration conflicts with the graphics
+    // driver, or when out-of-process browser UI features fail to initialize
+    // under antivirus / enterprise policy. Passing a small set of Chromium
+    // compat flags to WebView2 via WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS
+    // defuses the common offenders without disabling the GPU wholesale.
+    //   https://github.com/tauri-apps/tauri/issues/10967
+    //   https://github.com/tauri-apps/wry/issues/1255
+    #[cfg(target_os = "windows")]
+    {
+        if std::env::var_os("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS").is_none() {
+            std::env::set_var(
+                "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
+                "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection \
+                 --disable-gpu-driver-bug-workarounds",
+            );
+        }
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
