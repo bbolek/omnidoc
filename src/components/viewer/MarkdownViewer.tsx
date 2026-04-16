@@ -43,10 +43,16 @@ export const CodeBlock = memo(function CodeBlock({
   const code = String(children).replace(/\n$/, "");
   const langMatch = className?.match(/language-(\w+)/);
   const lang = langMatch ? langMatch[1] : "text";
-  const inline = props.inline as boolean | undefined;
+  // react-markdown v9 no longer passes an `inline` prop. Fenced blocks always
+  // have a `language-xxx` class and typically contain a trailing newline;
+  // inline `` `code` `` has neither. Treating everything without a language
+  // class as inline keeps inline spans from being rendered as block-level
+  // shiki wrappers (which stacked them into one-per-row columns).
+  const inline =
+    (props.inline as boolean | undefined) ?? (!langMatch && !/\n/.test(String(children)));
 
   // Mermaid: render as diagram
-  if (lang === "mermaid") {
+  if (lang === "mermaid" && !inline) {
     return <MermaidBlock code={code} />;
   }
 
