@@ -458,6 +458,19 @@ body {
   font-size: calc(15px * var(--content-zoom, 1));
   line-height: 1.7;
   user-select: text;
+  /* Allow long unbreakable tokens (file paths, URLs, inline code) to wrap
+     rather than force the layout wider than the viewport. */
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+}
+
+/* Shrink padding and use full width on narrow viewports so we never need a
+   horizontal scrollbar for prose. */
+@media (max-width: 900px) {
+  .markdown-body {
+    padding: 20px 16px;
+    max-width: 100%;
+  }
 }
 
 .markdown-body h1,
@@ -502,6 +515,11 @@ body {
   padding: 0.15em 0.4em;
   border-radius: var(--radius-sm);
   color: var(--color-text);
+  /* Long tokens like `Invoke-KickstartProcess.ps1:305-321` must be able to
+     break anywhere; otherwise they force the paragraph to overflow or stack
+     into awkward single-column layouts on narrow viewports. */
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .markdown-body pre {
@@ -510,6 +528,7 @@ body {
   margin: 1em 0;
   overflow-x: auto;
   border: 1px solid var(--color-border);
+  max-width: 100%;
 }
 
 .markdown-body pre code {
@@ -517,6 +536,9 @@ body {
   padding: 0;
   font-size: 0.875em;
   border-radius: 0;
+  /* Inside pre, preserve formatting — wrapping is handled by pre's scroll. */
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 /* Shiki code blocks */
@@ -563,9 +585,16 @@ body {
 .markdown-body table {
   border-collapse: collapse;
   width: 100%;
+  max-width: 100%;
   margin: 1em 0;
   overflow-x: auto;
   display: block;
+}
+
+.markdown-body td,
+.markdown-body th {
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .markdown-body th,
