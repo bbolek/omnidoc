@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 
+use crate::{log_debug, log_info};
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ArchiveEntry {
     /// Path inside the archive, normalized with forward slashes.
@@ -18,6 +20,7 @@ pub struct ArchiveEntry {
 /// List entries in a zip archive without extracting any of them.
 #[tauri::command]
 pub async fn list_archive_entries(path: String) -> Result<Vec<ArchiveEntry>, String> {
+    log_debug!("archive::list_archive_entries", "path={}", path);
     tokio::task::spawn_blocking(move || list_zip_entries(&path))
         .await
         .map_err(|e| format!("join error: {e}"))?
@@ -51,6 +54,12 @@ pub async fn read_archive_entry_bytes(
     path: String,
     entry_name: String,
 ) -> Result<tauri::ipc::Response, String> {
+    log_debug!(
+        "archive::read_archive_entry_bytes",
+        "path={} entry={}",
+        path,
+        entry_name
+    );
     let bytes =
         tokio::task::spawn_blocking(move || read_zip_entry_bytes(&path, &entry_name))
             .await
@@ -100,6 +109,7 @@ pub async fn extract_archive(
     path: String,
     dest_dir: String,
 ) -> Result<ExtractResult, String> {
+    log_info!("archive::extract_archive", "path={} dest={}", path, dest_dir);
     tokio::task::spawn_blocking(move || extract_zip(&path, &dest_dir))
         .await
         .map_err(|e| format!("join error: {e}"))?

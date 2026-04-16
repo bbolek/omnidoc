@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::time::UNIX_EPOCH;
 
+use crate::{log_debug, log_error, log_info, log_warn};
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct FileEntry {
     pub name: String,
@@ -25,34 +27,45 @@ pub struct FileInfo {
 
 #[tauri::command]
 pub async fn read_file(path: String) -> Result<String, String> {
-    let bytes = tokio::fs::read(&path)
-        .await
-        .map_err(|e| format!("Failed to read file: {e}"))?;
+    log_debug!("fs::read_file", "path={}", path);
+    let bytes = tokio::fs::read(&path).await.map_err(|e| {
+        log_error!("fs::read_file", "path={} err={}", path, e);
+        format!("Failed to read file: {e}")
+    })?;
+    let size = bytes.len();
 
     // Detect encoding - try UTF-8 first, fall back to latin1
-    match String::from_utf8(bytes.clone()) {
-        Ok(content) => Ok(content),
+    let content = match String::from_utf8(bytes.clone()) {
+        Ok(content) => content,
         Err(_) => {
+            log_debug!("fs::read_file", "path={} utf8 failed, decoding as WINDOWS_1252", path);
             let (content, _, _) = encoding_rs::WINDOWS_1252.decode(&bytes);
-            Ok(content.into_owned())
+            content.into_owned()
         }
-    }
+    };
+    log_debug!("fs::read_file", "path={} bytes={} chars={}", path, size, content.len());
+    Ok(content)
 }
 
 #[tauri::command]
 pub async fn read_file_bytes(path: String) -> Result<tauri::ipc::Response, String> {
-    let bytes = tokio::fs::read(&path)
-        .await
-        .map_err(|e| format!("Failed to read file: {e}"))?;
+    log_debug!("fs::read_file_bytes", "path={}", path);
+    let bytes = tokio::fs::read(&path).await.map_err(|e| {
+        log_error!("fs::read_file_bytes", "path={} err={}", path, e);
+        format!("Failed to read file: {e}")
+    })?;
+    log_debug!("fs::read_file_bytes", "path={} bytes={}", path, bytes.len());
     Ok(tauri::ipc::Response::new(bytes))
 }
 
 #[tauri::command]
 pub async fn list_directory(path: String) -> Result<Vec<FileEntry>, String> {
+    log_debug!("fs::list_directory", "path={}", path);
     let mut entries: Vec<FileEntry> = Vec::new();
-    let mut read_dir = tokio::fs::read_dir(&path)
-        .await
-        .map_err(|e| format!("Failed to read directory: {e}"))?;
+    let mut read_dir = tokio::fs::read_dir(&path).await.map_err(|e| {
+        log_error!("fs::list_directory", "path={} err={}", path, e);
+        format!("Failed to read directory: {e}")
+    })?;
 
     while let Some(entry) = read_dir
         .next_entry()
@@ -109,72 +122,95 @@ pub async fn list_directory(path: String) -> Result<Vec<FileEntry>, String> {
         }
     });
 
+    log_debug!(
+        "fs::list_directory",
+        "path={} entries={}",
+        path,
+        entries.len()
+    );
     Ok(entries)
 }
 
 #[tauri::command]
 pub async fn write_file(path: String, content: String) -> Result<(), String> {
+    log_info!("fs::write_file", "path={} bytes={}", path, content.len());
     tokio::fs::write(&path, content.as_bytes())
         .await
-        .map_err(|e| format!("Failed to write file: {e}"))
+        .map_err(|e| {
+            log_error!("fs::write_file", "path={} err={}", path, e);
+            format!("Failed to write file: {e}")
+        })
 }
 
 #[tauri::command]
 pub async fn create_file(path: String) -> Result<(), String> {
+    log_info!("fs::create_file", "path={}", path);
     // Validate no forbidden characters in the final name component
     let name = std::path::Path::new(&path)
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_default();
     if name.is_empty() || name.contains(['/', '\\', ':', '*', '?', '"', '<', '>', '|']) {
+        log_warn!("fs::create_file", "rejected invalid name: {}", name);
         return Err("Invalid file name".to_string());
     }
     if std::path::Path::new(&path).exists() {
+        log_warn!("fs::create_file", "path already exists: {}", path);
         return Err("A file with that name already exists".to_string());
     }
-    tokio::fs::write(&path, b"")
-        .await
-        .map_err(|e| format!("Failed to create file: {e}"))
+    tokio::fs::write(&path, b"").await.map_err(|e| {
+        log_error!("fs::create_file", "path={} err={}", path, e);
+        format!("Failed to create file: {e}")
+    })
 }
 
 #[tauri::command]
 pub async fn create_directory(path: String) -> Result<(), String> {
+    log_info!("fs::create_directory", "path={}", path);
     let name = std::path::Path::new(&path)
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_default();
     if name.is_empty() || name.contains(['/', '\\', ':', '*', '?', '"', '<', '>', '|']) {
+        log_warn!("fs::create_directory", "rejected invalid name: {}", name);
         return Err("Invalid folder name".to_string());
     }
     if std::path::Path::new(&path).exists() {
+        log_warn!("fs::create_directory", "path already exists: {}", path);
         return Err("A folder with that name already exists".to_string());
     }
-    tokio::fs::create_dir_all(&path)
-        .await
-        .map_err(|e| format!("Failed to create directory: {e}"))
+    tokio::fs::create_dir_all(&path).await.map_err(|e| {
+        log_error!("fs::create_directory", "path={} err={}", path, e);
+        format!("Failed to create directory: {e}")
+    })
 }
 
 #[tauri::command]
 pub async fn rename_path(from: String, to: String) -> Result<(), String> {
+    log_info!("fs::rename_path", "from={} to={}", from, to);
     let name = std::path::Path::new(&to)
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_default();
     if name.is_empty() || name.contains(['/', '\\', ':', '*', '?', '"', '<', '>', '|']) {
+        log_warn!("fs::rename_path", "rejected invalid name: {}", name);
         return Err("Invalid name".to_string());
     }
     if std::path::Path::new(&to).exists() {
+        log_warn!("fs::rename_path", "destination exists: {}", to);
         return Err("A file or folder with that name already exists".to_string());
     }
-    tokio::fs::rename(&from, &to)
-        .await
-        .map_err(|e| format!("Failed to rename: {e}"))
+    tokio::fs::rename(&from, &to).await.map_err(|e| {
+        log_error!("fs::rename_path", "from={} to={} err={}", from, to, e);
+        format!("Failed to rename: {e}")
+    })
 }
 
 /// Recursively copy a file or directory. Refuses to overwrite an
 /// existing destination, and refuses to copy a directory into itself.
 #[tauri::command]
 pub async fn copy_path(from: String, to: String) -> Result<(), String> {
+    log_info!("fs::copy_path", "from={} to={}", from, to);
     let src = std::path::PathBuf::from(&from);
     let dst = std::path::PathBuf::from(&to);
 
@@ -232,17 +268,21 @@ fn copy_dir_recursive(src: &std::path::Path, dst: &std::path::Path) -> Result<()
 
 #[tauri::command]
 pub async fn delete_path(path: String) -> Result<(), String> {
-    let meta = tokio::fs::metadata(&path)
-        .await
-        .map_err(|e| format!("Failed to get metadata: {e}"))?;
+    log_info!("fs::delete_path", "path={}", path);
+    let meta = tokio::fs::metadata(&path).await.map_err(|e| {
+        log_error!("fs::delete_path", "metadata path={} err={}", path, e);
+        format!("Failed to get metadata: {e}")
+    })?;
     if meta.is_dir() {
-        tokio::fs::remove_dir_all(&path)
-            .await
-            .map_err(|e| format!("Failed to delete directory: {e}"))
+        tokio::fs::remove_dir_all(&path).await.map_err(|e| {
+            log_error!("fs::delete_path", "remove_dir path={} err={}", path, e);
+            format!("Failed to delete directory: {e}")
+        })
     } else {
-        tokio::fs::remove_file(&path)
-            .await
-            .map_err(|e| format!("Failed to delete file: {e}"))
+        tokio::fs::remove_file(&path).await.map_err(|e| {
+            log_error!("fs::delete_path", "remove_file path={} err={}", path, e);
+            format!("Failed to delete file: {e}")
+        })
     }
 }
 
@@ -250,6 +290,7 @@ pub async fn delete_path(path: String) -> Result<(), String> {
 /// platform supports it. Falls back to opening the containing directory.
 #[tauri::command]
 pub async fn show_in_folder(path: String) -> Result<(), String> {
+    log_info!("fs::show_in_folder", "path={}", path);
     // Make sure the target exists so the explorer doesn't pop up an error
     // dialog on a missing file.
     let exists = tokio::fs::try_exists(&path)
@@ -347,20 +388,30 @@ fn git_command(folder: &str, args: &[&str]) -> tokio::process::Command {
 /// status work entirely for non-git folders.
 #[tauri::command]
 pub async fn is_git_repo(folder: String) -> Result<bool, String> {
+    log_debug!("fs::is_git_repo", "folder={}", folder);
     let output = git_command(&folder, &["rev-parse", "--is-inside-work-tree"])
         .output()
         .await
-        .map_err(|e| format!("Failed to run git: {e}"))?;
-    Ok(output.status.success()
-        && String::from_utf8_lossy(&output.stdout).trim() == "true")
+        .map_err(|e| {
+            log_warn!("fs::is_git_repo", "git spawn failed folder={} err={}", folder, e);
+            format!("Failed to run git: {e}")
+        })?;
+    let is_repo = output.status.success()
+        && String::from_utf8_lossy(&output.stdout).trim() == "true";
+    log_debug!("fs::is_git_repo", "folder={} is_repo={}", folder, is_repo);
+    Ok(is_repo)
 }
 
 #[tauri::command]
 pub async fn get_git_status(folder: String) -> Result<Vec<GitStatusEntry>, String> {
+    log_debug!("fs::get_git_status", "folder={}", folder);
     let output = git_command(&folder, &["status", "--porcelain", "-u"])
         .output()
         .await
-        .map_err(|e| format!("Failed to run git: {e}"))?;
+        .map_err(|e| {
+            log_warn!("fs::get_git_status", "git spawn failed folder={} err={}", folder, e);
+            format!("Failed to run git: {e}")
+        })?;
 
     if !output.status.success() {
         // Not a git repo or git not found — return empty
@@ -401,9 +452,11 @@ pub async fn get_git_status(folder: String) -> Result<Vec<GitStatusEntry>, Strin
 
 #[tauri::command]
 pub async fn get_file_info(path: String) -> Result<FileInfo, String> {
-    let metadata = tokio::fs::metadata(&path)
-        .await
-        .map_err(|e| format!("Failed to get file info: {e}"))?;
+    log_debug!("fs::get_file_info", "path={}", path);
+    let metadata = tokio::fs::metadata(&path).await.map_err(|e| {
+        log_error!("fs::get_file_info", "path={} err={}", path, e);
+        format!("Failed to get file info: {e}")
+    })?;
 
     let size = metadata.len();
     let is_dir = metadata.is_dir();

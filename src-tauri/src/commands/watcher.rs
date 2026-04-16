@@ -4,6 +4,8 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter};
 
+use crate::{log_debug, log_error, log_info};
+
 pub struct WatcherState {
     pub watchers: Mutex<HashMap<String, RecommendedWatcher>>,
     /// Recursive folder watchers, keyed by folder path. Used for driving
@@ -32,6 +34,7 @@ pub fn watch_path(
     app: AppHandle,
     state: tauri::State<'_, WatcherState>,
 ) -> Result<(), String> {
+    log_info!("watcher::watch_path", "path={}", path);
     let app_clone = app.clone();
     let path_clone = path.clone();
 
@@ -44,7 +47,12 @@ pub fn watch_path(
                     notify::EventKind::Remove(_) => "remove",
                     _ => "other",
                 };
-
+                log_debug!(
+                    "watcher::file-changed",
+                    "path={} kind={}",
+                    path_clone,
+                    kind
+                );
                 let _ = app_clone.emit(
                     "file-changed",
                     FileChangedPayload {
@@ -56,7 +64,10 @@ pub fn watch_path(
         },
         Config::default(),
     )
-    .map_err(|e| format!("Failed to create watcher: {e}"))?;
+    .map_err(|e| {
+        log_error!("watcher::watch_path", "create failed path={} err={}", path, e);
+        format!("Failed to create watcher: {e}")
+    })?;
 
     let mut watcher = watcher;
     watcher
@@ -64,12 +75,18 @@ pub fn watch_path(
             std::path::Path::new(&path),
             RecursiveMode::NonRecursive,
         )
-        .map_err(|e| format!("Failed to watch path: {e}"))?;
+        .map_err(|e| {
+            log_error!("watcher::watch_path", "watch failed path={} err={}", path, e);
+            format!("Failed to watch path: {e}")
+        })?;
 
     state
         .watchers
         .lock()
-        .map_err(|e| format!("Lock error: {e}"))?
+        .map_err(|e| {
+            log_error!("watcher::watch_path", "lock poisoned err={}", e);
+            format!("Lock error: {e}")
+        })?
         .insert(path, watcher);
 
     Ok(())
@@ -80,6 +97,7 @@ pub fn unwatch_path(
     path: String,
     state: tauri::State<'_, WatcherState>,
 ) -> Result<(), String> {
+    log_info!("watcher::unwatch_path", "path={}", path);
     state
         .watchers
         .lock()
@@ -90,6 +108,7 @@ pub fn unwatch_path(
 
 #[tauri::command]
 pub fn unwatch_all(state: tauri::State<'_, WatcherState>) -> Result<(), String> {
+    log_info!("watcher::unwatch_all", "clearing all watchers");
     state
         .watchers
         .lock()
@@ -138,6 +157,7 @@ pub fn watch_git_folder(
     app: AppHandle,
     state: tauri::State<'_, WatcherState>,
 ) -> Result<(), String> {
+    log_info!("watcher::watch_git_folder", "folder={}", folder);
     let app_clone = app.clone();
     let folder_clone = folder.clone();
 
@@ -186,6 +206,7 @@ pub fn unwatch_git_folder(
     folder: String,
     state: tauri::State<'_, WatcherState>,
 ) -> Result<(), String> {
+    log_info!("watcher::unwatch_git_folder", "folder={}", folder);
     state
         .folder_watchers
         .lock()

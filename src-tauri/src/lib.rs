@@ -1,77 +1,32 @@
 pub mod commands;
+pub mod logger;
 
 use commands::watcher::WatcherState;
-use std::fs;
-use std::io::Write;
-use std::path::PathBuf;
-use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{Emitter, Manager};
 
-/// Resolve the platform-appropriate per-user data directory for Omnidoc,
-/// creating it if it doesn't exist. Returns `None` if we can't determine it
-/// (e.g. the relevant environment variable is unset) — the caller falls back
-/// to stderr-only logging in that case.
-fn startup_log_path() -> Option<PathBuf> {
-    let base: PathBuf = {
-        #[cfg(target_os = "windows")]
-        {
-            PathBuf::from(std::env::var_os("LOCALAPPDATA")?)
-        }
-        #[cfg(target_os = "macos")]
-        {
-            let home = std::env::var_os("HOME")?;
-            let mut p = PathBuf::from(home);
-            p.push("Library/Application Support");
-            p
-        }
-        #[cfg(target_os = "linux")]
-        {
-            if let Some(xdg) = std::env::var_os("XDG_DATA_HOME") {
-                PathBuf::from(xdg)
-            } else {
-                let home = std::env::var_os("HOME")?;
-                let mut p = PathBuf::from(home);
-                p.push(".local/share");
-                p
-            }
-        }
-    };
-    let mut dir = base;
-    dir.push("Omnidoc");
-    fs::create_dir_all(&dir).ok()?;
-    dir.push("omnidoc-startup.log");
-    Some(dir)
-}
-
-/// Append a timestamped line to the startup log. Echoes to stderr too so
-/// `Omnidoc.exe` launched from a terminal shows the same trace without
-/// needing to chase down the file path.
-fn log_startup(msg: &str) {
-    let ts = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
-    let line = format!("[{}] {}\n", ts, msg);
-    eprint!("{}", line);
-    if let Some(path) = startup_log_path() {
-        if let Ok(mut f) = fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&path)
-        {
-            let _ = f.write_all(line.as_bytes());
-        }
-    }
-}
+// The `log_*!` macros are placed at the crate root by `#[macro_export]`
+// in `logger.rs`, so they're callable here without an explicit `use` (a
+// `use crate::log_info;` would actually collide with the macro export).
 
 pub fn run() {
-    log_startup("──────── omnidoc startup ────────");
-    log_startup(&format!(
+    // Bring the logger up before anything else so a crash during the env-var
+    // dance or Tauri builder setup still ends up on disk. `init` is
+    // idempotent — the sink is lazy, and the panic hook swap happens once.
+    logger::init();
+
+    log_info!("boot", "──────── omnidoc startup ────────");
+    log_info!(
+        "boot",
         "build: v{} target: {}/{}",
         env!("CARGO_PKG_VERSION"),
         std::env::consts::OS,
-        std::env::consts::ARCH,
-    ));
+        std::env::consts::ARCH
+    );
+    if let Some(p) = logger::log_file_path() {
+        log_info!("boot", "log file: {}", p.display());
+    } else {
+        log_info!("boot", "log file: <in-memory only — app data dir unresolved>");
+    }
 
     // Workarounds for a blank / black window on first launch. Both platforms
     // share the same symptom (the native window appears, but the embedded
@@ -87,13 +42,14 @@ pub fn run() {
     #[cfg(target_os = "linux")]
     {
         match std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER") {
-            Some(v) => log_startup(&format!(
+            Some(v) => log_info!(
+                "boot",
                 "linux: WEBKIT_DISABLE_DMABUF_RENDERER already set ({:?}), leaving as-is",
                 v
-            )),
+            ),
             None => {
                 std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
-                log_startup("linux: set WEBKIT_DISABLE_DMABUF_RENDERER=1");
+                log_info!("boot", "linux: set WEBKIT_DISABLE_DMABUF_RENDERER=1");
             }
         }
     }
@@ -109,29 +65,27 @@ pub fn run() {
     #[cfg(target_os = "windows")]
     {
         match std::env::var_os("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS") {
-            Some(v) => log_startup(&format!(
+            Some(v) => log_info!(
+                "boot",
                 "windows: WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS already set ({:?}), leaving as-is",
                 v
-            )),
+            ),
             None => {
                 let args = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection \
                             --disable-gpu-driver-bug-workarounds";
                 std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", args);
-                log_startup(&format!(
-                    "windows: set WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS={}",
-                    args
-                ));
+                log_info!("boot", "windows: set WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS={}", args);
             }
         }
         if let Some(v) = std::env::var_os("WEBVIEW2_BROWSER_EXECUTABLE_FOLDER") {
-            log_startup(&format!("windows: WEBVIEW2_BROWSER_EXECUTABLE_FOLDER={:?}", v));
+            log_info!("boot", "windows: WEBVIEW2_BROWSER_EXECUTABLE_FOLDER={:?}", v);
         }
         if let Some(v) = std::env::var_os("WEBVIEW2_USER_DATA_FOLDER") {
-            log_startup(&format!("windows: WEBVIEW2_USER_DATA_FOLDER={:?}", v));
+            log_info!("boot", "windows: WEBVIEW2_USER_DATA_FOLDER={:?}", v);
         }
     }
 
-    log_startup("building tauri app");
+    log_info!("boot", "building tauri app");
 
     tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
@@ -145,12 +99,15 @@ pub fn run() {
         // is in the Rust→webview init path, not the frontend.
         .setup(|app| {
             let windows = app.webview_windows();
-            log_startup(&format!(
-                "tauri setup complete, windows: {}",
-                windows.len()
-            ));
-            for (label, _) in windows {
-                log_startup(&format!("  webview window: {}", label));
+            log_info!("boot", "tauri setup complete, windows: {}", windows.len());
+            for (label, w) in windows {
+                log_info!("boot", "  webview window: label={}", label);
+                // Attach lightweight listeners so we can tell from the log
+                // whether the webview is delivering page events at all.
+                let label_cloned = label.clone();
+                let _ = w.on_window_event(move |e| {
+                    log_debug!("window", "{}: {:?}", label_cloned, e);
+                });
             }
             Ok(())
         })
@@ -158,6 +115,7 @@ pub fn run() {
         // the frontend's command registry then dispatches it. Registered once
         // here so handlers don't accumulate across `set_app_menu` calls.
         .on_menu_event(|app, event| {
+            log_debug!("menu", "invoke {}", event.id().0);
             let _ = app.emit("menu:invoke", event.id().0.clone());
         })
         .invoke_handler(tauri::generate_handler![
@@ -190,10 +148,16 @@ pub fn run() {
             commands::archive::read_archive_entry_bytes,
             commands::archive::extract_archive,
             commands::menu::set_app_menu,
+            commands::logs::log_from_frontend,
+            commands::logs::read_log,
+            commands::logs::log_file_path,
+            commands::logs::clear_log,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {
-            log_startup(&format!("tauri run failed: {:?}", e));
+            log_error!("boot", "tauri run failed: {:?}", e);
             panic!("error while running tauri application: {:?}", e);
         });
+
+    log_info!("boot", "tauri event loop exited");
 }

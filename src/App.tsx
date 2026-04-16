@@ -24,6 +24,7 @@ import { CommandPalette } from "./components/search/CommandPalette";
 import { PresentationMode } from "./components/viewer/PresentationMode";
 import { getFileName, loadFileForOpen } from "./utils/fileUtils";
 import { showToast } from "./components/ui/Toast";
+import { log } from "./utils/logger";
 
 function AppInner() {
   useThemeInit();
@@ -41,18 +42,38 @@ function AppInner() {
   const isRestoring = useFileStore((s) => s.isRestoring);
 
   useEffect(() => {
+    log.info("App", "AppInner mounting; starting boot sequence");
     // Register built-in commands first so plugins loading later see existing
     // shortcuts and can detect conflicts at registration time.
-    registerBuiltinCommands();
+    try {
+      registerBuiltinCommands();
+      log.info("App", "built-in commands registered");
+    } catch (err) {
+      log.error("App", "registerBuiltinCommands threw", err);
+    }
     // Install the native macOS menu and the menu:invoke listener (no-op on
     // Win/Linux, where the in-titlebar MenuBar handles it).
-    void applyAppMenu();
+    applyAppMenu()
+      .then(() => log.info("App", "applyAppMenu resolved"))
+      .catch((err) => log.error("App", "applyAppMenu rejected", err));
     // Load user themes first, then re-apply so user theme tokens are present
-    loadUserThemes().then(() => applyCurrentTheme());
+    loadUserThemes()
+      .then(() => {
+        log.info("App", "user themes loaded; applying current theme");
+        applyCurrentTheme();
+      })
+      .catch((err) => log.error("App", "loadUserThemes rejected", err));
     // Discover and load installed plugins
-    discoverAndLoad();
+    try {
+      discoverAndLoad();
+      log.info("App", "plugin discoverAndLoad invoked");
+    } catch (err) {
+      log.error("App", "discoverAndLoad threw", err);
+    }
     // Restore last session tabs
-    restoreSession();
+    restoreSession()
+      .then(() => log.info("App", "restoreSession resolved"))
+      .catch((err) => log.error("App", "restoreSession rejected", err));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -163,8 +184,12 @@ class BootErrorBoundary extends React.Component<
     return { error };
   }
   componentDidCatch(error: Error, info: React.ErrorInfo) {
-    // eslint-disable-next-line no-console
-    console.error("[omnidoc] render crashed:", error, info);
+    log.error(
+      "BootErrorBoundary",
+      `render crashed: ${error.message}`,
+      error,
+      info.componentStack ?? "",
+    );
   }
   render() {
     if (!this.state.error) return this.props.children;
@@ -212,13 +237,16 @@ export default function App() {
   const setPlatform = useUiStore((s) => s.setPlatform);
 
   useEffect(() => {
+    log.info("App", "outer App mounting");
     try {
       const p = platform();
+      log.info("App", `detected platform: ${p}`);
       if (p === "macos") setPlatform("macos");
       else if (p === "windows") setPlatform("windows");
       else if (p === "linux") setPlatform("linux");
       else setPlatform("unknown");
-    } catch {
+    } catch (err) {
+      log.warn("App", "platform() threw; defaulting to unknown", err);
       setPlatform("unknown");
     }
 

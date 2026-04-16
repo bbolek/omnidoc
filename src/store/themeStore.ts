@@ -9,6 +9,7 @@ import {
   removeUserTheme,
   getAllThemes,
 } from "../themes";
+import { log } from "../utils/logger";
 
 interface UserThemePayload {
   name: string;
@@ -44,11 +45,13 @@ export const useThemeStore = create<ThemeState>()(
       userThemes: [],
 
       setTheme: (name) => {
+        log.info("themeStore.setTheme", `name=${name}`);
         set({ themeName: name });
         applyTheme(name, get().colorScheme);
       },
 
       setColorScheme: (scheme) => {
+        log.info("themeStore.setColorScheme", `scheme=${scheme}`);
         set({ colorScheme: scheme });
         applyTheme(get().themeName, scheme);
       },
@@ -56,15 +59,21 @@ export const useThemeStore = create<ThemeState>()(
       toggleScheme: () => {
         const current = get().colorScheme;
         const next: ColorScheme = current === "dark" ? "light" : "dark";
+        log.info("themeStore.toggleScheme", `${current} -> ${next}`);
         set({ colorScheme: next });
         applyTheme(get().themeName, next);
       },
 
       applyCurrentTheme: () => {
+        log.debug(
+          "themeStore.applyCurrentTheme",
+          `name=${get().themeName} scheme=${get().colorScheme}`,
+        );
         applyTheme(get().themeName, get().colorScheme);
       },
 
       loadUserThemes: async () => {
+        log.debug("themeStore.loadUserThemes", "invoking load_user_themes");
         try {
           const raw = await invoke<UserThemePayload[]>("load_user_themes");
           const themes: ThemeDefinition[] = raw.map((t) => ({
@@ -77,8 +86,9 @@ export const useThemeStore = create<ThemeState>()(
           }));
           registerUserThemes(themes);
           set({ userThemes: themes });
+          log.info("themeStore.loadUserThemes", `loaded ${themes.length} user themes`);
         } catch (err) {
-          console.error("Failed to load user themes:", err);
+          log.error("themeStore.loadUserThemes", "failed", err);
         }
       },
 
