@@ -4,6 +4,22 @@ use commands::watcher::WatcherState;
 use tauri::Emitter;
 
 pub fn run() {
+    // Linux: WebKit2GTK 2.42+ enables a DMABUF-backed compositor by default,
+    // which paints an entirely black window on many setups (notably NVIDIA
+    // proprietary drivers and some Wayland compositors) — the WRY surface
+    // is created, but the GPU path never produces a frame. Disable the
+    // DMABUF renderer unless the user has explicitly opted in via the
+    // env var, falling back to the software path that renders reliably.
+    //
+    //   https://github.com/tauri-apps/tauri/issues/9304
+    //   https://bugs.webkit.org/show_bug.cgi?id=264108
+    #[cfg(target_os = "linux")]
+    {
+        if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
+            std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+        }
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
