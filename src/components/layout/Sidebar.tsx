@@ -9,6 +9,7 @@ import { TagPanel } from "../sidebar/TagPanel";
 import { RecentFiles } from "../sidebar/RecentFiles";
 import { PluginsPanel } from "../plugins/PluginsPanel";
 import { GlobalSearchPanel } from "../sidebar/GlobalSearchPanel";
+import { ErrorBoundary } from "../ui/ErrorBoundary";
 import type { SidebarPosition } from "../../types";
 
 interface Props {
@@ -83,22 +84,42 @@ export function Sidebar({ position }: Props) {
       <div className="sidebar-header">{headerTitle}</div>
 
       <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
-        {activeSidebarPanel === "tree" && <FileTree />}
+        {/* Each panel sits behind its own ErrorBoundary so a misbehaving
+            panel (broken plugin mount, malformed file content, runaway
+            store update) becomes a contained inline notice instead of
+            propagating to the top-level boundary and blanking the app. */}
+        {activeSidebarPanel === "tree" && (
+          <ErrorBoundary label="Explorer"><FileTree /></ErrorBoundary>
+        )}
         {activeSidebarPanel === "toc" && (
-          <TOCPanel content={activeTab?.content ?? ""} />
+          <ErrorBoundary label="Contents">
+            <TOCPanel content={activeTab?.content ?? ""} />
+          </ErrorBoundary>
         )}
-        {activeSidebarPanel === "recent" && <RecentFiles />}
-        {activeSidebarPanel === "search" && <GlobalSearchPanel />}
+        {activeSidebarPanel === "recent" && (
+          <ErrorBoundary label="Recent"><RecentFiles /></ErrorBoundary>
+        )}
+        {activeSidebarPanel === "search" && (
+          <ErrorBoundary label="Search"><GlobalSearchPanel /></ErrorBoundary>
+        )}
         {activeSidebarPanel === "frontmatter" && (
-          <FrontmatterPanel
-            tabId={activeTab?.id ?? null}
-            content={activeTab?.content ?? ""}
-          />
+          <ErrorBoundary label="Frontmatter">
+            <FrontmatterPanel
+              tabId={activeTab?.id ?? null}
+              content={activeTab?.content ?? ""}
+            />
+          </ErrorBoundary>
         )}
-        {activeSidebarPanel === "tags" && <TagPanel />}
-        {activeSidebarPanel === "plugins" && <PluginsPanel />}
+        {activeSidebarPanel === "tags" && (
+          <ErrorBoundary label="Tags"><TagPanel /></ErrorBoundary>
+        )}
+        {activeSidebarPanel === "plugins" && (
+          <ErrorBoundary label="Plugins"><PluginsPanel /></ErrorBoundary>
+        )}
         {pluginPanel && activeSidebarPanel === pluginPanel.id && (
-          <PluginSidebarPanel panelId={pluginPanel.id} mount={pluginPanel.mount} />
+          <ErrorBoundary label={`Plugin panel "${pluginPanel.label}"`}>
+            <PluginSidebarPanel panelId={pluginPanel.id} mount={pluginPanel.mount} />
+          </ErrorBoundary>
         )}
       </div>
 
