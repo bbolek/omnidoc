@@ -7,7 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Application menu bar** — File, Edit, View, Go, Plugins, Help, with all built-in actions discoverable from one place. On macOS the menu lives in the system menu bar at the top of the screen; on Windows / Linux it's a custom in-titlebar menu with `Alt`-mnemonic activation (e.g. `Alt+F` opens File). Plugins can place their commands in the menu via the new optional `menu: { path: [...] }` field on `registerCommand`.
+- **Command palette** (`Ctrl+Shift+P` / `⌘⇧P`) — fuzzy-search every available command, including plugin commands, with shortcut hints and a recents list.
+- **Central command registry** — built-in actions and plugin commands now share one registry. The `?` overlay, the menu bar, and the command palette all read from it, so adding a command in any one place surfaces it everywhere. New optional fields on `registerCommand`: `category`, `keywords`, `when`, `additionalShortcuts`, `menu`. Existing plugins keep working unchanged. Conflicting plugin shortcuts that collide with built-ins log a warning and the binding is dropped (the command stays available from the menu / palette).
+
 ### Changed
+- **`Ctrl+Shift+P` is now the Command Palette.** Markdown presentation mode has moved to **`Ctrl+Alt+P`** to make room. The Markdown viewer's "Present" toolbar button still works as before.
+- **Decluttered titlebar** — the eight icon buttons that used to live in the titlebar (Open File, Open Folder, Add Folder, Save / Open Workspace, Export PDF, Toggle Minimap, Zen Mode) have moved into the new menu bar. Folder chips and the Win / Linux window controls stay where they were. The dirty-tab confirmation dialog that gated the titlebar's "Open Folder" button is no longer shown — this matches the existing keyboard-shortcut behavior, which never had that guard. Use **File → Save Workspace** before swapping folders if you want to preserve unsaved tabs.
 - **Rebranded from `md-viewer` to `Omnidoc`.** Reflects the app's expanded scope — it now handles PDFs, Office documents (DOCX/XLSX/PPTX), data formats (CSV/JSON/YAML/TOML), code, images, and more in addition to Markdown. Product name, crate/package name, window title, Tauri identifier (`com.omnidoc.app`), persisted store keys (`omnidoc-*`), CSS keyframes, plugin API globals (`window.__omnidocAPI`), and custom events (`omnidoc:*`) have all been renamed. **Note:** because persisted `localStorage` keys changed, user preferences (theme, pinned tabs, starred files, plugin enable state, recent files) will reset on first launch after upgrading.
 
 ### Added

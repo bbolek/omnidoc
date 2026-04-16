@@ -1,63 +1,71 @@
+import { useMemo, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 import { useUiStore } from "../../store/uiStore";
+import { commandRegistry } from "../../plugins/pluginManager";
+import { formatForDisplay } from "../../commands/shortcut";
 
 const isMac = navigator.platform.toUpperCase().includes("MAC");
-const mod = isMac ? "⌘" : "Ctrl";
 
-const SHORTCUTS = [
-  { group: "Files", items: [
-    { keys: [`${mod}+O`], description: "Open file" },
-    { keys: [`${mod}+Shift+O`], description: "Open folder" },
-    { keys: [`${mod}+W`], description: "Close current tab" },
-    { keys: [`${mod}+Shift+W`], description: "Close all tabs" },
-  ]},
-  { group: "Tab Navigation", items: [
-    { keys: [`${mod}+Tab`], description: "Next tab" },
-    { keys: [`${mod}+Shift+Tab`], description: "Previous tab" },
-    { keys: [`${mod}+PageDown`], description: "Next tab" },
-    { keys: [`${mod}+PageUp`], description: "Previous tab" },
-  ]},
-  { group: "View", items: [
-    { keys: [`${mod}+B`], description: "Toggle sidebar" },
-    { keys: [`${mod}+\\`], description: "Toggle split view" },
-    { keys: [`${mod}+Shift+Z`], description: "Toggle Zen / Focus mode" },
-    { keys: [`${mod}+Shift+M`], description: "Toggle minimap" },
-    { keys: [`${mod}+Shift+P`], description: "Present Markdown as slides" },
-    { keys: ["F11"], description: "Toggle fullscreen" },
-    { keys: ["?"], description: "Keyboard shortcuts" },
-  ]},
-  { group: "Presentation", items: [
-    { keys: ["→", "Space"], description: "Next slide" },
-    { keys: ["←"], description: "Previous slide" },
-    { keys: ["Home"], description: "First slide" },
-    { keys: ["End"], description: "Last slide" },
-    { keys: ["Escape"], description: "Exit presentation" },
-  ]},
-  { group: "Zoom", items: [
-    { keys: [`${mod}+=`], description: "Zoom in" },
-    { keys: [`${mod}+-`], description: "Zoom out" },
-    { keys: [`${mod}+0`], description: "Reset zoom" },
-  ]},
-  { group: "Search", items: [
-    { keys: [`${mod}+F`], description: "Search in file" },
-    { keys: [`${mod}+Shift+F`], description: "Global search (across files)" },
-    { keys: ["F3"], description: "Find next" },
-    { keys: ["Shift+F3"], description: "Find previous" },
-    { keys: ["Escape"], description: "Close search / overlay" },
-  ]},
-  { group: "Editing", items: [
-    { keys: ["Shift+Alt+F"], description: "Format document (JSON, XML, YAML, TOML)" },
-  ]},
-  { group: "Theme", items: [
-    { keys: ["Status bar → theme name"], description: "Switch theme" },
-    { keys: ["Status bar → Light/Dark/System"], description: "Toggle color scheme" },
-  ]},
+/**
+ * Display-only extras for shortcuts that aren't first-class commands —
+ * presentation-mode navigation lives in `PresentationMode.tsx` (which owns
+ * the keyboard while presenting), so it doesn't go through the registry but
+ * is still worth showing in the cheat sheet.
+ */
+const STATIC_GROUPS = [
+  {
+    group: "Presentation",
+    items: [
+      { keys: ["→", "Space"], description: "Next slide" },
+      { keys: ["←"], description: "Previous slide" },
+      { keys: ["Home"], description: "First slide" },
+      { keys: ["End"], description: "Last slide" },
+      { keys: ["Escape"], description: "Exit presentation" },
+    ],
+  },
 ];
+
+/**
+ * Preserve the category order from the original hardcoded overlay so the
+ * cheat sheet still flows top-down File → Edit → View etc.
+ */
+const CATEGORY_ORDER = ["File", "Edit", "View", "Go", "Help", "Other"];
 
 export function KeyboardShortcuts() {
   const { shortcutsVisible, setShortcutsVisible } = useUiStore();
+
+  const commands = useSyncExternalStore(
+    (cb) => commandRegistry.subscribe(cb),
+    () => commandRegistry.getAllCommands(),
+    () => commandRegistry.getAllCommands(),
+  );
+
+  const groups = useMemo(() => {
+    const byCategory = new Map<string, { keys: string[]; description: string }[]>();
+    for (const cmd of commands) {
+      if (!cmd.shortcut) continue;
+      const cat = cmd.category ?? (cmd.pluginId === "core" ? "Other" : "Plugins");
+      const bucket = byCategory.get(cat) ?? [];
+      bucket.push({
+        keys: [formatForDisplay(cmd.shortcut, isMac)],
+        description: cmd.label,
+      });
+      byCategory.set(cat, bucket);
+    }
+    // Sort categories by the canonical order, with unknown categories
+    // (e.g. plugin contributions) appended alphabetically at the end.
+    const known = CATEGORY_ORDER.filter((c) => byCategory.has(c));
+    const unknown = [...byCategory.keys()]
+      .filter((c) => !CATEGORY_ORDER.includes(c))
+      .sort();
+    const ordered = [...known, ...unknown].map((group) => ({
+      group,
+      items: byCategory.get(group)!,
+    }));
+    return [...ordered, ...STATIC_GROUPS];
+  }, [commands]);
 
   return createPortal(
     <AnimatePresence>
@@ -103,7 +111,7 @@ export function KeyboardShortcuts() {
               </button>
             </div>
 
-            {SHORTCUTS.map((group) => (
+            {groups.map((group) => (
               <div key={group.group} style={{ marginBottom: 20 }}>
                 <div
                   style={{
