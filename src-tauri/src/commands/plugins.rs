@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use tauri::{command, AppHandle, Manager};
 
+use crate::{log_debug, log_info, log_warn};
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PluginManifest {
     pub id: String,
@@ -20,8 +22,10 @@ pub async fn list_plugins(app: AppHandle) -> Result<Vec<PluginManifest>, String>
         .app_data_dir()
         .map_err(|e| e.to_string())?
         .join("plugins");
+    log_debug!("plugins::list_plugins", "dir={}", plugins_dir.display());
 
     if !plugins_dir.exists() {
+        log_info!("plugins::list_plugins", "creating empty plugins dir");
         std::fs::create_dir_all(&plugins_dir).map_err(|e| e.to_string())?;
         return Ok(vec![]);
     }
@@ -40,22 +44,43 @@ pub async fn list_plugins(app: AppHandle) -> Result<Vec<PluginManifest>, String>
         }
         match std::fs::read_to_string(&manifest_path) {
             Ok(content) => match serde_json::from_str::<PluginManifest>(&content) {
-                Ok(manifest) => plugins.push(manifest),
-                Err(e) => eprintln!("Bad manifest in {:?}: {e}", path),
+                Ok(manifest) => {
+                    log_debug!(
+                        "plugins::list_plugins",
+                        "discovered id={} version={}",
+                        manifest.id,
+                        manifest.version
+                    );
+                    plugins.push(manifest)
+                }
+                Err(e) => log_warn!(
+                    "plugins::list_plugins",
+                    "bad manifest in {}: {}",
+                    path.display(),
+                    e
+                ),
             },
-            Err(e) => eprintln!("Cannot read manifest in {:?}: {e}", path),
+            Err(e) => log_warn!(
+                "plugins::list_plugins",
+                "cannot read manifest in {}: {}",
+                path.display(),
+                e
+            ),
         }
     }
 
     plugins.sort_by(|a, b| a.name.cmp(&b.name));
+    log_info!("plugins::list_plugins", "loaded {} plugins", plugins.len());
     Ok(plugins)
 }
 
 /// Read main.js for a given plugin id
 #[command]
 pub async fn read_plugin_file(app: AppHandle, plugin_id: String) -> Result<String, String> {
+    log_debug!("plugins::read_plugin_file", "plugin_id={}", plugin_id);
     // Sanitise: don't allow path traversal
     if plugin_id.contains('/') || plugin_id.contains('\\') || plugin_id.contains("..") {
+        log_warn!("plugins::read_plugin_file", "rejected unsafe id: {}", plugin_id);
         return Err("Invalid plugin id".to_string());
     }
 
@@ -68,6 +93,12 @@ pub async fn read_plugin_file(app: AppHandle, plugin_id: String) -> Result<Strin
         .join("main.js");
 
     if !main_path.exists() {
+        log_warn!(
+            "plugins::read_plugin_file",
+            "main.js missing for id={} path={}",
+            plugin_id,
+            main_path.display()
+        );
         return Err(format!("main.js not found for plugin '{plugin_id}'"));
     }
 
@@ -82,6 +113,7 @@ pub async fn get_plugins_dir(app: AppHandle) -> Result<String, String> {
         .app_data_dir()
         .map_err(|e| e.to_string())?
         .join("plugins");
+    log_debug!("plugins::get_plugins_dir", "dir={}", plugins_dir.display());
 
     if !plugins_dir.exists() {
         std::fs::create_dir_all(&plugins_dir).map_err(|e| e.to_string())?;

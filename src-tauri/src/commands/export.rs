@@ -1,7 +1,10 @@
 use tokio::fs;
 
+use crate::{log_error, log_info};
+
 #[tauri::command]
 pub async fn export_html(html: String, path: String) -> Result<(), String> {
+    log_info!("export::export_html", "path={} html_bytes={}", path, html.len());
     let full_document = format!(
         r#"<!DOCTYPE html>
 <html lang="en">
@@ -67,9 +70,10 @@ pub async fn export_html(html: String, path: String) -> Result<(), String> {
 </html>"#
     );
 
-    fs::write(&path, full_document)
-        .await
-        .map_err(|e| format!("Failed to write file: {e}"))?;
+    fs::write(&path, full_document).await.map_err(|e| {
+        log_error!("export::export_html", "write failed path={} err={}", path, e);
+        format!("Failed to write file: {e}")
+    })?;
 
     Ok(())
 }

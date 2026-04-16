@@ -8,6 +8,7 @@ import type {
 import type { ThemeDefinition } from "../types";
 import { registerSingleUserTheme } from "../themes";
 import { showToast } from "../components/ui/Toast";
+import { log } from "../utils/logger";
 
 // ── Registry entry (augmented with the owning plugin id) ─────────────────────
 
@@ -65,16 +66,20 @@ class PluginManager {
    * caught and surfaced as a toast so a bad plugin can't kill the app.
    */
   async executeCommand(id: string): Promise<void> {
+    log.debug("pluginManager.executeCommand", `id=${id}`);
     const cmd = this.getCommand(id);
     if (!cmd) {
-      console.warn(`[commands] unknown command: ${id}`);
+      log.warn("pluginManager.executeCommand", `unknown command: ${id}`);
       return;
     }
-    if (cmd.when && !cmd.when()) return;
+    if (cmd.when && !cmd.when()) {
+      log.debug("pluginManager.executeCommand", `gated off by when(): ${id}`);
+      return;
+    }
     try {
       await cmd.handler();
     } catch (err) {
-      console.error(`[commands] handler error for "${id}":`, err);
+      log.error("pluginManager.executeCommand", `handler error for "${id}"`, err);
       showToast({
         message: `Command "${cmd.label}" failed: ${err instanceof Error ? err.message : String(err)}`,
         type: "error",
@@ -114,6 +119,7 @@ class PluginManager {
    * AND via `window.__omnidocAPI` (for IIFE-style plugins).
    */
   loadPlugin(pluginId: string, code: string): void {
+    log.info("pluginManager.loadPlugin", `id=${pluginId} bytes=${code.length}`);
     // Remove stale registrations from a previous load of this plugin
     this.unregisterPlugin(pluginId);
 
@@ -126,8 +132,12 @@ class PluginManager {
     try {
       // eslint-disable-next-line no-new-func
       new Function("api", code)(api);
+      log.info(
+        "pluginManager.loadPlugin",
+        `id=${pluginId} done; registered ${this.commands.filter((c) => c.pluginId === pluginId).length} commands, ${this.viewers.filter((v) => v.pluginId === pluginId).length} viewers`,
+      );
     } catch (err) {
-      console.error(`[Plugin ${pluginId}] load error:`, err);
+      log.error("pluginManager.loadPlugin", `id=${pluginId} threw during execution`, err);
       showToast({ message: `Plugin "${pluginId}" failed to load`, type: "error" });
     }
 
@@ -138,12 +148,22 @@ class PluginManager {
    * Remove all contributions from a plugin (called on disable / reload).
    */
   unregisterPlugin(pluginId: string): void {
+    const before = {
+      v: this.viewers.length,
+      c: this.commands.length,
+      p: this.sidebarPanels.length,
+      i: this.statusBarItems.length,
+    };
     this.viewers = this.viewers.filter((v) => v.pluginId !== pluginId);
     this.commands = this.commands.filter((c) => c.pluginId !== pluginId);
     this.sidebarPanels = this.sidebarPanels.filter((p) => p.pluginId !== pluginId);
     this.statusBarItems = this.statusBarItems.filter((i) => i.pluginId !== pluginId);
     this.fileOpenHandlers.delete(pluginId);
     this.themeChangeHandlers.delete(pluginId);
+    log.debug(
+      "pluginManager.unregisterPlugin",
+      `id=${pluginId} removed viewers=${before.v - this.viewers.length} commands=${before.c - this.commands.length} panels=${before.p - this.sidebarPanels.length} statusItems=${before.i - this.statusBarItems.length}`,
+    );
     this.notify();
   }
 

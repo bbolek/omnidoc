@@ -3,6 +3,7 @@ import { persist } from "zustand/middleware";
 import { invoke } from "@tauri-apps/api/core";
 import { pluginManager } from "../plugins/pluginManager";
 import { showToast } from "../components/ui/Toast";
+import { log } from "../utils/logger";
 
 export interface PluginManifest {
   id: string;
@@ -44,8 +45,13 @@ export const usePluginStore = create<PluginState>()(
       errors: {},
 
       discoverAndLoad: async () => {
+        log.info("pluginStore.discoverAndLoad", "invoking list_plugins");
         try {
           const manifests = await invoke<PluginManifest[]>("list_plugins");
+          log.info(
+            "pluginStore.discoverAndLoad",
+            `discovered ${manifests.length} plugins: ${manifests.map((m) => m.id).join(", ") || "(none)"}`,
+          );
           set({ manifests });
 
           // Load all plugins that aren't explicitly disabled
@@ -53,10 +59,12 @@ export const usePluginStore = create<PluginState>()(
             const isEnabled = get().enabled[m.id] !== false; // default = enabled
             if (isEnabled) {
               await loadOne(m.id, set, get);
+            } else {
+              log.debug("pluginStore.discoverAndLoad", `skipping disabled plugin ${m.id}`);
             }
           }
         } catch (err) {
-          console.error("Failed to discover plugins:", err);
+          log.error("pluginStore.discoverAndLoad", "failed to discover plugins", err);
         }
       },
 
@@ -102,19 +110,22 @@ async function loadOne(
   set: (partial: Partial<PluginState> | ((s: PluginState) => Partial<PluginState>)) => void,
   get: () => PluginState
 ): Promise<void> {
+  log.debug("pluginStore.loadOne", `loading plugin id=${id}`);
   try {
     const code = await invoke<string>("read_plugin_file", { pluginId: id });
+    log.debug("pluginStore.loadOne", `fetched ${code.length} bytes of code for ${id}`);
     pluginManager.loadPlugin(id, code);
     set((s) => ({
       loaded: { ...s.loaded, [id]: true },
       errors: { ...s.errors, [id]: "" },
     }));
+    log.info("pluginStore.loadOne", `plugin ${id} loaded`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     set((s) => ({
       loaded: { ...s.loaded, [id]: false },
       errors: { ...s.errors, [id]: msg },
     }));
-    console.error(`[Plugin ${id}] failed to load:`, err);
+    log.error("pluginStore.loadOne", `plugin ${id} failed to load`, err);
   }
 }

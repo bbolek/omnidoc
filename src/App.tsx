@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import React from "react";
 import { Loader2 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { platform } from "@tauri-apps/plugin-os";
@@ -23,6 +24,7 @@ import { CommandPalette } from "./components/search/CommandPalette";
 import { PresentationMode } from "./components/viewer/PresentationMode";
 import { getFileName, loadFileForOpen } from "./utils/fileUtils";
 import { showToast } from "./components/ui/Toast";
+import { log } from "./utils/logger";
 
 function AppInner() {
   useThemeInit();
@@ -40,18 +42,38 @@ function AppInner() {
   const isRestoring = useFileStore((s) => s.isRestoring);
 
   useEffect(() => {
+    log.info("App", "AppInner mounting; starting boot sequence");
     // Register built-in commands first so plugins loading later see existing
     // shortcuts and can detect conflicts at registration time.
-    registerBuiltinCommands();
+    try {
+      registerBuiltinCommands();
+      log.info("App", "built-in commands registered");
+    } catch (err) {
+      log.error("App", "registerBuiltinCommands threw", err);
+    }
     // Install the native macOS menu and the menu:invoke listener (no-op on
     // Win/Linux, where the in-titlebar MenuBar handles it).
-    void applyAppMenu();
+    applyAppMenu()
+      .then(() => log.info("App", "applyAppMenu resolved"))
+      .catch((err) => log.error("App", "applyAppMenu rejected", err));
     // Load user themes first, then re-apply so user theme tokens are present
-    loadUserThemes().then(() => applyCurrentTheme());
+    loadUserThemes()
+      .then(() => {
+        log.info("App", "user themes loaded; applying current theme");
+        applyCurrentTheme();
+      })
+      .catch((err) => log.error("App", "loadUserThemes rejected", err));
     // Discover and load installed plugins
-    discoverAndLoad();
+    try {
+      discoverAndLoad();
+      log.info("App", "plugin discoverAndLoad invoked");
+    } catch (err) {
+      log.error("App", "discoverAndLoad threw", err);
+    }
     // Restore last session tabs
-    restoreSession();
+    restoreSession()
+      .then(() => log.info("App", "restoreSession resolved"))
+      .catch((err) => log.error("App", "restoreSession rejected", err));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -147,17 +169,84 @@ function SessionLoader({ visible }: { visible: boolean }) {
   );
 }
 
+/**
+ * Catches any render / lifecycle error inside the app tree and displays the
+ * stack in a styled fallback view. Without this a throw inside a store hook
+ * or effect unmounts the whole tree silently and the webview stays black,
+ * which is exactly the kind of failure we can't otherwise diagnose remotely.
+ */
+class BootErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { error: Error | null }
+> {
+  state: { error: Error | null } = { error: null };
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    log.error(
+      "BootErrorBoundary",
+      `render crashed: ${error.message}`,
+      error,
+      info.componentStack ?? "",
+    );
+  }
+  render() {
+    if (!this.state.error) return this.props.children;
+    const err = this.state.error;
+    return (
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          padding: 24,
+          overflow: "auto",
+          fontFamily: "Inter, system-ui, sans-serif",
+          background: "#0d1117",
+          color: "#e6edf3",
+          zIndex: 99999,
+        }}
+      >
+        <h2 style={{ marginTop: 0, color: "#ff7b72" }}>Omnidoc crashed on startup</h2>
+        <p style={{ fontSize: 13, opacity: 0.8 }}>
+          The React tree threw an unrecoverable error. The stack trace below
+          (and any entries written to <code>%LOCALAPPDATA%\Omnidoc\omnidoc-startup.log</code>)
+          should point at the cause.
+        </p>
+        <pre
+          style={{
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+            background: "rgba(255,255,255,0.05)",
+            border: "1px solid rgba(255,255,255,0.1)",
+            padding: 12,
+            borderRadius: 6,
+            fontFamily: "Fira Code, Consolas, monospace",
+            fontSize: 12,
+            lineHeight: 1.5,
+          }}
+        >
+          {err.stack || err.message || String(err)}
+        </pre>
+      </div>
+    );
+  }
+}
+
 export default function App() {
   const setPlatform = useUiStore((s) => s.setPlatform);
 
   useEffect(() => {
+    log.info("App", "outer App mounting");
     try {
       const p = platform();
+      log.info("App", `detected platform: ${p}`);
       if (p === "macos") setPlatform("macos");
       else if (p === "windows") setPlatform("windows");
       else if (p === "linux") setPlatform("linux");
       else setPlatform("unknown");
-    } catch {
+    } catch (err) {
+      log.warn("App", "platform() threw; defaulting to unknown", err);
       setPlatform("unknown");
     }
 
@@ -172,5 +261,9 @@ export default function App() {
     return () => document.removeEventListener("contextmenu", handler);
   }, [setPlatform]);
 
-  return <AppInner />;
+  return (
+    <BootErrorBoundary>
+      <AppInner />
+    </BootErrorBoundary>
+  );
 }

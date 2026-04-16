@@ -1,6 +1,7 @@
 pub mod archive;
 pub mod export;
 pub mod fs;
+pub mod logs;
 pub mod menu;
 pub mod plugins;
 pub mod search;

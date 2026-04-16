@@ -1,5 +1,7 @@
 use std::path::Path;
 
+use crate::{log_debug, log_info};
+
 #[derive(serde::Serialize)]
 pub struct SearchMatch {
     pub path: String,
@@ -156,6 +158,7 @@ fn search_recursive(
 
 #[tauri::command]
 pub async fn search_in_files(folder: String, query: String) -> Result<Vec<SearchMatch>, String> {
+    log_info!("search::search_in_files", "folder={} query={:?}", folder, query);
     if query.trim().is_empty() {
         return Ok(vec![]);
     }
@@ -170,5 +173,12 @@ pub async fn search_in_files(folder: String, query: String) -> Result<Vec<Search
     let mut results = Vec::new();
     search_recursive(dir, &query_lower, &mut results, 0);
 
+    log_debug!(
+        "search::search_in_files",
+        "folder={} query={:?} results={}",
+        folder,
+        query,
+        results.len()
+    );
     Ok(results)
 }

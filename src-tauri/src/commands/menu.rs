@@ -15,6 +15,8 @@ use serde::Deserialize;
 use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
 use tauri::{AppHandle, Wry};
 
+use crate::{log_debug, log_error};
+
 #[derive(Debug, Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum SerializedNode {
@@ -47,18 +49,30 @@ pub struct SerializedMenu {
 /// — this command only swaps the visible menu definition.
 #[tauri::command]
 pub async fn set_app_menu(app: AppHandle, menu: SerializedMenu) -> Result<(), String> {
+    log_debug!(
+        "menu::set_app_menu",
+        "installing menu with {} top-level submenus",
+        menu.menus.len()
+    );
     let mut top = MenuBuilder::new(&app);
 
     for sub in &menu.menus {
-        let submenu = build_submenu(&app, &sub.label, &sub.items)
-            .map_err(|e| format!("build submenu '{}': {e}", sub.label))?;
+        let submenu = build_submenu(&app, &sub.label, &sub.items).map_err(|e| {
+            log_error!("menu::set_app_menu", "build submenu {}: {}", sub.label, e);
+            format!("build submenu '{}': {e}", sub.label)
+        })?;
         top = top.item(&submenu);
     }
 
-    let built = top.build().map_err(|e| format!("build menu: {e}"))?;
+    let built = top.build().map_err(|e| {
+        log_error!("menu::set_app_menu", "build menu: {}", e);
+        format!("build menu: {e}")
+    })?;
 
-    app.set_menu(built)
-        .map_err(|e| format!("install menu: {e}"))?;
+    app.set_menu(built).map_err(|e| {
+        log_error!("menu::set_app_menu", "install menu: {}", e);
+        format!("install menu: {e}")
+    })?;
 
     Ok(())
 }

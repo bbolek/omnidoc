@@ -12,6 +12,7 @@ import type {
 } from "../types";
 import { nextColorIndex } from "../utils/folderColors";
 import { getFileName } from "../utils/fileUtils";
+import { log } from "../utils/logger";
 
 interface SessionTab {
   path: string;
@@ -353,8 +354,13 @@ export const useFileStore = create<FileState>()(
       },
 
       openFile: (path, name, content, info, folderPath) => {
+        log.debug(
+          "fileStore.openFile",
+          `path=${path} bytes=${content.length} folderPath=${folderPath ?? "-"}`,
+        );
         const existing = get().tabs.find((t) => t.path === path);
         if (existing) {
+          log.debug("fileStore.openFile", `tab already open id=${existing.id}, activating`);
           set({ activeTabId: existing.id });
           return;
         }
@@ -374,6 +380,7 @@ export const useFileStore = create<FileState>()(
           tabs: [...state.tabs, tab],
           activeTabId: id,
         }));
+        log.info("fileStore.openFile", `new tab id=${id} name=${name}`);
 
         const ext = path.split(".").pop()?.toLowerCase();
         get().addRecentFile({ path, name, accessedAt: Date.now(), extension: ext });
@@ -489,11 +496,20 @@ export const useFileStore = create<FileState>()(
 
       saveTabContent: async (id) => {
         const tab = get().tabs.find((t) => t.id === id);
-        if (!tab) return;
-        await invoke("write_file", { path: tab.path, content: tab.content });
-        set((state) => ({
-          tabs: state.tabs.map((t) => (t.id === id ? { ...t, isDirty: false } : t)),
-        }));
+        if (!tab) {
+          log.warn("fileStore.saveTabContent", `no tab for id=${id}`);
+          return;
+        }
+        log.info("fileStore.saveTabContent", `id=${id} path=${tab.path}`);
+        try {
+          await invoke("write_file", { path: tab.path, content: tab.content });
+          set((state) => ({
+            tabs: state.tabs.map((t) => (t.id === id ? { ...t, isDirty: false } : t)),
+          }));
+        } catch (err) {
+          log.error("fileStore.saveTabContent", `write failed id=${id}`, err);
+          throw err;
+        }
       },
 
       discardTabChanges: async (id) => {
@@ -530,6 +546,10 @@ export const useFileStore = create<FileState>()(
 
       restoreSession: async () => {
         const { lastSession, folders } = get();
+        log.info(
+          "fileStore.restoreSession",
+          `folders=${folders.length} lastSessionTabs=${lastSession?.tabs?.length ?? 0} activePath=${lastSession?.activePath ?? "-"}`,
+        );
         // Per-call timeout: any single invoke that exceeds this is abandoned.
         const PER_CALL_MS = 5000;
         // Global watchdog: guarantees `isRestoring` is cleared even if something
@@ -539,9 +559,9 @@ export const useFileStore = create<FileState>()(
         let settled = false;
         const watchdog = setTimeout(() => {
           if (!settled) {
-            // eslint-disable-next-line no-console
-            console.warn(
-              `restoreSession: watchdog fired after ${WATCHDOG_MS}ms; clearing loader`,
+            log.warn(
+              "fileStore.restoreSession",
+              `watchdog fired after ${WATCHDOG_MS}ms; clearing loader`,
             );
             set({ isRestoring: false });
           }
@@ -556,13 +576,25 @@ export const useFileStore = create<FileState>()(
                 PER_CALL_MS,
                 `list_directory ${f.path}`,
               );
+              log.debug(
+                "fileStore.restoreSession",
+                `folder ${f.path} -> ${entries.length} entries`,
+              );
               get().setFolderTree(f.path, entries);
-            } catch {
+            } catch (err) {
+              log.warn(
+                "fileStore.restoreSession",
+                `list_directory failed for ${f.path}`,
+                err,
+              );
               // Folder may have been deleted/moved or backend hung — skip.
             }
           }
 
-          if (!lastSession?.tabs?.length) return;
+          if (!lastSession?.tabs?.length) {
+            log.info("fileStore.restoreSession", "no tabs to restore");
+            return;
+          }
 
           for (const { path, name, folderPath } of lastSession.tabs) {
             try {
@@ -575,19 +607,27 @@ export const useFileStore = create<FileState>()(
                 `read ${path}`,
               );
               get().openFile(path, name, content as string, info as FileInfo, folderPath);
-            } catch {
+            } catch (err) {
+              log.warn("fileStore.restoreSession", `failed to reopen ${path}`, err);
               // File deleted, moved, or backend hung — skip silently.
             }
           }
 
           if (lastSession.activePath) {
             const active = get().tabs.find((t) => t.path === lastSession.activePath);
-            if (active) get().setActiveTab(active.id);
+            if (active) {
+              log.debug(
+                "fileStore.restoreSession",
+                `restoring active tab id=${active.id}`,
+              );
+              get().setActiveTab(active.id);
+            }
           }
         } finally {
           settled = true;
           clearTimeout(watchdog);
           set({ isRestoring: false });
+          log.info("fileStore.restoreSession", "complete, loader cleared");
         }
       },
     }),
