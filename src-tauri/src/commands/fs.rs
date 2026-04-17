@@ -96,11 +96,6 @@ pub async fn list_directory(path: String) -> Result<Vec<FileEntry>, String> {
                 .map(|e| e.to_string_lossy().to_lowercase())
         };
 
-        // Skip hidden files/dirs (starting with .)
-        if name.starts_with('.') {
-            continue;
-        }
-
         entries.push(FileEntry {
             name,
             path: full_path,
