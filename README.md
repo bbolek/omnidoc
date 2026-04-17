@@ -18,6 +18,7 @@ Windows, macOS (Intel + Apple Silicon), and Linux.
   - [Markdown](#markdown)
   - [Code & data](#code--data)
   - [Office & PDF](#office--pdf)
+  - [Terminal](#terminal)
   - [Themes & typography](#themes--typography)
   - [Productivity](#productivity)
   - [Plugins](#plugins)
@@ -40,6 +41,7 @@ Windows, macOS (Intel + Apple Silicon), and Linux.
 - 🧘 **Zen mode** — hide all chrome, center the content, focus on the reading.
 - 📝 **Markdown editing** — not just viewing. Formatting toolbar, live preview, dirty indicator.
 - 🔌 **Live file watching** — files change on disk, Omnidoc reloads them.
+- 💻 **Integrated terminal** — full PTY-backed shell (`Ctrl+` `` ` ``), one terminal per workspace folder, auto-switching as you move between folders.
 
 ## Supported formats
 
@@ -118,6 +120,28 @@ Within Markdown, Omnidoc additionally renders:
 - **DOCX** — styled rendering close to the original document
 - **XLSX** — sheet tabs, cell styles preserved
 - **PPTX** — slide-by-slide viewer
+
+### Terminal
+
+A first-class integrated terminal — no "run commands in a subprocess and print the output" toy, but a real PTY-backed shell that feels like your OS terminal emulator.
+
+- **Real PTY** — spawned via `portable-pty` on the Rust side, with live resize tied to the xterm.js viewport (`ResizeObserver` + window resize)
+- **Shell auto-detection** — PowerShell 7 → PowerShell → `cmd.exe` on Windows, `$SHELL` → `bash` on macOS / Linux
+- **xterm.js frontend** — full ANSI, 256-color / truecolor, clickable web links, 5000-line scrollback
+- **Toggle panel** — `Ctrl+` `` ` `` shows/hides the terminal panel at the bottom of the workspace
+- **New terminal** — `Ctrl+Shift+` `` ` `` spawns a fresh PTY stacked in the tab strip
+- **Persistent output** — terminals stay alive when you switch tabs (hidden, not unmounted), so long-running processes keep running
+- **Exit status reporting** — when a shell exits, the status code is surfaced in the UI
+
+#### Binding terminals to folders
+
+Every terminal is bound to a workspace folder, and Omnidoc uses that binding as the backbone of its terminal UX:
+
+- **Rooted `cwd`** — a new terminal opens with its working directory set to the folder it's bound to, so `ls` / `dir` / `git status` just work
+- **Auto-switching** — when you change the active folder in the sidebar, Omnidoc auto-switches to the terminal bound to that folder (if one exists). Multi-folder workspaces get one terminal per folder without you having to juggle tabs
+- **Folder-colored tabs** — each terminal tab inherits the accent color of its bound folder, so you can see at a glance which repo / project each shell belongs to
+- **Unbound terminals** — terminals spawned without a workspace folder (`folderPath = null`) persist independently and aren't tied to any directory
+- **Session-restored** — folder bindings are persisted in the workspace file (`.omnidoc-workspace.json`) alongside your tabs, so your terminal layout comes back on restart
 
 ### Images
 
@@ -253,6 +277,8 @@ Linux and uploads signed draft release artifacts.
 | `Ctrl+Tab`         | Next tab                               |
 | `Ctrl+Shift+P`     | Presentation mode (Markdown slide deck) |
 | `Ctrl+P`           | Fuzzy file search                      |
+| `Ctrl+` `` ` ``    | Toggle integrated terminal             |
+| `Ctrl+Shift+` `` ` `` | New terminal (in active folder)     |
 | `Ctrl+F`           | Find in current document               |
 | `Ctrl+S`           | Save (in edit mode)                    |
 | `Ctrl+B`           | Bold (markdown edit)                   |
@@ -276,6 +302,7 @@ omnidoc/
 │   │   ├── layout/             # Titlebar, breadcrumb, status bar, tabs
 │   │   ├── editor/             # Markdown editor + toolbar
 │   │   ├── search/             # Fuzzy file search
+│   │   ├── terminal/           # xterm.js panel + folder-bound terminal tabs
 │   │   ├── welcome/            # Welcome screen
 │   │   └── ui/                 # Shared primitives (Toast, Dialog, …)
 │   ├── store/                  # Zustand stores (files, theme, UI, plugins, starred)
@@ -286,7 +313,7 @@ omnidoc/
 │   └── index.css               # Global CSS (all styling lives here)
 ├── src-tauri/                  # Rust backend
 │   ├── src/
-│   │   ├── commands/           # fs, search, export, themes, plugins, watcher
+│   │   ├── commands/           # fs, search, export, themes, plugins, watcher, terminal
 │   │   └── lib.rs              # Tauri setup + command registry
 │   ├── capabilities/           # Tauri v2 permission manifests
 │   └── tauri.conf.json
@@ -306,13 +333,15 @@ omnidoc/
 - **Shiki** for syntax highlighting (same engine VS Code uses)
 - **react-markdown** + remark/rehype plugins (GFM, math, breaks, raw, KaTeX)
 - **Mermaid**, **KaTeX**, **PDF.js**, **docx-preview**, **xlsx-js-style**, **pptx-preview**, **PapaParse**, **js-yaml**, **smol-toml**
+- **xterm.js** (`@xterm/xterm` + `fit` + `web-links` addons) for the integrated terminal
 
 **Backend (Rust / Tauri)**
 
 - `tauri-plugin-fs`, `-dialog`, `-shell`, `-os`
 - `notify` for filesystem watching
 - `encoding_rs` for charset detection
-- Custom commands: `read_file_bytes`, `write_file`, `get_git_status`, file tree enumeration, search, export, plugin loading, theme compilation
+- `portable-pty` for the integrated terminal (PTY spawn, resize, I/O streaming over Tauri events)
+- Custom commands: `read_file_bytes`, `write_file`, `get_git_status`, file tree enumeration, search, export, plugin loading, theme compilation, `terminal_spawn` / `terminal_write` / `terminal_resize` / `terminal_kill`
 
 **State**
 
