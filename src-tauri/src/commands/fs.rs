@@ -438,7 +438,19 @@ pub async fn get_git_status(folder: String) -> Result<Vec<GitStatusEntry>, Strin
             _ => "modified",
         };
 
-        let full_path = format!("{}/{}", folder.trim_end_matches('/'), actual_path);
+        // Git porcelain always emits forward-slash paths; `list_directory`
+        // returns native-separator paths (backslashes on Windows). Build the
+        // joined path via `PathBuf::push` so it uses the OS separator and the
+        // two commands produce byte-identical strings — otherwise the
+        // frontend's `gitStatus.get(entry.path)` / `startsWith` lookups miss
+        // on Windows and no indicator is rendered.
+        let mut buf = std::path::PathBuf::from(folder.trim_end_matches(['/', '\\']));
+        for component in actual_path.split('/') {
+            if !component.is_empty() {
+                buf.push(component);
+            }
+        }
+        let full_path = buf.to_string_lossy().to_string();
         entries.push(GitStatusEntry { path: full_path, status: status.to_string() });
     }
 
