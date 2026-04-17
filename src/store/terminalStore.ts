@@ -5,6 +5,8 @@ import { invoke } from "@tauri-apps/api/core";
 export interface TerminalInstance {
   /** Stable id used as the PTY key and event-channel suffix. */
   id: string;
+  /** Which pane this terminal is rendered in. */
+  paneId: string;
   /** Human-readable name shown in the tab strip. */
   name: string;
   /** Folder this terminal was spawned in; also used for folder-switch binding. */
@@ -19,19 +21,35 @@ export interface TerminalInstance {
   started: boolean;
 }
 
+export interface TerminalPane {
+  id: string;
+  /** The terminal shown inside this pane. */
+  activeTerminalId: string | null;
+}
+
 interface TerminalState {
   terminals: TerminalInstance[];
+  /** Horizontal row of panes, each hosting its own set of terminal tabs. */
+  panes: TerminalPane[];
+  /** Which pane has focus — receives new terminals, toolbar actions, etc. */
+  activePaneId: string;
+  /** Convenience: the active terminal inside the active pane. */
   activeTerminalId: string | null;
   /** Whether the bottom panel is visible. */
   panelVisible: boolean;
   /** Last user-chosen panel height, in pixels. */
   panelHeight: number;
 
-  addTerminal: (term: TerminalInstance) => void;
+  addTerminal: (term: Omit<TerminalInstance, "paneId"> & { paneId?: string }) => void;
   removeTerminal: (id: string) => void;
   renameTerminal: (id: string, name: string) => void;
   markStarted: (id: string) => void;
   setActiveTerminal: (id: string | null) => void;
+  setActivePane: (paneId: string) => void;
+  /** Create a new pane to the right of `afterPaneId` (or at the end). Returns its id. */
+  addPaneAfter: (afterPaneId?: string) => string;
+  /** Remove a pane and all terminals inside it. Always keeps at least one pane. */
+  closePane: (paneId: string) => void;
   /** Returns the terminal bound to `folderPath`, or null. */
   terminalForFolder: (folderPath: string | null) => TerminalInstance | null;
   setPanelVisible: (v: boolean) => void;
@@ -39,29 +57,73 @@ interface TerminalState {
   setPanelHeight: (h: number) => void;
 }
 
+const FIRST_PANE_ID = "pane-1";
+
+function makePaneId(): string {
+  return `pane-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+}
+
 export const useTerminalStore = create<TerminalState>()(
   persist(
     (set, get) => ({
       terminals: [],
+      panes: [{ id: FIRST_PANE_ID, activeTerminalId: null }],
+      activePaneId: FIRST_PANE_ID,
       activeTerminalId: null,
       panelVisible: false,
       panelHeight: 260,
 
       addTerminal: (term) =>
-        set((s) => ({
-          terminals: [...s.terminals, term],
-          activeTerminalId: term.id,
-          panelVisible: true,
-        })),
+        set((s) => {
+          const paneId = term.paneId ?? s.activePaneId;
+          const instance: TerminalInstance = { ...term, paneId };
+          const panes = s.panes.map((p) =>
+            p.id === paneId ? { ...p, activeTerminalId: instance.id } : p
+          );
+          return {
+            terminals: [...s.terminals, instance],
+            panes,
+            activePaneId: paneId,
+            activeTerminalId: instance.id,
+            panelVisible: true,
+          };
+        }),
 
       removeTerminal: (id) =>
         set((s) => {
+          const victim = s.terminals.find((t) => t.id === id);
           const terminals = s.terminals.filter((t) => t.id !== id);
-          const activeTerminalId =
-            s.activeTerminalId === id
-              ? terminals[terminals.length - 1]?.id ?? null
-              : s.activeTerminalId;
-          return { terminals, activeTerminalId };
+          if (!victim) {
+            return { terminals };
+          }
+          // Pick a replacement active terminal for the affected pane.
+          let panes = s.panes.map((p) => {
+            if (p.id !== victim.paneId) return p;
+            if (p.activeTerminalId !== id) return p;
+            const fallback =
+              [...terminals].reverse().find((t) => t.paneId === p.id)?.id ?? null;
+            return { ...p, activeTerminalId: fallback };
+          });
+          // Collapse empty non-first panes so the user doesn't accumulate
+          // blank columns whenever the last tab in a pane closes.
+          let activePaneId = s.activePaneId;
+          if (panes.length > 1) {
+            const pane = panes.find((p) => p.id === victim.paneId);
+            const hasTerminals = terminals.some((t) => t.paneId === victim.paneId);
+            if (pane && !hasTerminals) {
+              panes = panes.filter((p) => p.id !== victim.paneId);
+              if (activePaneId === victim.paneId) {
+                activePaneId = panes[0].id;
+              }
+            }
+          }
+          const activePane = panes.find((p) => p.id === activePaneId) ?? panes[0];
+          return {
+            terminals,
+            panes,
+            activePaneId: activePane.id,
+            activeTerminalId: activePane.activeTerminalId,
+          };
         }),
 
       renameTerminal: (id, name) =>
@@ -74,7 +136,69 @@ export const useTerminalStore = create<TerminalState>()(
           terminals: s.terminals.map((t) => (t.id === id ? { ...t, started: true } : t)),
         })),
 
-      setActiveTerminal: (id) => set({ activeTerminalId: id }),
+      setActiveTerminal: (id) =>
+        set((s) => {
+          if (id === null) {
+            return { activeTerminalId: null };
+          }
+          const term = s.terminals.find((t) => t.id === id);
+          if (!term) return {};
+          const panes = s.panes.map((p) =>
+            p.id === term.paneId ? { ...p, activeTerminalId: id } : p
+          );
+          return { panes, activePaneId: term.paneId, activeTerminalId: id };
+        }),
+
+      setActivePane: (paneId) =>
+        set((s) => {
+          const pane = s.panes.find((p) => p.id === paneId);
+          if (!pane) return {};
+          return { activePaneId: paneId, activeTerminalId: pane.activeTerminalId };
+        }),
+
+      addPaneAfter: (afterPaneId) => {
+        const newId = makePaneId();
+        set((s) => {
+          const idx = afterPaneId
+            ? s.panes.findIndex((p) => p.id === afterPaneId)
+            : s.panes.length - 1;
+          const insertAt = idx < 0 ? s.panes.length : idx + 1;
+          const panes = [
+            ...s.panes.slice(0, insertAt),
+            { id: newId, activeTerminalId: null },
+            ...s.panes.slice(insertAt),
+          ];
+          return {
+            panes,
+            activePaneId: newId,
+            activeTerminalId: null,
+            panelVisible: true,
+          };
+        });
+        return newId;
+      },
+
+      closePane: (paneId) =>
+        set((s) => {
+          if (s.panes.length <= 1) return {};
+          const panes = s.panes.filter((p) => p.id !== paneId);
+          const terminals = s.terminals.filter((t) => t.paneId !== paneId);
+          // Kill any PTYs that lived in the closed pane.
+          s.terminals
+            .filter((t) => t.paneId === paneId)
+            .forEach((t) => {
+              invoke("terminal_kill", { id: t.id }).catch(() => {});
+            });
+          const activePaneId =
+            s.activePaneId === paneId ? panes[0].id : s.activePaneId;
+          const activePane = panes.find((p) => p.id === activePaneId) ?? panes[0];
+          return {
+            terminals,
+            panes,
+            activePaneId: activePane.id,
+            activeTerminalId: activePane.activeTerminalId,
+          };
+        }),
 
       terminalForFolder: (folderPath) => {
         if (!folderPath) return null;
@@ -89,7 +213,8 @@ export const useTerminalStore = create<TerminalState>()(
     {
       name: "omnidoc-terminal",
       // Only persist panel chrome state — terminal instances are live
-      // PTY-backed processes that cannot be restored across sessions.
+      // PTY-backed processes that cannot be restored across sessions, and
+      // panes without terminals aren't worth rehydrating.
       partialize: (state) => ({
         panelHeight: state.panelHeight,
       }),
@@ -117,7 +242,8 @@ function shortName(p: string | null): string {
 }
 
 /**
- * Always create a new terminal instance rooted at `folderPath`.
+ * Always create a new terminal instance rooted at `folderPath`, placed in
+ * the currently-active pane (or `paneId` if given).
  *
  * Unlike `terminalForFolder` this does not de-duplicate — clicking the "+"
  * button, running the "New Terminal" command, or using a folder's terminal
@@ -125,12 +251,14 @@ function shortName(p: string | null): string {
  * that folder. The panel reveals itself and the new tab becomes active.
  */
 export async function spawnTerminalForFolder(
-  folderPath: string | null
+  folderPath: string | null,
+  paneId?: string
 ): Promise<string> {
   const shell = await invoke<string>("terminal_detect_shell").catch(() => "");
   const id = cryptoRandomId();
   useTerminalStore.getState().addTerminal({
     id,
+    paneId,
     name: shortName(folderPath),
     folderPath,
     shell: shell || defaultShellFallback(),
