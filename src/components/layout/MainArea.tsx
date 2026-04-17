@@ -1,36 +1,33 @@
 import { Allotment } from "allotment";
 import "allotment/dist/style.css";
 import { useFileStore } from "../../store/fileStore";
+import { useTerminalStore } from "../../store/terminalStore";
 import { TabBar } from "./TabBar";
 import { Breadcrumb } from "./Breadcrumb";
 import { ViewerRouter } from "../viewer/ViewerRouter";
 import { WelcomeScreen } from "../welcome/WelcomeScreen";
+import { TerminalPanel } from "../terminal/TerminalPanel";
 
 export function MainArea() {
   const { tabs, activeTabId, splitView, rightPaneTabId, setActiveTab, setRightPaneTab } =
     useFileStore();
+  const panelVisible = useTerminalStore((s) => s.panelVisible);
+  const panelHeight = useTerminalStore((s) => s.panelHeight);
+  const setPanelHeight = useTerminalStore((s) => s.setPanelHeight);
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const rightPaneTab = tabs.find((t) => t.id === rightPaneTabId) ?? tabs[0];
 
-  if (!splitView) {
-    return (
-      <div className="main-area">
-        <TabBar />
-        <Breadcrumb />
-        <div className="viewer-area">
-          {activeTab ? (
-            <ViewerRouter tab={activeTab} />
-          ) : (
-            <WelcomeScreen />
-          )}
-        </div>
+  const editors = !splitView ? (
+    <div className="main-area-editors">
+      <TabBar />
+      <Breadcrumb />
+      <div className="viewer-area">
+        {activeTab ? <ViewerRouter tab={activeTab} /> : <WelcomeScreen />}
       </div>
-    );
-  }
-
-  return (
-    <div className="main-area">
+    </div>
+  ) : (
+    <div className="main-area-editors">
       <Allotment>
         <Allotment.Pane minSize={200}>
           <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -44,13 +41,33 @@ export function MainArea() {
           <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
             <SplitTabBar paneId="right" activeId={rightPaneTabId} onActivate={(id) => setRightPaneTab(id)} />
             <div className="viewer-area" style={{ flex: 1, overflow: "hidden" }}>
-              {rightPaneTab ? (
-                <ViewerRouter tab={rightPaneTab} />
-              ) : (
-                <WelcomeScreen />
-              )}
+              {rightPaneTab ? <ViewerRouter tab={rightPaneTab} /> : <WelcomeScreen />}
             </div>
           </div>
+        </Allotment.Pane>
+      </Allotment>
+    </div>
+  );
+
+  // When the terminal is hidden, skip the Allotment entirely — rendering a
+  // one-pane split triggers unnecessary layout work on every editor change.
+  if (!panelVisible) {
+    return <div className="main-area">{editors}</div>;
+  }
+
+  return (
+    <div className="main-area">
+      <Allotment
+        vertical
+        onChange={(sizes) => {
+          // Persist the user's chosen terminal height. Sizes[1] is the
+          // bottom pane's pixel height.
+          if (sizes[1] && sizes[1] > 0) setPanelHeight(sizes[1]);
+        }}
+      >
+        <Allotment.Pane minSize={120}>{editors}</Allotment.Pane>
+        <Allotment.Pane preferredSize={panelHeight} minSize={80}>
+          <TerminalPanel />
         </Allotment.Pane>
       </Allotment>
     </div>

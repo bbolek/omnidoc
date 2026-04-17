@@ -5,5 +5,6 @@ pub mod logs;
 pub mod menu;
 pub mod plugins;
 pub mod search;
+pub mod terminal;
 pub mod themes;
 pub mod watcher;

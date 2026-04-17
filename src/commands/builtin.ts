@@ -16,6 +16,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { commandRegistry } from "../plugins/pluginManager";
 import { useFileStore } from "../store/fileStore";
 import { useUiStore } from "../store/uiStore";
+import { useTerminalStore } from "../store/terminalStore";
 import { saveWorkspace, openWorkspace } from "../utils/workspace";
 import { getFileExtension, getFileName, getFileType } from "../utils/fileUtils";
 import { canFormat, formatContent } from "../utils/formatUtils";
@@ -261,6 +262,54 @@ export function registerBuiltinCommands(): void {
     category: "View",
     menu: { path: ["View"], order: 10 },
     handler: () => useUiStore.getState().toggleSidebar(),
+  });
+
+  r({
+    id: "view.toggleTerminal",
+    label: "Toggle Terminal",
+    shortcut: "Mod+`",
+    category: "View",
+    keywords: ["terminal", "shell", "console"],
+    menu: { path: ["View"], order: 14 },
+    handler: () => useTerminalStore.getState().togglePanel(),
+  });
+
+  r({
+    id: "terminal.new",
+    label: "New Terminal",
+    shortcut: "Mod+Shift+`",
+    category: "Terminal",
+    keywords: ["terminal", "shell", "console", "new"],
+    menu: { path: ["Terminal"], order: 10 },
+    handler: async () => {
+      const store = useTerminalStore.getState();
+      const folders = useFileStore.getState().folders;
+      const primary = folders[0] ?? null;
+      // Re-use an existing terminal already bound to this folder rather
+      // than spawning a duplicate — matches the panel's "+" button.
+      const existing = store.terminalForFolder(primary?.path ?? null);
+      if (existing) {
+        store.setActiveTerminal(existing.id);
+        store.setPanelVisible(true);
+        return;
+      }
+      const shell = await invoke<string>("terminal_detect_shell").catch(() => "");
+      const id =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? (crypto as Crypto).randomUUID()
+          : `t-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const folderPath = primary?.path ?? null;
+      const name = folderPath
+        ? (folderPath.split(/[\\/]/).filter(Boolean).pop() ?? "terminal")
+        : "terminal";
+      store.addTerminal({
+        id,
+        name,
+        folderPath,
+        shell: shell || (useUiStore.getState().platform === "windows" ? "pwsh" : "/bin/bash"),
+        started: false,
+      });
+    },
   });
 
   r({

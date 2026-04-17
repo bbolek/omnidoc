@@ -1,6 +1,7 @@
 pub mod commands;
 pub mod logger;
 
+use commands::terminal::TerminalState;
 use commands::watcher::WatcherState;
 use tauri::{Emitter, Manager};
 
@@ -93,6 +94,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_os::init())
         .manage(WatcherState::default())
+        .manage(TerminalState::default())
         // Confirm the webview reached setup. Black-window reports almost
         // always cut off before this line — if the startup log shows
         // "building tauri app" but never "tauri setup complete", the issue
@@ -144,6 +146,11 @@ pub fn run() {
             commands::plugins::read_plugin_file,
             commands::plugins::get_plugins_dir,
             commands::search::search_in_files,
+            commands::terminal::terminal_spawn,
+            commands::terminal::terminal_write,
+            commands::terminal::terminal_resize,
+            commands::terminal::terminal_kill,
+            commands::terminal::terminal_detect_shell,
             commands::archive::list_archive_entries,
             commands::archive::read_archive_entry_bytes,
             commands::archive::extract_archive,
