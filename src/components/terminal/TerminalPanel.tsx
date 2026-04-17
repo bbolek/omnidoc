@@ -1,7 +1,6 @@
 import { useEffect, useRef } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { Plus, X, TerminalSquare, ChevronDown } from "lucide-react";
-import { useTerminalStore, type TerminalInstance } from "../../store/terminalStore";
+import { useTerminalStore, spawnTerminalForFolder } from "../../store/terminalStore";
 import { useFileStore } from "../../store/fileStore";
 import { folderColor } from "../../utils/folderColors";
 import { TerminalView } from "./TerminalView";
@@ -20,7 +19,6 @@ import { TerminalView } from "./TerminalView";
 export function TerminalPanel() {
   const terminals = useTerminalStore((s) => s.terminals);
   const activeId = useTerminalStore((s) => s.activeTerminalId);
-  const addTerminal = useTerminalStore((s) => s.addTerminal);
   const removeTerminal = useTerminalStore((s) => s.removeTerminal);
   const setActive = useTerminalStore((s) => s.setActiveTerminal);
   const terminalForFolder = useTerminalStore((s) => s.terminalForFolder);
@@ -43,26 +41,15 @@ export function TerminalPanel() {
   }, [primaryFolder?.path, terminalForFolder, setActive, activeId]);
 
   const handleNewTerminal = async () => {
-    const shell = await invoke<string>("terminal_detect_shell").catch(() => "");
-    const folderPath = primaryFolder?.path ?? null;
-    // If the current folder already has a terminal, focus it rather than
-    // spawning a duplicate. Matches the spirit of "folder-bound" terminals.
-    const existing = terminalForFolder(folderPath);
-    if (existing) {
-      setActive(existing.id);
-      setPanelVisible(true);
-      return;
-    }
-    const id = cryptoRandomId();
-    const baseName = folderPath ? shortName(folderPath) : "terminal";
-    const term: TerminalInstance = {
-      id,
-      name: baseName,
-      folderPath,
-      shell: shell || defaultShellFallback(),
-      started: false,
-    };
-    addTerminal(term);
+    // Spawn a fresh PTY every time — the "+" button is explicit intent to
+    // open another terminal, not to re-focus an existing one. Re-use only
+    // happens via the auto-switch effect above when the primary folder
+    // changes.
+    const activeTerm = terminals.find((t) => t.id === activeId);
+    const folderPath =
+      activeTerm?.folderPath ?? primaryFolder?.path ?? null;
+    setPanelVisible(true);
+    await spawnTerminalForFolder(folderPath);
   };
 
   return (
@@ -138,27 +125,3 @@ export function TerminalPanel() {
   );
 }
 
-function shortName(p: string): string {
-  const parts = p.split(/[\\/]/).filter(Boolean);
-  return parts[parts.length - 1] || p;
-}
-
-function cryptoRandomId(): string {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return (crypto as Crypto).randomUUID();
-  }
-  return `t-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-/**
- * Frontend fallback when backend shell detection fails — the backend does
- * the "pwsh if available" check, this just prevents us spawning an empty
- * command if the IPC itself errors out.
- */
-function defaultShellFallback(): string {
-  const platform =
-    typeof navigator !== "undefined" && /win/i.test(navigator.platform)
-      ? "windows"
-      : "unix";
-  return platform === "windows" ? "pwsh" : "/bin/bash";
-}
