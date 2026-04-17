@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { invoke } from "@tauri-apps/api/core";
 
 export interface TerminalInstance {
   /** Stable id used as the PTY key and event-channel suffix. */
@@ -95,3 +96,45 @@ export const useTerminalStore = create<TerminalState>()(
     }
   )
 );
+
+function defaultShellFallback(): string {
+  const isWindows =
+    typeof navigator !== "undefined" && /win/i.test(navigator.platform);
+  return isWindows ? "pwsh" : "/bin/bash";
+}
+
+function cryptoRandomId(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return (crypto as Crypto).randomUUID();
+  }
+  return `t-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function shortName(p: string | null): string {
+  if (!p) return "terminal";
+  const parts = p.split(/[\\/]/).filter(Boolean);
+  return parts[parts.length - 1] || p;
+}
+
+/**
+ * Always create a new terminal instance rooted at `folderPath`.
+ *
+ * Unlike `terminalForFolder` this does not de-duplicate — clicking the "+"
+ * button, running the "New Terminal" command, or using a folder's terminal
+ * shortcut all need to spawn a fresh PTY even when one already exists for
+ * that folder. The panel reveals itself and the new tab becomes active.
+ */
+export async function spawnTerminalForFolder(
+  folderPath: string | null
+): Promise<string> {
+  const shell = await invoke<string>("terminal_detect_shell").catch(() => "");
+  const id = cryptoRandomId();
+  useTerminalStore.getState().addTerminal({
+    id,
+    name: shortName(folderPath),
+    folderPath,
+    shell: shell || defaultShellFallback(),
+    started: false,
+  });
+  return id;
+}

@@ -16,7 +16,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { commandRegistry } from "../plugins/pluginManager";
 import { useFileStore } from "../store/fileStore";
 import { useUiStore } from "../store/uiStore";
-import { useTerminalStore } from "../store/terminalStore";
+import { useTerminalStore, spawnTerminalForFolder } from "../store/terminalStore";
 import { saveWorkspace, openWorkspace } from "../utils/workspace";
 import { getFileExtension, getFileName, getFileType } from "../utils/fileUtils";
 import { canFormat, formatContent } from "../utils/formatUtils";
@@ -282,33 +282,18 @@ export function registerBuiltinCommands(): void {
     keywords: ["terminal", "shell", "console", "new"],
     menu: { path: ["Terminal"], order: 10 },
     handler: async () => {
-      const store = useTerminalStore.getState();
+      // Root the new terminal in the currently-active terminal's folder if
+      // any, otherwise the primary workspace folder. Always spawns a fresh
+      // PTY so running the command repeatedly stacks terminals.
+      const termState = useTerminalStore.getState();
       const folders = useFileStore.getState().folders;
-      const primary = folders[0] ?? null;
-      // Re-use an existing terminal already bound to this folder rather
-      // than spawning a duplicate — matches the panel's "+" button.
-      const existing = store.terminalForFolder(primary?.path ?? null);
-      if (existing) {
-        store.setActiveTerminal(existing.id);
-        store.setPanelVisible(true);
-        return;
-      }
-      const shell = await invoke<string>("terminal_detect_shell").catch(() => "");
-      const id =
-        typeof crypto !== "undefined" && "randomUUID" in crypto
-          ? (crypto as Crypto).randomUUID()
-          : `t-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      const folderPath = primary?.path ?? null;
-      const name = folderPath
-        ? (folderPath.split(/[\\/]/).filter(Boolean).pop() ?? "terminal")
-        : "terminal";
-      store.addTerminal({
-        id,
-        name,
-        folderPath,
-        shell: shell || (useUiStore.getState().platform === "windows" ? "pwsh" : "/bin/bash"),
-        started: false,
-      });
+      const activeTerm = termState.terminals.find(
+        (t) => t.id === termState.activeTerminalId
+      );
+      const folderPath =
+        activeTerm?.folderPath ?? folders[0]?.path ?? null;
+      termState.setPanelVisible(true);
+      await spawnTerminalForFolder(folderPath);
     },
   });
 

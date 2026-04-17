@@ -5,12 +5,13 @@ import { open } from "@tauri-apps/plugin-dialog";
 import {
   ChevronRight, ChevronDown, FolderOpen, Folder, FolderPlus,
   ChevronsDownUp, Search, X, FilePlus, Star, Pencil, Trash2,
-  ExternalLink, Copy, Scissors, Clipboard,
+  ExternalLink, Copy, Scissors, Clipboard, TerminalSquare,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useFileStore } from "../../store/fileStore";
 import { useStarredStore } from "../../store/starredStore";
 import { useFileClipboardStore } from "../../store/fileClipboardStore";
+import { spawnTerminalForFolder } from "../../store/terminalStore";
 import { getFileName, isOpenable, loadFileForOpen } from "../../utils/fileUtils";
 import { FileIcon } from "../ui/FileIcon";
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from "../ui/ContextMenu";
@@ -557,6 +558,14 @@ function TreeNode({ entry, depth, collapseKey, parentPath }: TreeNodeProps) {
                 label="New Folder"
                 icon={<FolderPlus size={13} />}
                 onClick={() => handleNewItem("folder")}
+              />
+              <ContextMenuItem
+                label="Open Terminal Here"
+                icon={<TerminalSquare size={13} />}
+                onClick={() => {
+                  void spawnTerminalForFolder(entry.path);
+                  setContextMenu(null);
+                }}
               />
               <ContextMenuSeparator />
             </>
@@ -1265,6 +1274,17 @@ function FolderSection({ folder }: FolderSectionProps) {
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--color-text-muted)"; }}
           >
             <FolderPlus size={13} />
+          </button>
+
+          {/* Open Terminal rooted in this folder */}
+          <button
+            onClick={() => { void spawnTerminalForFolder(currentFolder); }}
+            title="Open Terminal Here"
+            style={{ background: "none", border: "none", padding: "2px 3px", cursor: "pointer", color: "var(--color-text-muted)", display: "flex", alignItems: "center", borderRadius: "var(--radius-sm)", flexShrink: 0 }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--color-text)"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--color-text-muted)"; }}
+          >
+            <TerminalSquare size={13} />
           </button>
 
           {/* Collapse All children */}
