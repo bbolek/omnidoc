@@ -26,6 +26,8 @@ import type {
 
 type Inner = "changes" | "log" | "branches";
 
+const EMPTY_BRANCHES: BranchInfo[] = [];
+
 export function GitPanel() {
   const repo = useActiveRepo();
   const refresh = useGitStore((s) => s.refresh);
@@ -234,7 +236,7 @@ function BranchDropdown({
   current: string | null;
   onClose: () => void;
 }) {
-  const branches = useGitStore((s) => s.repos[folder]?.branches ?? []);
+  const branches = useGitStore((s) => s.repos[folder]?.branches ?? EMPTY_BRANCHES);
   const checkout = useGitStore((s) => s.checkoutBranch);
   const create = useGitStore((s) => s.createBranch);
   const [query, setQuery] = useState("");

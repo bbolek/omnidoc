@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { useShallow } from "zustand/react/shallow";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
@@ -293,13 +294,17 @@ export const useGitStore = create<GitStoreState>((set, get) => {
   };
 });
 
+const EMPTY_REPO_STATE: RepoState = emptyRepoState();
+
 /** Selector convenience — returns the active repo's state (or a blank one). */
 export function useActiveRepo(): RepoState & { folder: string | null } {
-  return useGitStore((s) => {
-    const folder = s.activeRepo;
-    const repo = folder ? s.repos[folder] : undefined;
-    return { folder, ...(repo ?? emptyRepoState()) };
-  });
+  return useGitStore(
+    useShallow((s) => {
+      const folder = s.activeRepo;
+      const repo = folder ? s.repos[folder] : undefined;
+      return { folder, ...(repo ?? EMPTY_REPO_STATE) };
+    }),
+  );
 }
 
 /** Make the keys for a diff-tab id stable regardless of revision shape. */
