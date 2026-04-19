@@ -11,6 +11,7 @@ import { useGlobalKeyboard } from "./hooks/useKeyboard";
 import { useAllFileWatchers } from "./hooks/useFileWatcher";
 import { useUiStore } from "./store/uiStore";
 import { useFileStore } from "./store/fileStore";
+import { useGitStore } from "./store/gitStore";
 import { pluginManager } from "./plugins/pluginManager";
 import { registerBuiltinCommands } from "./commands/builtin";
 import { applyAppMenu } from "./commands/applyMenu";
@@ -89,6 +90,16 @@ function AppInner() {
     if (activeTab) {
       pluginManager.emitFileOpen(activeTab.path, activeTab.content);
     }
+  }, [activeTabId, tabs]);
+
+  // Keep the git store's active repo aligned with the active tab's owning
+  // workspace folder so the Git sidebar reflects whichever repo the user is
+  // looking at — JetBrains-style context switching.
+  useEffect(() => {
+    const activeTab = tabs.find((t) => t.id === activeTabId);
+    void useGitStore
+      .getState()
+      .setActiveRepo(activeTab?.folderPath ?? null);
   }, [activeTabId, tabs]);
 
   // Tauri drag-and-drop via window events

@@ -26,7 +26,32 @@ export interface Tab {
   fileInfo?: FileInfo;
   /** Absolute path of the workspace folder this tab belongs to, if any. */
   folderPath?: string;
+  /**
+   * Tab kind. `"file"` (default) is the normal document tab; `"diff"` is a
+   * synthetic git diff tab that renders `DiffViewer` instead of routing by
+   * extension. Synthetic tabs are never persisted to the session snapshot.
+   */
+  kind?: "file" | "diff";
+  /** Populated only for `kind === "diff"`. */
+  diff?: DiffTabPayload;
 }
+
+export interface DiffTabPayload {
+  /** Repo root (same value used for invoke calls). */
+  folder: string;
+  /** Path of the file being diffed, relative to the repo root (forward slashes). */
+  relPath: string;
+  /** Display name shown in the tab. */
+  displayName: string;
+  /** Which diff to compute. Mirrors the Rust `DiffRev` enum. */
+  revision: DiffRevision;
+}
+
+export type DiffRevision =
+  | { kind: "workingToIndex" }
+  | { kind: "indexToHead" }
+  | { kind: "workingToHead" }
+  | { kind: "commit"; sha: string };
 
 export interface RecentFile {
   path: string;
@@ -85,7 +110,66 @@ export interface TocHeading {
   slug: string;
 }
 
-export type SidebarPanel = "tree" | "toc" | "recent" | "frontmatter" | "tags" | "plugins" | (string & {});
+export type SidebarPanel =
+  | "tree"
+  | "toc"
+  | "recent"
+  | "frontmatter"
+  | "tags"
+  | "plugins"
+  | "git"
+  | (string & {});
+
+// ── Git ──────────────────────────────────────────────────────────────────────
+
+export interface GitStatusEntry {
+  path: string;
+  /** "modified" | "untracked" | "staged" | "deleted" | "ignored" | "renamed" */
+  status: string;
+  /** Index (staged) status character from porcelain; empty if not staged. */
+  index: string;
+  /** Worktree (unstaged) status character from porcelain. */
+  worktree: string;
+  /** Path relative to the repo root, forward slashes. */
+  rel_path: string;
+}
+
+export interface BranchInfo {
+  name: string;
+  is_current: boolean;
+  is_remote: boolean;
+  upstream: string | null;
+  ahead: number;
+  behind: number;
+}
+
+export interface CommitInfo {
+  sha: string;
+  short_sha: string;
+  author_name: string;
+  author_email: string;
+  /** Unix timestamp in seconds. */
+  time: number;
+  subject: string;
+  parents: string[];
+}
+
+export interface ChangedFile {
+  status: string;
+  path: string;
+  old_path: string | null;
+}
+
+export interface RemoteInfo {
+  name: string;
+  url: string;
+}
+
+export interface GitRemoteOutput {
+  ok: boolean;
+  stdout: string;
+  stderr: string;
+}
 export type SidebarPosition = "left" | "right";
 export type ColorScheme = "light" | "dark" | "system";
 

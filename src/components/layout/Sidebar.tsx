@@ -9,6 +9,7 @@ import { TagPanel } from "../sidebar/TagPanel";
 import { RecentFiles } from "../sidebar/RecentFiles";
 import { PluginsPanel } from "../plugins/PluginsPanel";
 import { GlobalSearchPanel } from "../sidebar/GlobalSearchPanel";
+import { GitPanel } from "../sidebar/GitPanel";
 import { ErrorBoundary } from "../ui/ErrorBoundary";
 import type { SidebarPosition } from "../../types";
 
@@ -66,6 +67,7 @@ export function Sidebar({ position }: Props) {
     toc: "Contents",
     recent: "Recent",
     search: "Search",
+    git: "Git",
     frontmatter: "Frontmatter",
     tags: "Tags",
     plugins: "Plugins",
@@ -101,6 +103,9 @@ export function Sidebar({ position }: Props) {
         )}
         {activeSidebarPanel === "search" && (
           <ErrorBoundary label="Search"><GlobalSearchPanel /></ErrorBoundary>
+        )}
+        {activeSidebarPanel === "git" && (
+          <ErrorBoundary label="Git"><GitPanel /></ErrorBoundary>
         )}
         {activeSidebarPanel === "frontmatter" && (
           <ErrorBoundary label="Frontmatter">
