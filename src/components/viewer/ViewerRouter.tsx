@@ -16,6 +16,7 @@ import { ImageViewer } from "./ImageViewer";
 import { VideoViewer } from "./VideoViewer";
 import { ArchiveViewer } from "./ArchiveViewer";
 import { VttViewer } from "./VttViewer";
+import { DiffViewer } from "./DiffViewer";
 import type { Tab } from "../../types";
 import type { ViewerRegistration } from "../../plugins/api";
 
@@ -52,6 +53,25 @@ export function ViewerRouter({ tab }: Props) {
   const pluginViewer = pluginManager.getViewerForExtension(ext);
   const minimapVisible = useUiStore((s) => s.minimapVisible);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Synthetic diff tabs short-circuit the usual extension-based dispatch —
+  // their `path` is the document being diffed but the content must come from
+  // `git diff`, not the filesystem.
+  if (tab.kind === "diff" && tab.diff) {
+    return (
+      <div style={{ position: "relative", height: "100%" }}>
+        <motion.div
+          key={tab.id}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.15 }}
+          style={{ height: "100%" }}
+        >
+          <DiffViewer tab={tab} />
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ position: "relative", height: "100%" }}>

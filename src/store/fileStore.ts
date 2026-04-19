@@ -9,6 +9,7 @@ import type {
   FileInfo,
   WorkspaceFolder,
   WorkspaceFile,
+  DiffRevision,
 } from "../types";
 import { nextColorIndex } from "../utils/folderColors";
 import { getFileName } from "../utils/fileUtils";
@@ -108,6 +109,17 @@ interface FileState {
   getActiveTab: () => Tab | null;
   /** Re-open tabs from the last session. Call once on app startup. */
   restoreSession: () => Promise<void>;
+  /**
+   * Open (or focus) a synthetic git-diff tab for `relPath` in `folder`. The
+   * tab id is derived from the inputs so re-requesting the same diff reuses
+   * the existing tab instead of stacking duplicates.
+   */
+  openDiffTab: (
+    folder: string,
+    relPath: string,
+    revision: DiffRevision,
+    displayName?: string,
+  ) => void;
 }
 
 let tabCounter = 0;
@@ -474,6 +486,33 @@ export const useFileStore = create<FileState>()(
 
       setActiveTab: (id) => set({ activeTabId: id }),
 
+      openDiffTab: (folder, relPath, revision, displayName) => {
+        const revKey =
+          revision.kind === "commit" ? `commit:${revision.sha}` : revision.kind;
+        const id = `diff:${folder}:${relPath}:${revKey}`;
+        const existing = get().tabs.find((t) => t.id === id);
+        if (existing) {
+          set({ activeTabId: id });
+          return;
+        }
+        const tab: Tab = {
+          id,
+          path: `${folder}/${relPath}`,
+          name: `Δ ${displayName ?? relPath.split("/").pop() ?? relPath}`,
+          content: "",
+          isDirty: false,
+          folderPath: folder,
+          kind: "diff",
+          diff: {
+            folder,
+            relPath,
+            displayName: displayName ?? relPath,
+            revision,
+          },
+        };
+        set((state) => ({ tabs: [...state.tabs, tab], activeTabId: id }));
+      },
+
       nextTab: () => {
         const { tabs, activeTabId } = get();
         if (tabs.length < 2) return;
@@ -648,11 +687,15 @@ export const useFileStore = create<FileState>()(
         // from the persisted store key directly.
         openFolder: state.openFolder,
         lastSession: {
-          tabs: state.tabs.map((t) => ({
-            path: t.path,
-            name: t.name,
-            folderPath: t.folderPath,
-          })),
+          // Synthetic diff tabs are computed on-demand from git state and
+          // shouldn't be restored as regular file tabs on relaunch.
+          tabs: state.tabs
+            .filter((t) => (t.kind ?? "file") === "file")
+            .map((t) => ({
+              path: t.path,
+              name: t.name,
+              folderPath: t.folderPath,
+            })),
           activePath: state.tabs.find((t) => t.id === state.activeTabId)?.path ?? null,
         },
       }),
