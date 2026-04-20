@@ -150,7 +150,21 @@ export function TerminalView({
       fitRef.current = null;
       unlisteners.forEach((u) => u());
       invoke("terminal_kill", { id: terminalId }).catch(() => {});
-      term.dispose();
+      // Defer dispose() by a tick. xterm schedules its first render via RAF
+      // during open(); disposing synchronously fires that RAF against a
+      // torn-down RenderService and throws "Cannot read properties of
+      // undefined (reading 'dimensions')". That throw happens inside xterm
+      // internals, so the try/catch on our fit() call can't catch it.
+      // Running dispose on the next frame lets xterm's own initial render
+      // complete on a still-live instance first.
+      const pending = term;
+      requestAnimationFrame(() => {
+        try {
+          pending.dispose();
+        } catch {
+          /* teardown race — ignore */
+        }
+      });
       startedRef.current = false;
     };
     // Spawn exactly once per id; ignore incidental prop changes.
