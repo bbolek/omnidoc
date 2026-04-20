@@ -46,7 +46,7 @@ export function KeyboardShortcuts() {
     const byCategory = new Map<string, { keys: string[]; description: string }[]>();
     for (const cmd of commands) {
       if (!cmd.shortcut) continue;
-      const cat = cmd.category ?? (cmd.pluginId === "core" ? "Other" : "Plugins");
+      const cat = cmd.category ?? "Other";
       const bucket = byCategory.get(cat) ?? [];
       bucket.push({
         keys: [formatForDisplay(cmd.shortcut, isMac)],
@@ -55,7 +55,7 @@ export function KeyboardShortcuts() {
       byCategory.set(cat, bucket);
     }
     // Sort categories by the canonical order, with unknown categories
-    // (e.g. plugin contributions) appended alphabetically at the end.
+    // appended alphabetically at the end.
     const known = CATEGORY_ORDER.filter((c) => byCategory.has(c));
     const unknown = [...byCategory.keys()]
       .filter((c) => !CATEGORY_ORDER.includes(c))

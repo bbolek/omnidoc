@@ -17,13 +17,10 @@ export type MenuNode =
   | { kind: "separator" }
   /**
    * A slot that expands at render time:
-   *   - "plugins":     all commands whose `pluginId !== "core"`, grouped by
-   *                    `menu.path[1]` if present (so a plugin can group its
-   *                    own commands under its name).
    *   - "recentFiles": last N files from `useFileStore.recentFiles` as
    *                    `Open Recent` entries.
    */
-  | { kind: "dynamic"; source: "plugins" | "recentFiles" };
+  | { kind: "dynamic"; source: "recentFiles" };
 
 export interface MenuTree {
   label: string;
@@ -96,11 +93,6 @@ export const APP_MENU: MenuTree[] = [
       { kind: "command", id: "go.quickOpen" },
       { kind: "command", id: "go.commandPalette" },
     ],
-  },
-  {
-    label: "Plugins",
-    mnemonic: "P",
-    items: [{ kind: "dynamic", source: "plugins" }],
   },
   {
     label: "Help",

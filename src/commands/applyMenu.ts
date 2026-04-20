@@ -4,8 +4,7 @@
  *   - On macOS: serialize `APP_MENU` (resolving every command id against the
  *     registry, expanding `dynamic` sources, evaluating `when` gates) and ship
  *     the result to Rust via the `set_app_menu` Tauri command. Re-runs whenever
- *     the registry changes (debounced) so plugin commands appear in the
- *     Plugins submenu live without a restart.
+ *     the registry changes (debounced).
  *
  *   - On every platform: install one `menu:invoke` event listener that
  *     dispatches the original command id back through the registry. The Rust
@@ -86,51 +85,6 @@ function serializeNodes(
           });
         }
       }
-    } else if (node.kind === "dynamic" && node.source === "plugins") {
-      const plugin = commands.filter((c) => c.pluginId !== "core");
-      if (plugin.length === 0) {
-        out.push({
-          kind: "command",
-          id: "__noPlugins",
-          label: "No plugin commands",
-          enabled: false,
-        });
-        continue;
-      }
-      // Group by `menu.path[1]` so a plugin's commands cluster under its name.
-      const grouped = new Map<string | null, typeof plugin>();
-      for (const c of plugin) {
-        const key = c.menu?.path?.[1] ?? null;
-        const bucket = grouped.get(key) ?? [];
-        bucket.push(c);
-        grouped.set(key, bucket);
-      }
-      for (const c of grouped.get(null) ?? []) {
-        out.push({
-          kind: "command",
-          id: c.id,
-          label: c.label,
-          accelerator: c.shortcut ? toTauriAccelerator(c.shortcut) : undefined,
-          enabled: !c.when || c.when(),
-        });
-      }
-      const groupNames = [...grouped.keys()]
-        .filter((k): k is string => !!k)
-        .sort();
-      for (const name of groupNames) {
-        const items = grouped.get(name)!;
-        out.push({
-          kind: "submenu",
-          label: name,
-          items: items.map((c) => ({
-            kind: "command",
-            id: c.id,
-            label: c.label,
-            accelerator: c.shortcut ? toTauriAccelerator(c.shortcut) : undefined,
-            enabled: !c.when || c.when(),
-          })),
-        });
-      }
     }
   }
   return out;
@@ -199,7 +153,7 @@ export async function applyAppMenu(): Promise<void> {
 
   scheduleApply();
 
-  // Re-apply whenever the registry changes (plugins load/unload).
+  // Re-apply whenever the registry changes.
   commandRegistry.subscribe(() => scheduleApply());
 
   // Recent files change independently of the registry — re-apply on those too.

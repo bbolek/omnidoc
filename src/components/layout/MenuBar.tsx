@@ -99,57 +99,6 @@ function resolveItems(
           });
         }
       }
-    } else if (node.kind === "dynamic" && node.source === "plugins") {
-      const plugin = commands.filter((c) => c.pluginId !== "core");
-      if (plugin.length === 0) {
-        out.push({
-          kind: "command",
-          id: "__noPlugins",
-          label: "No plugin commands",
-          enabled: false,
-          onClick: () => {},
-        });
-      } else {
-        // Group by `menu.path[1]` if set (path is e.g. ["Plugins", "Foo Plugin"]).
-        const grouped = new Map<string | null, typeof plugin>();
-        for (const c of plugin) {
-          const key = c.menu?.path?.[1] ?? null;
-          const bucket = grouped.get(key) ?? [];
-          bucket.push(c);
-          grouped.set(key, bucket);
-        }
-        // Ungrouped first, then named submenus alphabetically.
-        const ungrouped = grouped.get(null) ?? [];
-        for (const c of ungrouped) {
-          const enabled = !c.when || c.when();
-          out.push({
-            kind: "command",
-            id: c.id,
-            label: c.label,
-            shortcut: c.shortcut,
-            enabled,
-            onClick: () => commandRegistry.executeCommand(c.id),
-          });
-        }
-        const groupNames = [...grouped.keys()]
-          .filter((k): k is string => !!k)
-          .sort();
-        for (const name of groupNames) {
-          const items = grouped.get(name)!;
-          out.push({
-            kind: "submenu",
-            label: name,
-            items: items.map((c) => ({
-              kind: "command",
-              id: c.id,
-              label: c.label,
-              shortcut: c.shortcut,
-              enabled: !c.when || c.when(),
-              onClick: () => commandRegistry.executeCommand(c.id),
-            })),
-          });
-        }
-      }
     }
   }
   return out;

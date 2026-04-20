@@ -116,7 +116,6 @@ export type SidebarPanel =
   | "recent"
   | "frontmatter"
   | "tags"
-  | "plugins"
   | "git"
   | (string & {});
 

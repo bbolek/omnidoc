@@ -1,13 +1,11 @@
-import { useEffect, useRef, useCallback, useState } from "react";
+import { useRef, useCallback } from "react";
 import { useUiStore } from "../../store/uiStore";
 import { useFileStore } from "../../store/fileStore";
-import { pluginManager } from "../../plugins/pluginManager";
 import { FileTree } from "../sidebar/FileTree";
 import { TOCPanel } from "../sidebar/TOCPanel";
 import { FrontmatterPanel } from "../sidebar/FrontmatterPanel";
 import { TagPanel } from "../sidebar/TagPanel";
 import { RecentFiles } from "../sidebar/RecentFiles";
-import { PluginsPanel } from "../plugins/PluginsPanel";
 import { GlobalSearchPanel } from "../sidebar/GlobalSearchPanel";
 import { GitPanel } from "../sidebar/GitPanel";
 import { ErrorBoundary } from "../ui/ErrorBoundary";
@@ -21,10 +19,6 @@ export function Sidebar({ position }: Props) {
   const { activeSidebarPanel, sidebarWidth, setSidebarWidth } = useUiStore();
   const { tabs, activeTabId } = useFileStore();
   const activeTab = tabs.find((t) => t.id === activeTabId);
-
-  // Re-render when plugin panels change
-  const [, setTick] = useState(0);
-  useEffect(() => pluginManager.subscribe(() => setTick((n) => n + 1)), []);
 
   const isResizing = useRef(false);
   const startX = useRef(0);
@@ -57,11 +51,6 @@ export function Sidebar({ position }: Props) {
     [sidebarWidth, setSidebarWidth, position]
   );
 
-  // Find a plugin-defined panel matching the active id
-  const pluginPanel = pluginManager
-    .getAllSidebarPanels()
-    .find((p) => p.id === activeSidebarPanel);
-
   const panelTitles: Record<string, string> = {
     tree: "Explorer",
     toc: "Contents",
@@ -70,13 +59,9 @@ export function Sidebar({ position }: Props) {
     git: "Git",
     frontmatter: "Frontmatter",
     tags: "Tags",
-    plugins: "Plugins",
   };
 
-  const headerTitle =
-    panelTitles[activeSidebarPanel] ??
-    pluginPanel?.label ??
-    "Explorer";
+  const headerTitle = panelTitles[activeSidebarPanel] ?? "Explorer";
 
   return (
     <div
@@ -87,9 +72,9 @@ export function Sidebar({ position }: Props) {
 
       <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
         {/* Each panel sits behind its own ErrorBoundary so a misbehaving
-            panel (broken plugin mount, malformed file content, runaway
-            store update) becomes a contained inline notice instead of
-            propagating to the top-level boundary and blanking the app. */}
+            panel (malformed file content, runaway store update) becomes a
+            contained inline notice instead of propagating to the top-level
+            boundary and blanking the app. */}
         {activeSidebarPanel === "tree" && (
           <ErrorBoundary label="Explorer"><FileTree /></ErrorBoundary>
         )}
@@ -118,14 +103,6 @@ export function Sidebar({ position }: Props) {
         {activeSidebarPanel === "tags" && (
           <ErrorBoundary label="Tags"><TagPanel /></ErrorBoundary>
         )}
-        {activeSidebarPanel === "plugins" && (
-          <ErrorBoundary label="Plugins"><PluginsPanel /></ErrorBoundary>
-        )}
-        {pluginPanel && activeSidebarPanel === pluginPanel.id && (
-          <ErrorBoundary label={`Plugin panel "${pluginPanel.label}"`}>
-            <PluginSidebarPanel panelId={pluginPanel.id} mount={pluginPanel.mount} />
-          </ErrorBoundary>
-        )}
       </div>
 
       {/* Resize handle */}
@@ -135,30 +112,5 @@ export function Sidebar({ position }: Props) {
         onMouseDown={onMouseDown}
       />
     </div>
-  );
-}
-
-// ── Plugin sidebar panel (DOM-based mount/unmount) ────────────────────────────
-
-interface PluginPanelProps {
-  panelId: string;
-  mount: (container: HTMLElement) => () => void;
-}
-
-function PluginSidebarPanel({ panelId, mount }: PluginPanelProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const cleanup = mount(containerRef.current);
-    return cleanup;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [panelId]);
-
-  return (
-    <div
-      ref={containerRef}
-      style={{ flex: 1, overflow: "auto" }}
-    />
   );
 }
