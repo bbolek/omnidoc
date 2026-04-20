@@ -20,7 +20,6 @@ import { showToast } from "../ui/Toast";
 import type {
   BranchInfo,
   CommitInfo,
-  DiffRevision,
   GitStatusEntry,
 } from "../../types";
 
@@ -36,7 +35,7 @@ export function GitPanel() {
   if (!repo.folder) {
     return (
       <EmptyState
-        icon={<FolderGit2 size={28} />}
+        icon={<FolderGit2 size={28} strokeWidth={1.5} />}
         title="No folder"
         body="Open a folder to see its git status here."
       />
@@ -45,7 +44,7 @@ export function GitPanel() {
   if (repo.isRepo === null) {
     return (
       <EmptyState
-        icon={<RefreshCw size={24} className="spin" />}
+        icon={<RefreshCw size={24} strokeWidth={1.5} className="spin" />}
         title="Loading…"
         body={repo.folder}
       />
@@ -54,7 +53,7 @@ export function GitPanel() {
   if (repo.isRepo === false) {
     return (
       <EmptyState
-        icon={<FolderGit2 size={28} />}
+        icon={<FolderGit2 size={28} strokeWidth={1.5} />}
         title="Not a git repo"
         body={repo.folder}
       />
@@ -62,15 +61,7 @@ export function GitPanel() {
   }
 
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100%",
-        minHeight: 0,
-        fontSize: 12.5,
-      }}
-    >
+    <div className="git-panel">
       <HeaderBar folder={repo.folder} onRefresh={() => refresh(repo.folder!)} />
       <BranchChip folder={repo.folder} />
       <InnerTabs inner={inner} setInner={setInner} />
@@ -101,16 +92,32 @@ function EmptyState({
         alignItems: "center",
         justifyContent: "center",
         gap: 10,
-        padding: 20,
+        padding: 24,
         color: "var(--color-text-muted)",
         textAlign: "center",
       }}
     >
       {icon}
-      <div style={{ fontWeight: 600, fontSize: 13, color: "var(--color-text)" }}>
+      <div
+        style={{
+          fontWeight: 600,
+          fontSize: 13,
+          color: "var(--color-text)",
+        }}
+      >
         {title}
       </div>
-      {body && <div style={{ fontSize: 11, wordBreak: "break-all" }}>{body}</div>}
+      {body && (
+        <div
+          style={{
+            fontSize: 11,
+            wordBreak: "break-all",
+            lineHeight: 1.45,
+          }}
+        >
+          {body}
+        </div>
+      )}
     </div>
   );
 }
@@ -120,33 +127,14 @@ function EmptyState({
 function HeaderBar({ folder, onRefresh }: { folder: string; onRefresh: () => void }) {
   const name = folder.split(/[\\/]/).filter(Boolean).pop() ?? folder;
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 6,
-        padding: "6px 10px",
-        borderBottom: "1px solid var(--color-border)",
-      }}
-    >
-      <FolderGit2 size={13} style={{ color: "var(--color-text-muted)" }} />
-      <div
-        style={{
-          flex: 1,
-          fontWeight: 600,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-        }}
-        title={folder}
-      >
-        {name}
-      </div>
+    <div className="git-panel-header">
+      <span className="git-panel-header-title" title={folder}>
+        Source Control · {name}
+      </span>
       <button
         type="button"
-        className="activity-btn"
+        className="git-panel-icon-btn"
         title="Refresh"
-        style={{ padding: 4 }}
         onClick={onRefresh}
       >
         <RefreshCw size={13} />
@@ -176,45 +164,18 @@ function BranchChip({ folder }: { folder: string }) {
   }, [open]);
 
   return (
-    <div
-      ref={ref}
-      style={{
-        position: "relative",
-        padding: "6px 10px",
-        borderBottom: "1px solid var(--color-border)",
-      }}
-    >
+    <div ref={ref} className="git-branch-bar">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-          width: "100%",
-          padding: "4px 8px",
-          background: "var(--color-bg-subtle, rgba(127,127,127,0.08))",
-          border: "1px solid var(--color-border)",
-          borderRadius: 4,
-          color: "var(--color-text)",
-          cursor: "pointer",
-          fontSize: 12,
-        }}
+        className="git-branch-chip"
         title="Switch / create branch"
       >
-        <GitBranch size={13} />
-        <span
-          style={{
-            flex: 1,
-            textAlign: "left",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-        >
+        <GitBranch size={13} style={{ color: "var(--color-text-muted)" }} />
+        <span className="git-branch-chip-name">
           {currentBranch ?? "(detached HEAD)"}
         </span>
-        <ChevronDown size={12} />
+        <ChevronDown size={12} style={{ color: "var(--color-text-muted)" }} />
       </button>
       {open && (
         <BranchDropdown
@@ -266,42 +227,20 @@ function BranchDropdown({
   };
 
   return (
-    <div
-      style={{
-        position: "absolute",
-        top: "100%",
-        left: 10,
-        right: 10,
-        zIndex: 50,
-        maxHeight: 360,
-        display: "flex",
-        flexDirection: "column",
-        background: "var(--color-bg)",
-        border: "1px solid var(--color-border)",
-        boxShadow: "0 4px 16px rgba(0,0,0,0.25)",
-        borderRadius: 4,
-      }}
-    >
+    <div className="git-branch-dropdown">
       <input
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Search branches…"
         autoFocus
-        style={{
-          padding: "6px 8px",
-          background: "transparent",
-          border: "none",
-          borderBottom: "1px solid var(--color-border)",
-          color: "var(--color-text)",
-          fontSize: 12,
-          outline: "none",
-        }}
+        className="git-panel-input-flush"
       />
       <div style={{ flex: 1, overflow: "auto", minHeight: 0 }}>
         {filtered.map((b) => (
           <button
             key={`${b.is_remote}-${b.name}`}
             type="button"
+            className="git-panel-dropdown-item"
             onClick={async () => {
               if (b.name === current) {
                 onClose();
@@ -314,19 +253,6 @@ function BranchDropdown({
               } catch (e) {
                 showToast({ message: String(e), type: "error" });
               }
-            }}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              width: "100%",
-              padding: "5px 8px",
-              background: "transparent",
-              border: "none",
-              textAlign: "left",
-              color: "var(--color-text)",
-              cursor: "pointer",
-              fontSize: 12,
             }}
           >
             <Check
@@ -348,19 +274,7 @@ function BranchDropdown({
         <button
           type="button"
           onClick={() => setCreating(true)}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "6px 8px",
-            background: "transparent",
-            border: "none",
-            borderTop: "1px solid var(--color-border)",
-            color: "var(--color-accent, var(--color-text))",
-            cursor: "pointer",
-            fontSize: 12,
-            textAlign: "left",
-          }}
+          className="git-panel-dropdown-action"
         >
           <Plus size={12} />
           New branch…
@@ -368,8 +282,8 @@ function BranchDropdown({
       ) : (
         <div
           style={{
-            padding: 8,
-            borderTop: "1px solid var(--color-border)",
+            padding: 10,
+            borderTop: "1px solid var(--color-border-muted)",
             display: "flex",
             flexDirection: "column",
             gap: 6,
@@ -384,12 +298,13 @@ function BranchDropdown({
               if (e.key === "Enter") submitCreate();
               if (e.key === "Escape") setCreating(false);
             }}
-            style={inputStyle}
+            className="git-panel-input"
           />
           <select
             value={fromRef}
             onChange={(e) => setFromRef(e.target.value)}
-            style={{ ...inputStyle, cursor: "pointer" }}
+            className="git-panel-input"
+            style={{ cursor: "pointer" }}
           >
             <option value="HEAD">From HEAD ({current ?? "?"})</option>
             {branches
@@ -400,14 +315,7 @@ function BranchDropdown({
                 </option>
               ))}
           </select>
-          <label
-            style={{
-              display: "flex",
-              gap: 6,
-              fontSize: 11,
-              color: "var(--color-text-muted)",
-            }}
-          >
+          <label className="git-panel-checkbox-row">
             <input
               type="checkbox"
               checked={checkoutAfter}
@@ -419,14 +327,16 @@ function BranchDropdown({
             <button
               type="button"
               onClick={submitCreate}
-              style={{ ...btnPrimary, flex: 1 }}
+              className="git-panel-btn-primary"
+              style={{ flex: 1 }}
             >
               Create
             </button>
             <button
               type="button"
               onClick={() => setCreating(false)}
-              style={{ ...btnGhost, flex: 1 }}
+              className="git-panel-btn-ghost"
+              style={{ flex: 1 }}
             >
               Cancel
             </button>
@@ -446,12 +356,7 @@ function InnerTabs({ inner, setInner }: { inner: Inner; setInner: (v: Inner) => 
     { id: "branches", label: "Branches" },
   ];
   return (
-    <div
-      style={{
-        display: "flex",
-        borderBottom: "1px solid var(--color-border)",
-      }}
-    >
+    <div className="git-panel-tabs">
       {items.map((it) => {
         const active = it.id === inner;
         return (
@@ -459,21 +364,7 @@ function InnerTabs({ inner, setInner }: { inner: Inner; setInner: (v: Inner) => 
             key={it.id}
             type="button"
             onClick={() => setInner(it.id)}
-            style={{
-              flex: 1,
-              padding: "6px 4px",
-              background: "transparent",
-              border: "none",
-              color: active ? "var(--color-text)" : "var(--color-text-muted)",
-              borderBottom: active
-                ? "2px solid var(--color-accent, var(--color-text))"
-                : "2px solid transparent",
-              fontSize: 11,
-              fontWeight: active ? 600 : 400,
-              cursor: "pointer",
-              textTransform: "uppercase",
-              letterSpacing: "0.05em",
-            }}
+            className={`git-panel-tab${active ? " active" : ""}`}
           >
             {it.label}
           </button>
@@ -525,7 +416,7 @@ function ChangesTab() {
               <button
                 type="button"
                 onClick={unstageAll}
-                style={linkBtn}
+                className="git-panel-link-btn"
                 title="Unstage all"
               >
                 Unstage all
@@ -556,7 +447,7 @@ function ChangesTab() {
               <button
                 type="button"
                 onClick={() => stage(folder, unstaged.map((s) => s.rel_path))}
-                style={linkBtn}
+                className="git-panel-link-btn"
                 title="Stage all"
               >
                 Stage all
@@ -600,7 +491,7 @@ function ChangesTab() {
               <button
                 type="button"
                 onClick={() => stage(folder, untracked.map((s) => s.rel_path))}
-                style={linkBtn}
+                className="git-panel-link-btn"
               >
                 Add all
               </button>
@@ -637,8 +528,13 @@ function ChangesTab() {
 function stageAllButton(total: number, onClick: () => void) {
   if (total === 0) return null;
   return (
-    <div style={{ padding: "6px 10px" }}>
-      <button type="button" onClick={onClick} style={btnGhost}>
+    <div style={{ padding: "6px 10px 10px" }}>
+      <button
+        type="button"
+        onClick={onClick}
+        className="git-panel-btn-ghost"
+        style={{ width: "100%" }}
+      >
         Stage everything ({total})
       </button>
     </div>
@@ -694,20 +590,11 @@ function RemoteBar({ folder }: { folder: string }) {
   };
 
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 6,
-        padding: "6px 10px",
-        borderBottom: "1px solid var(--color-border)",
-        fontSize: 11,
-      }}
-    >
+    <div className="git-panel-remote-bar">
       <button
         type="button"
         onClick={handleFetch}
-        style={toolBtn}
+        className="git-panel-tool-btn"
         title="git fetch"
       >
         <Download size={12} /> Fetch
@@ -716,24 +603,24 @@ function RemoteBar({ folder }: { folder: string }) {
         type="button"
         onClick={handlePull}
         disabled={!current}
-        style={toolBtn}
+        className="git-panel-tool-btn"
         title="git pull"
       >
         <GitPullRequest size={12} /> Pull
         {branchInfo && branchInfo.behind > 0 && (
-          <span style={badge}>{branchInfo.behind}</span>
+          <span className="git-panel-badge">{branchInfo.behind}</span>
         )}
       </button>
       <button
         type="button"
         onClick={handlePush}
         disabled={!current}
-        style={toolBtn}
+        className="git-panel-tool-btn"
         title="git push"
       >
         <Upload size={12} /> Push
         {branchInfo && branchInfo.ahead > 0 && (
-          <span style={badge}>{branchInfo.ahead}</span>
+          <span className="git-panel-badge">{branchInfo.ahead}</span>
         )}
       </button>
     </div>
@@ -751,20 +638,8 @@ function Section({
 }) {
   return (
     <div>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 4,
-          padding: "4px 10px",
-          fontSize: 10,
-          textTransform: "uppercase",
-          letterSpacing: "0.05em",
-          color: "var(--color-text-muted)",
-          background: "var(--color-bg-subtle, rgba(127,127,127,0.05))",
-        }}
-      >
-        <span style={{ flex: 1 }}>{label}</span>
+      <div className="git-panel-section-header">
+        <span className="git-panel-section-header-label">{label}</span>
         {actions}
       </div>
       {children}
@@ -773,18 +648,7 @@ function Section({
 }
 
 function EmptyRow({ text }: { text: string }) {
-  return (
-    <div
-      style={{
-        padding: "6px 10px",
-        fontSize: 11,
-        color: "var(--color-text-muted)",
-        fontStyle: "italic",
-      }}
-    >
-      {text}
-    </div>
-  );
+  return <div className="git-panel-empty-row">{text}</div>;
 }
 
 function StatusRow({
@@ -800,88 +664,60 @@ function StatusRow({
   onPrimary: () => void;
   onDiscard?: () => void;
 }) {
-  const [hover, setHover] = useState(false);
   const letter = statusLetter(entry, side);
-  const color = statusColor(entry.status);
+  const statusClass = statusColorClass(entry.status);
   return (
     <div
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
+      className="git-panel-row"
       onDoubleClick={onDiff}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 6,
-        padding: "3px 10px",
-        cursor: onDiff ? "pointer" : "default",
-        background: hover ? "var(--color-bg-hover, rgba(127,127,127,0.08))" : "transparent",
-      }}
       title={entry.rel_path}
+      style={{ cursor: onDiff ? "pointer" : "default" }}
     >
+      <span className={`git-panel-row-status ${statusClass}`}>{letter}</span>
       <span
-        style={{
-          width: 14,
-          textAlign: "center",
-          color,
-          fontWeight: 600,
-          fontSize: 10,
-        }}
-      >
-        {letter}
-      </span>
-      <span
-        style={{
-          flex: 1,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-          color: entry.status === "deleted" ? "var(--color-text-muted)" : undefined,
-          textDecoration: entry.status === "deleted" ? "line-through" : undefined,
-        }}
+        className={`git-panel-row-name${entry.status === "deleted" ? " deleted" : ""}`}
       >
         {entry.rel_path}
       </span>
-      {hover && (
-        <div style={{ display: "flex", gap: 2 }}>
-          {onDiff && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDiff();
-              }}
-              style={iconBtn}
-              title="Open diff"
-            >
-              <CornerDownRight size={11} />
-            </button>
-          )}
-          {onDiscard && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDiscard();
-              }}
-              style={iconBtn}
-              title="Discard changes"
-            >
-              <Trash2 size={11} />
-            </button>
-          )}
+      <div className="git-panel-row-actions">
+        {onDiff && (
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              onPrimary();
+              onDiff();
             }}
-            style={iconBtn}
-            title={side === "staged" ? "Unstage" : "Stage"}
+            className="git-panel-icon-btn"
+            title="Open diff"
           >
-            {side === "staged" ? <X size={11} /> : <Plus size={11} />}
+            <CornerDownRight size={11} />
           </button>
-        </div>
-      )}
+        )}
+        {onDiscard && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDiscard();
+            }}
+            className="git-panel-icon-btn"
+            title="Discard changes"
+          >
+            <Trash2 size={11} />
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onPrimary();
+          }}
+          className="git-panel-icon-btn"
+          title={side === "staged" ? "Unstage" : "Stage"}
+        >
+          {side === "staged" ? <X size={11} /> : <Plus size={11} />}
+        </button>
+      </div>
     </div>
   );
 }
@@ -902,15 +738,7 @@ function CommitBox({
   onCommit: () => void;
 }) {
   return (
-    <div
-      style={{
-        borderTop: "1px solid var(--color-border)",
-        padding: 8,
-        display: "flex",
-        flexDirection: "column",
-        gap: 6,
-      }}
-    >
+    <div className="git-panel-commit-box">
       <textarea
         value={message}
         onChange={(e) => setMessage(e.target.value)}
@@ -922,21 +750,9 @@ function CommitBox({
           }
         }}
         rows={3}
-        style={{
-          ...inputStyle,
-          resize: "vertical",
-          fontFamily: "inherit",
-        }}
+        className="git-panel-commit-textarea"
       />
-      <label
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-          fontSize: 11,
-          color: "var(--color-text-muted)",
-        }}
-      >
+      <label className="git-panel-checkbox-row">
         <input
           type="checkbox"
           checked={amend}
@@ -948,14 +764,9 @@ function CommitBox({
         type="button"
         onClick={onCommit}
         disabled={!canCommit}
-        style={{
-          ...btnPrimary,
-          opacity: canCommit ? 1 : 0.5,
-          cursor: canCommit ? "pointer" : "not-allowed",
-        }}
+        className="git-panel-btn-primary"
       >
-        <GitCommit size={12} />{" "}
-        {amend ? "Amend commit" : "Commit"}
+        <GitCommit size={12} /> {amend ? "Amend commit" : "Commit"}
       </button>
     </div>
   );
@@ -979,14 +790,17 @@ function LogTab() {
           key={c.sha}
           commit={c}
           expanded={expanded === c.sha}
-          onToggle={() =>
-            setExpanded(expanded === c.sha ? null : c.sha)
-          }
+          onToggle={() => setExpanded(expanded === c.sha ? null : c.sha)}
         />
       ))}
       {repo.logHasMore && (
-        <div style={{ padding: 8 }}>
-          <button type="button" onClick={() => loadMore(folder)} style={btnGhost}>
+        <div style={{ padding: "6px 10px 10px" }}>
+          <button
+            type="button"
+            onClick={() => loadMore(folder)}
+            className="git-panel-btn-ghost"
+            style={{ width: "100%" }}
+          >
             Load more
           </button>
         </div>
@@ -1017,37 +831,14 @@ function CommitRow({
   }, [expanded, files, folder, commit.sha, loadFiles]);
 
   return (
-    <div
-      style={{
-        borderBottom: "1px solid var(--color-border)",
-      }}
-    >
+    <div style={{ borderBottom: "1px solid var(--color-border-muted)" }}>
       <button
         type="button"
         onClick={onToggle}
-        style={{
-          width: "100%",
-          display: "grid",
-          gridTemplateColumns: "auto 1fr auto",
-          gap: 8,
-          padding: "5px 10px",
-          background: "transparent",
-          border: "none",
-          color: "var(--color-text)",
-          cursor: "pointer",
-          textAlign: "left",
-        }}
+        className="git-panel-commit-row-btn"
         title={`${commit.sha}\n${commit.author_name} <${commit.author_email}>`}
       >
-        <span
-          style={{
-            fontFamily: "'Fira Code', monospace",
-            fontSize: 10.5,
-            color: "var(--color-text-muted)",
-          }}
-        >
-          {commit.short_sha}
-        </span>
+        <span className="git-panel-commit-sha">{commit.short_sha}</span>
         <span
           style={{
             overflow: "hidden",
@@ -1057,23 +848,29 @@ function CommitRow({
         >
           {commit.subject}
         </span>
-        <span style={{ fontSize: 10, color: "var(--color-text-muted)" }}>
+        <span className="git-panel-commit-time">
           {formatRelative(commit.time)}
         </span>
       </button>
       {expanded && (
-        <div style={{ paddingLeft: 10, paddingBottom: 6 }}>
+        <div style={{ paddingBottom: 6 }}>
           <div
             style={{
-              fontSize: 10.5,
+              fontSize: 11,
               color: "var(--color-text-muted)",
-              padding: "2px 0 4px 0",
+              padding: "2px 12px 6px 28px",
             }}
           >
             {commit.author_name}
           </div>
           {!files && (
-            <div style={{ fontSize: 11, color: "var(--color-text-muted)" }}>
+            <div
+              style={{
+                fontSize: 11,
+                color: "var(--color-text-muted)",
+                padding: "2px 12px 4px 28px",
+              }}
+            >
               Loading files…
             </div>
           )}
@@ -1089,26 +886,10 @@ function CommitRow({
                   f.path,
                 )
               }
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                width: "100%",
-                padding: "2px 0",
-                background: "transparent",
-                border: "none",
-                color: "var(--color-text)",
-                cursor: "pointer",
-                textAlign: "left",
-                fontSize: 11,
-              }}
+              className="git-panel-commit-file-btn"
             >
               <span
-                style={{
-                  width: 12,
-                  fontFamily: "monospace",
-                  color: statusColor(statusFromLetter(f.status)),
-                }}
+                className={`git-panel-row-status ${statusColorClass(statusFromLetter(f.status))}`}
               >
                 {f.status}
               </span>
@@ -1142,7 +923,6 @@ function BranchesTab() {
     try {
       await deleteBranch(folder, b.name, false);
     } catch (e) {
-      // Force prompt for unmerged.
       if (
         String(e).toLowerCase().includes("not fully merged") &&
         window.confirm(`"${b.name}" isn't fully merged. Force-delete?`)
@@ -1160,16 +940,15 @@ function BranchesTab() {
 
   return (
     <div>
-      <input
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Filter branches…"
-        style={{
-          ...inputStyle,
-          margin: 8,
-          width: "calc(100% - 16px)",
-        }}
-      />
+      <div style={{ padding: "8px 10px 4px" }}>
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Filter branches…"
+          className="git-panel-input"
+          style={{ width: "100%" }}
+        />
+      </div>
       <Section label={`Local (${local.length})`}>
         {filter(local).map((b) => (
           <BranchRow
@@ -1222,66 +1001,66 @@ function BranchRow({
   onNewFromHere?: () => void;
   onDelete?: () => void;
 }) {
-  const [hover, setHover] = useState(false);
   return (
-    <div
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 6,
-        padding: "3px 10px",
-        background: hover ? "var(--color-bg-hover, rgba(127,127,127,0.08))" : "transparent",
-      }}
-    >
+    <div className="git-panel-row">
       <Check
-        size={11}
-        style={{ opacity: branch.is_current ? 1 : 0, flexShrink: 0 }}
+        size={12}
+        style={{
+          opacity: branch.is_current ? 1 : 0,
+          flexShrink: 0,
+          color: "var(--color-accent)",
+        }}
       />
-      <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>
+      <span
+        className="git-panel-row-name"
+        style={{ fontWeight: branch.is_current ? 600 : 400 }}
+      >
         {branch.name}
       </span>
       {(branch.ahead > 0 || branch.behind > 0) && (
-        <span style={{ fontSize: 10, color: "var(--color-text-muted)" }}>
+        <span
+          style={{
+            fontSize: 10,
+            color: "var(--color-text-muted)",
+            fontVariantNumeric: "tabular-nums",
+          }}
+        >
           {branch.ahead > 0 && `↑${branch.ahead}`}
           {branch.behind > 0 && ` ↓${branch.behind}`}
         </span>
       )}
-      {hover && (
-        <div style={{ display: "flex", gap: 2 }}>
-          {!branch.is_current && (
-            <button
-              type="button"
-              onClick={onCheckout}
-              style={iconBtn}
-              title="Checkout"
-            >
-              <Check size={11} />
-            </button>
-          )}
-          {onNewFromHere && (
-            <button
-              type="button"
-              onClick={onNewFromHere}
-              style={iconBtn}
-              title="New branch from here"
-            >
-              <Plus size={11} />
-            </button>
-          )}
-          {onDelete && !branch.is_current && (
-            <button
-              type="button"
-              onClick={onDelete}
-              style={iconBtn}
-              title="Delete"
-            >
-              <Trash2 size={11} />
-            </button>
-          )}
-        </div>
-      )}
+      <div className="git-panel-row-actions">
+        {!branch.is_current && (
+          <button
+            type="button"
+            onClick={onCheckout}
+            className="git-panel-icon-btn"
+            title="Checkout"
+          >
+            <Check size={11} />
+          </button>
+        )}
+        {onNewFromHere && (
+          <button
+            type="button"
+            onClick={onNewFromHere}
+            className="git-panel-icon-btn"
+            title="New branch from here"
+          >
+            <Plus size={11} />
+          </button>
+        )}
+        {onDelete && !branch.is_current && (
+          <button
+            type="button"
+            onClick={onDelete}
+            className="git-panel-icon-btn"
+            title="Delete"
+          >
+            <Trash2 size={11} />
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -1304,20 +1083,20 @@ function statusLetter(entry: GitStatusEntry, side: "staged" | "unstaged"): strin
   return ch || "·";
 }
 
-function statusColor(status: string): string {
+function statusColorClass(status: string): string {
   switch (status) {
     case "modified":
-      return "var(--color-git-modified, #d29922)";
+      return "git-status-modified";
     case "staged":
-      return "var(--color-git-staged, #3fb950)";
+      return "git-status-staged";
     case "deleted":
-      return "var(--color-git-deleted, #f85149)";
+      return "git-status-deleted";
     case "untracked":
-      return "var(--color-git-untracked, #7ee787)";
+      return "git-status-untracked";
     case "renamed":
-      return "var(--color-git-renamed, #58a6ff)";
+      return "git-status-renamed";
     default:
-      return "var(--color-text-muted)";
+      return "";
   }
 }
 
@@ -1342,87 +1121,8 @@ function formatRelative(unixSec: number): string {
   const diff = Math.floor(Date.now() / 1000 - unixSec);
   if (diff < 60) return `${diff}s`;
   if (diff < 3600) return `${Math.floor(diff / 60)}m`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
+  if (diff < 86400) return `${Math.floor(diff / 60 / 60)}h`;
   if (diff < 86400 * 30) return `${Math.floor(diff / 86400)}d`;
   if (diff < 86400 * 365) return `${Math.floor(diff / 86400 / 30)}mo`;
   return `${Math.floor(diff / 86400 / 365)}y`;
 }
-
-// ── Shared inline styles ──────────────────────────────────────────────────────
-
-const inputStyle: React.CSSProperties = {
-  padding: "4px 6px",
-  background: "var(--color-bg)",
-  border: "1px solid var(--color-border)",
-  borderRadius: 3,
-  color: "var(--color-text)",
-  fontSize: 12,
-  outline: "none",
-};
-
-const btnPrimary: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: 6,
-  padding: "5px 10px",
-  background: "var(--color-accent, #238636)",
-  color: "var(--color-accent-text, white)",
-  border: "none",
-  borderRadius: 3,
-  fontSize: 12,
-  fontWeight: 600,
-  cursor: "pointer",
-};
-
-const btnGhost: React.CSSProperties = {
-  padding: "5px 10px",
-  background: "transparent",
-  color: "var(--color-text)",
-  border: "1px solid var(--color-border)",
-  borderRadius: 3,
-  fontSize: 12,
-  cursor: "pointer",
-  width: "100%",
-};
-
-const toolBtn: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 4,
-  padding: "3px 6px",
-  background: "transparent",
-  color: "var(--color-text)",
-  border: "1px solid var(--color-border)",
-  borderRadius: 3,
-  fontSize: 11,
-  cursor: "pointer",
-};
-
-const iconBtn: React.CSSProperties = {
-  padding: 2,
-  background: "transparent",
-  border: "none",
-  color: "var(--color-text-muted)",
-  cursor: "pointer",
-  display: "inline-flex",
-  alignItems: "center",
-};
-
-const linkBtn: React.CSSProperties = {
-  background: "transparent",
-  border: "none",
-  color: "var(--color-accent, var(--color-text))",
-  fontSize: 10,
-  cursor: "pointer",
-  textTransform: "uppercase",
-  letterSpacing: "0.05em",
-};
-
-const badge: React.CSSProperties = {
-  fontSize: 10,
-  padding: "0 4px",
-  borderRadius: 8,
-  background: "var(--color-bg-subtle, rgba(127,127,127,0.2))",
-  color: "var(--color-text)",
-};
