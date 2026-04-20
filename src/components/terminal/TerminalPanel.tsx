@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Allotment } from "allotment";
+import { useShallow } from "zustand/react/shallow";
 import {
   Plus,
   X,
@@ -78,8 +79,11 @@ function TerminalPaneContent({
   isOnlyPane: boolean;
   isLastPane: boolean;
 }) {
-  const terminals = useTerminalStore((s) =>
-    s.terminals.filter((t) => t.paneId === pane.id)
+  // useShallow: zustand v5 compares snapshots with Object.is, and
+  // `.filter(...)` returns a new array every call — without shallow equality
+  // React throws #185 "Maximum update depth exceeded" on mount.
+  const terminals = useTerminalStore(
+    useShallow((s) => s.terminals.filter((t) => t.paneId === pane.id))
   );
   const removeTerminal = useTerminalStore((s) => s.removeTerminal);
   const setActive = useTerminalStore((s) => s.setActiveTerminal);
