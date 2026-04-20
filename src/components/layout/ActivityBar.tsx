@@ -1,7 +1,5 @@
-import { useEffect, useState } from "react";
-import { FolderTree, List, Clock, Puzzle, Search, FileCode2, Hash, GitBranch, ChevronLeft, ChevronRight } from "lucide-react";
+import { FolderTree, List, Clock, Search, FileCode2, Hash, GitBranch, ChevronLeft, ChevronRight } from "lucide-react";
 import { useUiStore } from "../../store/uiStore";
-import { pluginManager } from "../../plugins/pluginManager";
 import type { SidebarPanel, SidebarPosition } from "../../types";
 
 interface Props {
@@ -18,12 +16,6 @@ export function ActivityBar({ position }: Props) {
     toggleSidebar,
   } = useUiStore();
 
-  // Re-render when plugin panels are added/removed
-  const [, setTick] = useState(0);
-  useEffect(() => pluginManager.subscribe(() => setTick((n) => n + 1)), []);
-
-  const pluginPanels = pluginManager.getAllSidebarPanels();
-
   const builtinPanels: { id: SidebarPanel; icon: React.ReactNode; title: string }[] = [
     { id: "tree", icon: <FolderTree size={18} />, title: "File Explorer" },
     { id: "toc", icon: <List size={18} />, title: "Table of Contents" },
@@ -32,7 +24,6 @@ export function ActivityBar({ position }: Props) {
     { id: "git", icon: <GitBranch size={18} />, title: "Git" },
     { id: "frontmatter", icon: <FileCode2 size={18} />, title: "Frontmatter" },
     { id: "tags", icon: <Hash size={18} />, title: "Tags" },
-    { id: "plugins", icon: <Puzzle size={18} />, title: "Plugins" },
   ];
 
   const handlePanelClick = (id: SidebarPanel) => {
@@ -55,32 +46,6 @@ export function ActivityBar({ position }: Props) {
             onClick={() => handlePanelClick(panel.id)}
           >
             {panel.icon}
-          </button>
-        ))}
-
-        {/* Plugin-defined sidebar panels */}
-        {pluginPanels.length > 0 && (
-          <div
-            style={{
-              height: 1,
-              background: "var(--color-border-muted)",
-              margin: "4px 6px",
-            }}
-          />
-        )}
-        {pluginPanels.map((panel) => (
-          <button
-            key={panel.id}
-            className={`activity-btn ${activeSidebarPanel === panel.id && sidebarVisible ? "active" : ""}`}
-            title={panel.label}
-            onClick={() => handlePanelClick(panel.id)}
-            dangerouslySetInnerHTML={
-              panel.iconSvg
-                ? { __html: panel.iconSvg }
-                : undefined
-            }
-          >
-            {!panel.iconSvg && <Puzzle size={18} />}
           </button>
         ))}
       </div>
