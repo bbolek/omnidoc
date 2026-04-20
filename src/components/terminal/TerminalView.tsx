@@ -30,6 +30,11 @@ export function TerminalView({
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
   const startedRef = useRef(false);
+  // Flipped synchronously in cleanup so any already-queued RAF / ResizeObserver
+  // callback bails out instead of calling fit() on a disposed terminal — the
+  // FitAddon otherwise reads `_core._renderService.dimensions` on the torn-down
+  // core and throws "Cannot read properties of undefined (reading 'dimensions')".
+  const disposedRef = useRef(false);
 
   const terminal = useTerminalStore((s) =>
     s.terminals.find((t) => t.id === terminalId)
@@ -45,10 +50,28 @@ export function TerminalView({
     : undefined;
   const accent = folder ? folderColor(folder.colorIndex).accent : "#388bfd";
 
+  // Guarded fit: reads refs fresh every call and bails if the terminal was
+  // disposed or the container isn't measurable yet. All fit() callers route
+  // through here so a late RAF/ResizeObserver can't touch a torn-down xterm.
+  const safeFit = () => {
+    if (disposedRef.current) return;
+    const fit = fitRef.current;
+    const term = termRef.current;
+    const el = containerRef.current;
+    if (!fit || !term || !el) return;
+    if (!el.isConnected || el.clientWidth === 0 || el.clientHeight === 0) return;
+    try {
+      fit.fit();
+    } catch {
+      /* xterm internals can race with DOM teardown; swallow. */
+    }
+  };
+
   // ── Create & spawn ───────────────────────────────────────────────────
   useEffect(() => {
     if (!containerRef.current || !terminal || startedRef.current) return;
     startedRef.current = true;
+    disposedRef.current = false;
 
     const term = new Terminal({
       fontFamily: '"Fira Code", "Cascadia Code", Menlo, Consolas, monospace',
@@ -65,10 +88,9 @@ export function TerminalView({
 
     // Xterm needs to be in the DOM *and* have a measurable size before fit()
     // can compute columns. On first mount the flex layout sometimes reports
-    // 0×0 for one frame — the rAF + try/catch keeps that quiet.
-    requestAnimationFrame(() => {
-      try { fit.fit(); } catch { /* ignore */ }
-    });
+    // 0×0 for one frame — the rAF defers until after layout; safeFit bails if
+    // the component unmounted in between.
+    requestAnimationFrame(() => safeFit());
 
     termRef.current = term;
     fitRef.current = fit;
@@ -121,11 +143,14 @@ export function TerminalView({
     })();
 
     return () => {
+      // Mark disposed before any teardown so callbacks that slip in between
+      // dispose() and the next paint (RAF, ResizeObserver) skip fit().
+      disposedRef.current = true;
+      termRef.current = null;
+      fitRef.current = null;
       unlisteners.forEach((u) => u());
       invoke("terminal_kill", { id: terminalId }).catch(() => {});
       term.dispose();
-      termRef.current = null;
-      fitRef.current = null;
       startedRef.current = false;
     };
     // Spawn exactly once per id; ignore incidental prop changes.
@@ -141,22 +166,22 @@ export function TerminalView({
   // ── Refit whenever visibility / size changes ─────────────────────────
   useEffect(() => {
     if (!active || !fitRef.current || !containerRef.current) return;
-    const fit = fitRef.current;
     const el = containerRef.current;
 
-    const doFit = () => {
-      try { fit.fit(); } catch { /* ignore */ }
-    };
-    // Immediately on activation, then continuously via ResizeObserver.
-    doFit();
-    const ro = new ResizeObserver(() => doFit());
+    // Re-read fitRef on every call — the spawn effect may replace or null it
+    // out, and a captured closure would call the stale (disposed) addon.
+    safeFit();
+    const ro = new ResizeObserver(() => safeFit());
     ro.observe(el);
     // Also refit on window resize (belt-and-suspenders for allotment splits).
-    window.addEventListener("resize", doFit);
+    window.addEventListener("resize", safeFit);
     return () => {
       ro.disconnect();
-      window.removeEventListener("resize", doFit);
+      window.removeEventListener("resize", safeFit);
     };
+    // safeFit reads refs only; including it would reattach the observer on
+    // every render for no behavioural benefit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
   // Focus when activated so the user can type immediately.
