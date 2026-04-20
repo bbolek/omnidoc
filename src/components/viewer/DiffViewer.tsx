@@ -264,16 +264,16 @@ function SideBySideHunk({
   shikiTheme: string;
 }) {
   const rows = useMemo(() => toSideBySide(hunk), [hunk]);
-  const leftHtml = useHighlightedMap(
-    rows.map((r) => r.left?.text ?? ""),
-    lang,
-    shikiTheme,
+  const leftLines = useMemo(
+    () => rows.map((r) => r.left?.text ?? ""),
+    [rows],
   );
-  const rightHtml = useHighlightedMap(
-    rows.map((r) => r.right?.text ?? ""),
-    lang,
-    shikiTheme,
+  const rightLines = useMemo(
+    () => rows.map((r) => r.right?.text ?? ""),
+    [rows],
   );
+  const leftHtml = useHighlightedMap(leftLines, lang, shikiTheme);
+  const rightHtml = useHighlightedMap(rightLines, lang, shikiTheme);
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
@@ -312,11 +312,11 @@ function UnifiedHunk({
   lang: string;
   shikiTheme: string;
 }) {
-  const htmls = useHighlightedMap(
-    hunk.lines.map((l) => l.text),
-    lang,
-    shikiTheme,
+  const lineTexts = useMemo(
+    () => hunk.lines.map((l) => l.text),
+    [hunk.lines],
   );
+  const htmls = useHighlightedMap(lineTexts, lang, shikiTheme);
   return (
     <div>
       {hunk.lines.map((line, i) => (
