@@ -42,11 +42,16 @@ export function TranscriptFeed({
     return map;
   }, [entries]);
 
+  // Drop bookkeeping records (queue-operation, attachment, last-prompt,
+  // ai-title, …) — the CLI writes these alongside real messages, and without
+  // a `message` field they'd render as empty "(no content)" system cards.
+  const renderable = useMemo(() => entries.filter((e) => e.message != null), [entries]);
+
   // Group entries into linear items and sidechain threads.
   // A sidechain thread is a consecutive run of entries with isSidechain === true.
   // We keep the preceding Task tool_use entry outside the thread — it becomes
   // the header row, and the thread slots in right after it.
-  const items = useMemo(() => groupSidechains(entries, showSidechain), [entries, showSidechain]);
+  const items = useMemo(() => groupSidechains(renderable, showSidechain), [renderable, showSidechain]);
 
   // Filter by query (case-insensitive substring on text / tool_use input).
   const filtered = useMemo(() => {
@@ -123,7 +128,7 @@ export function TranscriptFeed({
       <div ref={scrollRef} className="claude-feed-scroll">
         {filtered.length === 0 && (
           <div className="claude-feed-empty">
-            {entries.length === 0
+            {renderable.length === 0
               ? live
                 ? "Listening for the first message…"
                 : "This session has no entries yet."
