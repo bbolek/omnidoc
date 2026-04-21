@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
+import { Virtuoso, type VirtuosoHandle, type Components } from "react-virtuoso";
 import { ChevronDown, Search, Eye, EyeOff, Bot, User as UserIcon } from "lucide-react";
 import type { LogEntry } from "../../store/claudeStore";
 import { MessageCard, type ToolResultMap } from "./MessageCard";
@@ -122,6 +122,7 @@ export function TranscriptFeed({
           // the user is already at the bottom. `"auto"` = jump instantly (no
           // smooth-scroll spam during a 200-entry backfill).
           followOutput={(isAtBottom) => (isAtBottom ? "auto" : false)}
+          components={FEED_COMPONENTS}
           computeItemKey={(i, it) =>
             it.kind === "entry"
               ? `e-${it.entry.uuid ?? i}`
@@ -130,23 +131,27 @@ export function TranscriptFeed({
           itemContent={(_i, it) => {
             if (it.kind === "entry") {
               return (
-                <MessageCard
-                  entry={it.entry}
-                  toolResults={toolResults}
-                  showThinking={showThinking}
-                />
+                <div className="claude-feed-row">
+                  <MessageCard
+                    entry={it.entry}
+                    toolResults={toolResults}
+                    showThinking={showThinking}
+                  />
+                </div>
               );
             }
             const color = folderColor(it.threadIndex);
             return (
-              <SubAgentThread
-                entries={it.entries}
-                toolResults={toolResults}
-                accent={color.accent}
-                tint={color.tint}
-                showThinking={showThinking}
-                taskInput={it.taskInput}
-              />
+              <div className="claude-feed-row">
+                <SubAgentThread
+                  entries={it.entries}
+                  toolResults={toolResults}
+                  accent={color.accent}
+                  tint={color.tint}
+                  showThinking={showThinking}
+                  taskInput={it.taskInput}
+                />
+              </div>
             );
           }}
         />
@@ -231,6 +236,13 @@ type Item =
       threadIndex: number;
       taskInput?: { description?: string; subagent_type?: string };
     };
+
+// Hoisted so its identity is stable across renders — Virtuoso treats a new
+// `components` object as a prop change and tears down measurements.
+const FEED_COMPONENTS: Components<Item> = {
+  Header: () => <div className="claude-feed-spacer-top" />,
+  Footer: () => <div className="claude-feed-spacer-bottom" />,
+};
 
 /**
  * Walk entries and bundle every consecutive run of `isSidechain: true`
