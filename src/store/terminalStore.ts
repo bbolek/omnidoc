@@ -19,6 +19,19 @@ export interface TerminalInstance {
    * terminals exist, which is active, and their folder binding.
    */
   started: boolean;
+  /**
+   * When this terminal was spawned to host a specific Claude Code session,
+   * the session id is stored here so the picker can highlight the binding
+   * and re-select the tab instead of re-spawning.
+   */
+  claudeSessionId?: string;
+  /**
+   * Optional command line the TerminalView writes to the PTY after a
+   * successful spawn — used to auto-launch `claude --resume <id>` inside a
+   * regular shell without having to special-case the PTY spawn path itself.
+   * The trailing newline is included.
+   */
+  startupCommand?: string;
 }
 
 export interface TerminalPane {
@@ -265,4 +278,59 @@ export async function spawnTerminalForFolder(
     started: false,
   });
   return id;
+}
+
+/**
+ * Spawn a terminal that launches the Claude Code CLI resumed to
+ * `sessionId`. The shell is the user's normal shell (so aliases / PATH
+ * still resolve) and `claude --resume <id>` is written to stdin as soon as
+ * the PTY is up. `cwd` should be the session's original working directory;
+ * we fall back to the folder path if unknown.
+ *
+ * Returns the new terminal id. If `sessionId` is null, spawns a fresh
+ * `claude` process instead of resuming.
+ */
+export async function spawnClaudeTerminal(
+  sessionId: string | null,
+  cwd: string | null,
+  claudeBinary: string | null,
+  paneId?: string,
+  titleHint?: string | null
+): Promise<string> {
+  const shell = await invoke<string>("terminal_detect_shell").catch(() => "");
+  const id = cryptoRandomId();
+  const displayName = titleHint
+    ? trimName(titleHint)
+    : sessionId
+      ? `claude ${sessionId.slice(0, 6)}`
+      : "claude";
+  // Shell-quote the resolved binary path so spaces in install paths don't
+  // break the exec. Fall back to `claude` on PATH when resolution failed.
+  const program = claudeBinary ? shellQuote(claudeBinary) : "claude";
+  const args = sessionId ? ` --resume ${shellQuote(sessionId)}` : "";
+  const startupCommand = `${program}${args}\r`;
+  useTerminalStore.getState().addTerminal({
+    id,
+    paneId,
+    name: displayName,
+    folderPath: cwd,
+    shell: shell || defaultShellFallback(),
+    started: false,
+    claudeSessionId: sessionId ?? undefined,
+    startupCommand,
+  });
+  return id;
+}
+
+function trimName(s: string): string {
+  const t = s.trim();
+  if (t.length <= 22) return t;
+  return t.slice(0, 21) + "…";
+}
+
+// Minimal POSIX-ish shell quoting. Wraps in single quotes and escapes any
+// embedded single quotes via the standard '"'"' trick.
+function shellQuote(s: string): string {
+  if (/^[A-Za-z0-9_\-./:=+@]+$/.test(s)) return s;
+  return `'${s.replace(/'/g, "'\"'\"'")}'`;
 }

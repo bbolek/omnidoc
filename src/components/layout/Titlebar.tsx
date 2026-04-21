@@ -1,8 +1,9 @@
 import React from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { FolderOpen, X, Minus, Square } from "lucide-react";
+import { FolderOpen, X, Minus, Square, Sparkles } from "lucide-react";
 import { useUiStore } from "../../store/uiStore";
 import { useFileStore } from "../../store/fileStore";
+import { useClaudeStore } from "../../store/claudeStore";
 import { getFileName } from "../../utils/fileUtils";
 import { folderColor } from "../../utils/folderColors";
 import { MenuBar } from "./MenuBar";
@@ -11,10 +12,14 @@ const win = getCurrentWindow();
 
 export function Titlebar() {
   const platform = useUiStore((s) => s.platform);
+  const claudeDrawerVisible = useUiStore((s) => s.claudeDrawerVisible);
+  const toggleClaudeDrawer = useUiStore((s) => s.toggleClaudeDrawer);
   const tabs = useFileStore((s) => s.tabs);
   const activeTabId = useFileStore((s) => s.activeTabId);
   const folders = useFileStore((s) => s.folders);
   const setFolderDisabled = useFileStore((s) => s.setFolderDisabled);
+  const watchedSessions = useClaudeStore((s) => s.watchedSessions);
+  const anyLive = watchedSessions.size > 0;
   const activeTab = tabs.find((t) => t.id === activeTabId);
 
   const isMac = platform === "macos";
@@ -140,6 +145,31 @@ export function Titlebar() {
             </span>
           </>
         )}
+      </div>
+
+      {/* Claude drawer toggle — always on right edge, before the window
+          controls. Works on mac too (native chrome is above anyway). */}
+      <div className="titlebar-no-drag" style={{ display: "flex", alignItems: "center" }}>
+        <button
+          type="button"
+          className={`claude-titlebar-toggle${claudeDrawerVisible ? " active" : ""}`}
+          onClick={toggleClaudeDrawer}
+          title={
+            anyLive
+              ? "Claude — live session tailing (Ctrl+Shift+L)"
+              : "Toggle Claude live drawer (Ctrl+Shift+L)"
+          }
+        >
+          <Sparkles size={13} />
+          <span>Claude</span>
+          {anyLive && (
+            <span
+              className="claude-pulse-dot"
+              style={{ marginLeft: 2 }}
+              aria-label="live"
+            />
+          )}
+        </button>
       </div>
 
       {/* Windows/Linux: window controls (right) */}

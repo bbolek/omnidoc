@@ -20,6 +20,8 @@ interface UiState {
   presentationVisible: boolean;
   livePreviewEnabled: boolean;
   minimapVisible: boolean;
+  claudeDrawerVisible: boolean;
+  claudeDrawerWidth: number;
 
   setSidebarPosition: (pos: SidebarPosition) => void;
   toggleSidebar: () => void;
@@ -46,6 +48,9 @@ interface UiState {
   setLivePreview: (v: boolean) => void;
   toggleMinimap: () => void;
   setMinimapVisible: (v: boolean) => void;
+  toggleClaudeDrawer: () => void;
+  setClaudeDrawerVisible: (v: boolean) => void;
+  setClaudeDrawerWidth: (w: number) => void;
 }
 
 export const useUiStore = create<UiState>()(
@@ -68,6 +73,8 @@ export const useUiStore = create<UiState>()(
       presentationVisible: false,
       livePreviewEnabled: false,
       minimapVisible: false,
+      claudeDrawerVisible: false,
+      claudeDrawerWidth: 520,
 
       setSidebarPosition: (pos) => set({ sidebarPosition: pos }),
       toggleSidebar: () => set((s) => ({ sidebarVisible: !s.sidebarVisible })),
@@ -95,6 +102,9 @@ export const useUiStore = create<UiState>()(
       setLivePreview: (v) => set({ livePreviewEnabled: v }),
       toggleMinimap: () => set((s) => ({ minimapVisible: !s.minimapVisible })),
       setMinimapVisible: (v) => set({ minimapVisible: v }),
+      toggleClaudeDrawer: () => set((s) => ({ claudeDrawerVisible: !s.claudeDrawerVisible })),
+      setClaudeDrawerVisible: (v) => set({ claudeDrawerVisible: v }),
+      setClaudeDrawerWidth: (w) => set({ claudeDrawerWidth: Math.max(360, Math.min(800, Math.round(w))) }),
     }),
     {
       name: "omnidoc-ui",
@@ -108,6 +118,8 @@ export const useUiStore = create<UiState>()(
         showLineNumbers: state.showLineNumbers,
         livePreviewEnabled: state.livePreviewEnabled,
         minimapVisible: state.minimapVisible,
+        claudeDrawerVisible: state.claudeDrawerVisible,
+        claudeDrawerWidth: state.claudeDrawerWidth,
       }),
     }
   )

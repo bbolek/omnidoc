@@ -1,6 +1,8 @@
 pub mod commands;
 pub mod logger;
 
+use commands::claude::ClaudeWatchState;
+use commands::claude_hooks::{self, ClaudeHookServerState};
 use commands::terminal::TerminalState;
 use commands::watcher::WatcherState;
 use tauri::{Emitter, Manager};
@@ -96,6 +98,8 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .manage(WatcherState::default())
         .manage(TerminalState::default())
+        .manage(ClaudeWatchState::default())
+        .manage(ClaudeHookServerState::default())
         // Confirm the webview reached setup. Black-window reports almost
         // always cut off before this line — if the startup log shows
         // "building tauri app" but never "tauri setup complete", the issue
@@ -111,6 +115,12 @@ pub fn run() {
                 let _ = w.on_window_event(move |e| {
                     log_debug!("window", "{}: {:?}", label_cloned, e);
                 });
+            }
+            // Bring the Claude hook loopback server up before the frontend
+            // loads so the initial hook-install call in App.tsx resolves.
+            match claude_hooks::start_hook_server(app.handle().clone()) {
+                Ok(port) => log_info!("boot", "claude hook server port={}", port),
+                Err(e) => log_error!("boot", "claude hook server failed: {}", e),
             }
             Ok(())
         })
@@ -176,6 +186,15 @@ pub fn run() {
             commands::logs::read_log,
             commands::logs::log_file_path,
             commands::logs::clear_log,
+            commands::claude::claude_list_sessions,
+            commands::claude::claude_read_session,
+            commands::claude::claude_watch_session,
+            commands::claude::claude_unwatch_session,
+            commands::claude::claude_global_watch,
+            commands::claude::claude_resolve_binary,
+            commands::claude_hooks::claude_install_hooks,
+            commands::claude_hooks::claude_uninstall_hooks,
+            commands::claude_hooks::claude_hook_port,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {

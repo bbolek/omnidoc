@@ -1,14 +1,17 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { useFileStore } from "../../store/fileStore";
 import { useUiStore } from "../../store/uiStore";
 import { Titlebar } from "./Titlebar";
 import { ActivityBar } from "./ActivityBar";
 import { Sidebar } from "./Sidebar";
 import { StatusBar } from "./StatusBar";
 import { MainArea } from "./MainArea";
+import { ClaudeDrawer } from "./ClaudeDrawer";
+import "../claude/claude.css";
 
 export function AppShell() {
   const { sidebarPosition, sidebarVisible, sidebarWidth, zenMode } = useUiStore();
+  const claudeDrawerVisible = useUiStore((s) => s.claudeDrawerVisible);
+  const claudeDrawerWidth = useUiStore((s) => s.claudeDrawerWidth);
 
   return (
     <div className={`app-shell${zenMode ? " zen-mode" : ""}`}>
@@ -64,6 +67,28 @@ export function AppShell() {
             </AnimatePresence>
             <ActivityBar position="right" />
           </>
+        )}
+
+        {/* Dedicated Claude drawer — always on the far right edge, animates
+            independently from the regular sidebar so both can be open. */}
+        {!zenMode && (
+          <AnimatePresence initial={false}>
+            {claudeDrawerVisible && (
+              <motion.div
+                key="claude-drawer"
+                initial={{ width: 0, opacity: 0 }}
+                animate={{ width: claudeDrawerWidth, opacity: 1 }}
+                exit={{ width: 0, opacity: 0 }}
+                transition={{
+                  opacity: { duration: 0.2, ease: "easeInOut" },
+                  width: { duration: 0 },
+                }}
+                style={{ overflow: "hidden", flexShrink: 0 }}
+              >
+                <ClaudeDrawer />
+              </motion.div>
+            )}
+          </AnimatePresence>
         )}
       </div>
 

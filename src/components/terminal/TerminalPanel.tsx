@@ -11,11 +11,14 @@ import {
 import {
   useTerminalStore,
   spawnTerminalForFolder,
+  spawnClaudeTerminal,
   type TerminalPane,
 } from "../../store/terminalStore";
 import { useFileStore } from "../../store/fileStore";
+import { useClaudeStore } from "../../store/claudeStore";
 import { folderColor } from "../../utils/folderColors";
 import { TerminalView } from "./TerminalView";
+import { SessionPicker } from "../claude/SessionPicker";
 
 /**
  * Bottom-panel container for the integrated terminal.
@@ -95,6 +98,12 @@ function TerminalPaneContent({
   const folders = useFileStore((s) => s.folders);
   const primaryFolder = folders[0] ?? null;
 
+  // Claude-related bits used by the session picker embedded in this pane.
+  const claudeSessions = useClaudeStore((s) => s.sessions);
+  const claudeActiveId = useClaudeStore((s) => s.activeSessionId);
+  const claudeSelect = useClaudeStore((s) => s.selectSession);
+  const claudeBinary = useClaudeStore((s) => s.binaryPath);
+
   const activeTerm = terminals.find((t) => t.id === pane.activeTerminalId);
 
   const folderForNewTerminal = (): string | null =>
@@ -114,6 +123,40 @@ function TerminalPaneContent({
     const folderPath = folderForNewTerminal();
     const newPaneId = addPaneAfter(pane.id);
     await spawnTerminalForFolder(folderPath, newPaneId);
+  };
+
+  // Select a Claude session in the drawer AND bind a PTY in this pane to
+  // `claude --resume <id>`. If a tab already hosts that session, just
+  // activate it — don't re-spawn.
+  const handleClaudeSessionSelect = async (sessionId: string) => {
+    setPanelVisible(true);
+    setActivePane(pane.id);
+    void claudeSelect(sessionId);
+    const existing = terminals.find((t) => t.claudeSessionId === sessionId);
+    if (existing) {
+      setActive(existing.id);
+      return;
+    }
+    const meta = claudeSessions.find((s) => s.session_id === sessionId);
+    await spawnClaudeTerminal(
+      sessionId,
+      meta?.cwd ?? folderForNewTerminal(),
+      claudeBinary ?? null,
+      pane.id,
+      meta?.ai_title ?? null
+    );
+  };
+
+  const handleClaudeSessionNew = async () => {
+    setPanelVisible(true);
+    setActivePane(pane.id);
+    await spawnClaudeTerminal(
+      null,
+      folderForNewTerminal(),
+      claudeBinary ?? null,
+      pane.id,
+      "new claude"
+    );
   };
 
   return (
@@ -169,6 +212,17 @@ function TerminalPaneContent({
           )}
         </div>
         <div className="terminal-tabs-right">
+          {/* Claude session picker — drops upward since we're at the bottom
+              of the viewport. Also lets the user spin up a fresh `claude`
+              PTY via the "New Claude session" entry at the top. */}
+          <SessionPicker
+            sessions={claudeSessions}
+            activeSessionId={activeTerm?.claudeSessionId ?? claudeActiveId}
+            onSelect={handleClaudeSessionSelect}
+            onNew={handleClaudeSessionNew}
+            placement="up"
+            compact
+          />
           <button
             className="terminal-action-btn"
             onClick={handleNewTerminal}

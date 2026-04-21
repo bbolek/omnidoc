@@ -1,4 +1,6 @@
 pub mod archive;
+pub mod claude;
+pub mod claude_hooks;
 pub mod export;
 pub mod fs;
 pub mod git;
