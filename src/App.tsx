@@ -12,6 +12,7 @@ import { useAllFileWatchers } from "./hooks/useFileWatcher";
 import { useUiStore } from "./store/uiStore";
 import { useFileStore } from "./store/fileStore";
 import { useGitStore } from "./store/gitStore";
+import { useClaudeStore } from "./store/claudeStore";
 import { pluginManager } from "./plugins/pluginManager";
 import { registerBuiltinCommands } from "./commands/builtin";
 import { applyAppMenu } from "./commands/applyMenu";
@@ -75,6 +76,13 @@ function AppInner() {
     restoreSession()
       .then(() => log.info("App", "restoreSession resolved"))
       .catch((err) => log.error("App", "restoreSession rejected", err));
+    // Spin up the Claude live-monitoring background services — session list
+    // refresh, global watcher, binary detection, and (idempotent) hook
+    // auto-install into ~/.claude/settings.json.
+    useClaudeStore
+      .getState()
+      .initBackground()
+      .catch((err) => log.error("App", "claude initBackground rejected", err));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

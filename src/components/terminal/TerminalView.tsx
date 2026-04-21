@@ -136,6 +136,17 @@ export function TerminalView({
         return;
       }
 
+      // If this terminal was configured with a startup command (e.g. auto-
+      // launching `claude --resume <id>`), write it to the PTY once the
+      // shell has had a moment to draw its prompt. A short delay avoids
+      // the command landing before the shell is ready to read stdin.
+      if (terminal.startupCommand) {
+        const cmd = terminal.startupCommand;
+        setTimeout(() => {
+          invoke("terminal_write", { id: terminalId, data: cmd }).catch(() => {});
+        }, 150);
+      }
+
       // stdin → PTY
       term.onData((data) => {
         invoke("terminal_write", { id: terminalId, data }).catch(() => {});
