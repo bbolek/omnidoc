@@ -249,14 +249,20 @@ function TreeNode({ entry, depth, collapseKey, parentPath }: TreeNodeProps) {
     } catch {}
   }, [entry.path]);
 
-  // Register refresh handler so parent can trigger it
+  // Register refresh handler so parent can trigger it. If collapsed, we
+  // invalidate the cached children so the next expand fetches fresh content
+  // rather than showing a stale listing.
   useEffect(() => {
     if (!navCtx || !entry.is_dir) return;
     navCtx.nodeRefreshersRef.current.set(entry.path, () => {
-      if (expanded) fetchChildren();
+      if (expanded) {
+        fetchChildren();
+      } else if (children.length > 0) {
+        setChildren([]);
+      }
     });
     return () => { navCtx.nodeRefreshersRef.current.delete(entry.path); };
-  }, [entry.path, entry.is_dir, expanded, fetchChildren, navCtx]);
+  }, [entry.path, entry.is_dir, expanded, children.length, fetchChildren, navCtx]);
 
   const handleExpand = useCallback(async () => {
     if (!entry.is_dir || loading) return;
@@ -906,16 +912,24 @@ function FolderSection({ folder }: FolderSectionProps) {
     }
   }, [currentFolder, refreshRoot]);
 
-  // ── git status: event-driven, with a slow safety poll ─────────────────────
+  // Stable ref so the watcher effect below can call the latest refreshFolder
+  // without needing to re-subscribe (and re-register the Rust-side watcher).
+  const refreshFolderRef = useRef(refreshFolder);
+  useEffect(() => { refreshFolderRef.current = refreshFolder; }, [refreshFolder]);
+
+  // ── folder watcher: drives both git status and file-tree refreshes ────────
   //
   // Strategy:
-  //   1. Check once whether `currentFolder` is actually a git repo. If not,
-  //      skip all git work (no polling, no watcher, no empty-result spam).
-  //   2. Register a recursive folder watcher on the Rust side that emits
+  //   1. Register a recursive folder watcher on the Rust side that emits
   //      `git-folder-changed` for create/modify/remove events (minus noisy
-  //      paths like `node_modules`, `.git/objects`). Debounce refreshes.
-  //   3. Keep a slow safety interval (30s) to catch anything the watcher
-  //      might miss (network-triggered state, platform edge cases).
+  //      paths like `node_modules`, `.git/objects`). The watcher runs for
+  //      every workspace folder, not just git repos — the tree still needs
+  //      to refresh when files appear/disappear externally.
+  //   2. On each event, schedule a file-tree refresh (re-list parent dir)
+  //      and, if the folder is a git repo, also schedule a git-status
+  //      refresh. Both are debounced.
+  //   3. Keep a slow safety interval (30s) on the git-status side to catch
+  //      anything the watcher might miss (network-triggered state, etc.).
 
   useEffect(() => {
     if (!currentFolder) {
@@ -924,7 +938,9 @@ function FolderSection({ folder }: FolderSectionProps) {
     }
 
     let cancelled = false;
+    let isRepo = false;
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    let treeDebounceTimer: ReturnType<typeof setTimeout> | null = null;
     let safetyInterval: ReturnType<typeof setInterval> | null = null;
     let unlisten: (() => void) | null = null;
     let watching = false;
@@ -944,33 +960,45 @@ function FolderSection({ folder }: FolderSectionProps) {
     };
 
     const scheduleRefresh = () => {
+      if (!isRepo) return;
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(refresh, 500);
+    };
+
+    // File-tree refresh: when something changes on disk, re-list the parent
+    // directory so newly created / renamed / deleted entries show up without
+    // the user having to manually refresh. Parents are batched across a short
+    // debounce window to coalesce bursts (e.g. save-triggered modify storms).
+    const pendingTreeParents = new Set<string>();
+    const scheduleTreeRefresh = (changedPath: string) => {
+      const normalized = changedPath.replace(/\\/g, "/");
+      const lastSlash = normalized.lastIndexOf("/");
+      if (lastSlash <= 0) return;
+      pendingTreeParents.add(normalized.substring(0, lastSlash));
+      if (treeDebounceTimer) clearTimeout(treeDebounceTimer);
+      treeDebounceTimer = setTimeout(() => {
+        if (cancelled) return;
+        for (const p of pendingTreeParents) refreshFolderRef.current(p);
+        pendingTreeParents.clear();
+      }, 200);
     };
 
     (async () => {
       // Clear any stale status from a previous folder while we check.
       setGitStatus(new Map());
 
-      let isRepo = false;
-      try {
-        isRepo = await invoke<boolean>("is_git_repo", { folder: currentFolder });
-      } catch {
-        isRepo = false;
-      }
-      if (cancelled || !isRepo) return;
-
-      // Initial fetch.
-      await refresh();
-      if (cancelled) return;
-
-      // Event-driven refresh: subscribe first, then ask Rust to watch. This
-      // way we don't miss events fired between watch-start and subscribe.
+      // Register the folder watcher unconditionally — it drives BOTH git
+      // status refreshes (when applicable) and file-tree refreshes. Non-git
+      // folders still need tree refreshes when files are created / removed
+      // externally. Subscribe first, then ask Rust to watch, so we don't
+      // miss events fired between watch-start and subscribe.
       try {
         const un = await listen<{ folder: string; path: string }>(
           "git-folder-changed",
           (event) => {
-            if (event.payload.folder === currentFolder) scheduleRefresh();
+            if (event.payload.folder !== currentFolder) return;
+            scheduleRefresh();
+            scheduleTreeRefresh(event.payload.path);
           },
         );
         if (cancelled) {
@@ -982,8 +1010,19 @@ function FolderSection({ folder }: FolderSectionProps) {
         await invoke("watch_git_folder", { folder: currentFolder });
         watching = true;
       } catch (err) {
-        console.warn("git folder watcher failed, falling back to poll:", err);
+        console.warn("folder watcher failed, falling back to poll:", err);
       }
+
+      try {
+        isRepo = await invoke<boolean>("is_git_repo", { folder: currentFolder });
+      } catch {
+        isRepo = false;
+      }
+      if (cancelled || !isRepo) return;
+
+      // Initial git-status fetch (only for repos).
+      await refresh();
+      if (cancelled) return;
 
       // Safety poll — much slower than before since the watcher covers the
       // common case. Catches things like remote-driven branch updates.
@@ -993,6 +1032,7 @@ function FolderSection({ folder }: FolderSectionProps) {
     return () => {
       cancelled = true;
       if (debounceTimer) clearTimeout(debounceTimer);
+      if (treeDebounceTimer) clearTimeout(treeDebounceTimer);
       if (safetyInterval) clearInterval(safetyInterval);
       unlisten?.();
       if (watching) {
