@@ -1,16 +1,21 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { ChevronDown, Search, Eye, EyeOff, Bot, User as UserIcon } from "lucide-react";
 import type { LogEntry } from "../../store/claudeStore";
 import { MessageCard, type ToolResultMap } from "./MessageCard";
 import { folderColor } from "../../utils/folderColors";
 
 /**
- * The meat of the drawer: a scrollable list of rendered message cards,
+ * The meat of the drawer: a virtualized list of rendered message cards,
  * with sidechain (sub-agent) runs grouped into collapsible bordered threads.
  *
- * We render everything (no virtualization) for now — typical sessions are
- * under a few thousand entries and React handles that fine. If we see real
- * perf regressions we can drop in a windowed list without breaking this API.
+ * Virtuoso handles the heavy lifting — only the handful of rows in (and
+ * just beyond) the viewport are mounted, so sessions with thousands of
+ * entries render without stalling React. Each entry and each sidechain
+ * thread is a single Virtuoso row; Virtuoso measures heights on the fly
+ * via ResizeObserver so expanding thinking / tool-result disclosures just
+ * work. `followOutput` keeps the view pinned to the bottom while new
+ * entries stream in, unless the user has scrolled away.
  */
 export function TranscriptFeed({
   entries,
@@ -22,10 +27,8 @@ export function TranscriptFeed({
   const [query, setQuery] = useState("");
   const [showThinking, setShowThinking] = useState(false);
   const [showSidechain, setShowSidechain] = useState(true);
-  const [tailFollow, setTailFollow] = useState(true);
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-  const lastLenRef = useRef(entries.length);
-  const interactedRef = useRef(false);
+  const [atBottom, setAtBottom] = useState(true);
+  const virtuosoRef = useRef<VirtuosoHandle | null>(null);
 
   // Build a map of tool_use_id → result info so chips can show status.
   const toolResults: ToolResultMap = useMemo(() => {
@@ -63,36 +66,6 @@ export function TranscriptFeed({
     });
   }, [items, query]);
 
-  // Auto-scroll to bottom when new entries arrive and tail-follow is on.
-  useLayoutEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const grew = entries.length > lastLenRef.current;
-    lastLenRef.current = entries.length;
-    if (!grew) return;
-    if (tailFollow) {
-      el.scrollTop = el.scrollHeight;
-    }
-  }, [entries.length, tailFollow]);
-
-  // Detect user scrolling away from bottom → disable tail-follow until they
-  // click the jump-to-bottom button (or hit bottom again).
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const onScroll = () => {
-      if (!interactedRef.current) {
-        interactedRef.current = true;
-      }
-      const atBottom =
-        el.scrollHeight - el.scrollTop - el.clientHeight < 24;
-      if (!atBottom && tailFollow) setTailFollow(false);
-      if (atBottom && !tailFollow) setTailFollow(true);
-    };
-    el.addEventListener("scroll", onScroll, { passive: true });
-    return () => el.removeEventListener("scroll", onScroll);
-  }, [tailFollow]);
-
   return (
     <div className="claude-feed">
       <div className="claude-feed-toolbar">
@@ -125,51 +98,69 @@ export function TranscriptFeed({
         </button>
       </div>
 
-      <div ref={scrollRef} className="claude-feed-scroll">
-        {filtered.length === 0 && (
-          <div className="claude-feed-empty">
-            {renderable.length === 0
-              ? live
-                ? "Listening for the first message…"
-                : "This session has no entries yet."
-              : "No entries match your filter."}
-          </div>
-        )}
-        {filtered.map((it, i) => {
-          if (it.kind === "entry") {
+      {filtered.length === 0 ? (
+        <div className="claude-feed-empty">
+          {renderable.length === 0
+            ? live
+              ? "Listening for the first message…"
+              : "This session has no entries yet."
+            : "No entries match your filter."}
+        </div>
+      ) : (
+        <Virtuoso
+          ref={virtuosoRef}
+          className="claude-feed-scroll"
+          data={filtered}
+          // Start at the most recent entry. Only applied on mount — subsequent
+          // appends are kept in view by `followOutput` below.
+          initialTopMostItemIndex={Math.max(0, filtered.length - 1)}
+          // Render ~400px of extra rows above and below the viewport so fast
+          // scrolling doesn't flash empty space while cards measure in.
+          increaseViewportBy={400}
+          atBottomStateChange={setAtBottom}
+          // Auto-pin to the bottom when new entries stream in, but only if
+          // the user is already at the bottom. `"auto"` = jump instantly (no
+          // smooth-scroll spam during a 200-entry backfill).
+          followOutput={(isAtBottom) => (isAtBottom ? "auto" : false)}
+          computeItemKey={(i, it) =>
+            it.kind === "entry"
+              ? `e-${it.entry.uuid ?? i}`
+              : `t-${it.entries[0]?.uuid ?? i}`
+          }
+          itemContent={(_i, it) => {
+            if (it.kind === "entry") {
+              return (
+                <MessageCard
+                  entry={it.entry}
+                  toolResults={toolResults}
+                  showThinking={showThinking}
+                />
+              );
+            }
+            const color = folderColor(it.threadIndex);
             return (
-              <MessageCard
-                key={`e-${i}-${it.entry.uuid ?? ""}`}
-                entry={it.entry}
+              <SubAgentThread
+                entries={it.entries}
                 toolResults={toolResults}
+                accent={color.accent}
+                tint={color.tint}
                 showThinking={showThinking}
+                taskInput={it.taskInput}
               />
             );
-          }
-          const color = folderColor(it.threadIndex);
-          return (
-            <SubAgentThread
-              key={`t-${i}-${it.entries[0]?.uuid ?? ""}`}
-              entries={it.entries}
-              toolResults={toolResults}
-              accent={color.accent}
-              tint={color.tint}
-              showThinking={showThinking}
-              taskInput={it.taskInput}
-            />
-          );
-        })}
-      </div>
+          }}
+        />
+      )}
 
-      {!tailFollow && (
+      {!atBottom && filtered.length > 0 && (
         <button
           type="button"
           className="claude-feed-follow"
           onClick={() => {
-            setTailFollow(true);
-            scrollRef.current?.scrollTo({
-              top: scrollRef.current.scrollHeight,
+            virtuosoRef.current?.scrollToIndex({
+              index: filtered.length - 1,
               behavior: "smooth",
+              align: "end",
             });
           }}
           title="Jump to latest"
