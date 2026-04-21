@@ -22,6 +22,8 @@
     "dialog:allow-open",
     "shell:allow-open",
     "os:default",
-    "os:allow-platform"
+    "os:allow-platform",
+    "clipboard-manager:allow-read-text",
+    "clipboard-manager:allow-write-text"
   ]
 }

@@ -93,6 +93,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_os::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .manage(WatcherState::default())
         .manage(TerminalState::default())
         // Confirm the webview reached setup. Black-window reports almost
