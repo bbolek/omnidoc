@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { readText as readClipboardText } from "@tauri-apps/plugin-clipboard-manager";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
@@ -146,53 +147,60 @@ export function TerminalView({
       });
     })();
 
-    // Paste support. xterm.js listens for `paste` DOM events on its hidden
-    // textarea, but Tauri's webview (webkit2gtk especially) doesn't reliably
-    // deliver those in response to Cmd/Ctrl-V — so programs running inside
-    // the PTY (shells, Claude Code, etc.) never see the pasted text. We
-    // intercept the shortcut ourselves, read the OS clipboard, and hand it
-    // to `term.paste()` which runs the text through xterm's normal input
-    // pipeline (honoring bracketed-paste mode when the program enabled it).
+    // Paste support. Two things conspire against the obvious approach:
+    //   1. `navigator.clipboard.readText()` is gated behind permissions the
+    //      Tauri webview (especially webkit2gtk on Linux) does not grant —
+    //      it throws NotAllowedError, so the previous fix silently failed.
+    //      We read via the tauri clipboard-manager plugin instead, which
+    //      talks directly to the OS clipboard.
+    //   2. xterm's own keydown handler runs before any DOM listener attached
+    //      to an ancestor during the bubble phase, so by the time we'd see
+    //      Ctrl-V it has already been sent to the PTY. We use
+    //      `attachCustomKeyEventHandler` (xterm's official intercept point)
+    //      and return `false` to stop xterm from also forwarding the keys.
     //
-    // Shortcuts match terminal-emulator conventions:
+    // Shortcuts accepted:
     //   - Cmd-V on macOS
-    //   - Ctrl-Shift-V elsewhere (plain Ctrl-V is reserved for programs
-    //     like vim/readline that treat it as "quoted insert")
+    //   - Ctrl-V and Ctrl-Shift-V on Windows/Linux (Ctrl-V is what most
+    //     users reach for; Ctrl-Shift-V is the GNOME/xterm convention)
     //   - Shift-Insert on every platform (classic X11 paste)
-    const containerEl = containerRef.current;
     const pasteClipboard = async () => {
       try {
-        const text = await navigator.clipboard.readText();
+        const text = await readClipboardText();
         if (text) term.paste(text);
       } catch (err) {
         log.warn("terminal", `clipboard read failed: ${String(err)}`);
       }
     };
-    const onPasteKey = (e: KeyboardEvent) => {
+    const isPasteShortcut = (e: KeyboardEvent) => {
       const keyV = e.key === "v" || e.key === "V";
-      const macPaste = isMacPlatform && e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && keyV;
-      const ctrlShiftV = !isMacPlatform && e.ctrlKey && e.shiftKey && !e.metaKey && !e.altKey && keyV;
+      const macPaste = isMacPlatform && e.metaKey && !e.ctrlKey && !e.altKey && keyV;
+      const ctrlV = !isMacPlatform && e.ctrlKey && !e.metaKey && !e.altKey && keyV;
       const shiftInsert = e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && e.key === "Insert";
-      if (!macPaste && !ctrlShiftV && !shiftInsert) return;
+      return macPaste || ctrlV || shiftInsert;
+    };
+    term.attachCustomKeyEventHandler((e) => {
+      if (e.type !== "keydown" || !isPasteShortcut(e)) return true;
       e.preventDefault();
       e.stopPropagation();
       void pasteClipboard();
-    };
-    // Belt-and-suspenders: if the webview *does* fire a native paste event
-    // (context-menu paste, middle-click on X11), short-circuit xterm's own
-    // handler and route through term.paste() for consistent bracketed-paste
-    // behavior.
+      return false;
+    });
+    // Context-menu paste / middle-click on X11 fire a native `paste` event
+    // on xterm's hidden textarea. Let it through xterm's own paste pipeline
+    // by reading clipboardData; xterm's default handler also does this, but
+    // some webviews deliver the event without clipboardData populated — in
+    // which case we fall back to the OS clipboard via the plugin.
+    const containerEl = containerRef.current;
     const onPasteEvent = (e: ClipboardEvent) => {
       const text = e.clipboardData?.getData("text");
-      if (!text) return;
       e.preventDefault();
       e.stopPropagation();
-      term.paste(text);
+      if (text) term.paste(text);
+      else void pasteClipboard();
     };
-    containerEl.addEventListener("keydown", onPasteKey, { capture: true });
     containerEl.addEventListener("paste", onPasteEvent, { capture: true });
     pasteCleanupRef.current = () => {
-      containerEl.removeEventListener("keydown", onPasteKey, { capture: true });
       containerEl.removeEventListener("paste", onPasteEvent, { capture: true });
     };
 
