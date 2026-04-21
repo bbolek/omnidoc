@@ -10,6 +10,9 @@ import { folderColor } from "../../utils/folderColors";
 import { useFileStore } from "../../store/fileStore";
 import { log } from "../../utils/logger";
 
+const isMacPlatform =
+  typeof navigator !== "undefined" && navigator.platform.toUpperCase().includes("MAC");
+
 /**
  * One live xterm.js instance bound 1:1 to a backend PTY by `terminalId`.
  *
@@ -35,6 +38,7 @@ export function TerminalView({
   // FitAddon otherwise reads `_core._renderService.dimensions` on the torn-down
   // core and throws "Cannot read properties of undefined (reading 'dimensions')".
   const disposedRef = useRef(false);
+  const pasteCleanupRef = useRef<(() => void) | null>(null);
 
   const terminal = useTerminalStore((s) =>
     s.terminals.find((t) => t.id === terminalId)
@@ -142,12 +146,64 @@ export function TerminalView({
       });
     })();
 
+    // Paste support. xterm.js listens for `paste` DOM events on its hidden
+    // textarea, but Tauri's webview (webkit2gtk especially) doesn't reliably
+    // deliver those in response to Cmd/Ctrl-V — so programs running inside
+    // the PTY (shells, Claude Code, etc.) never see the pasted text. We
+    // intercept the shortcut ourselves, read the OS clipboard, and hand it
+    // to `term.paste()` which runs the text through xterm's normal input
+    // pipeline (honoring bracketed-paste mode when the program enabled it).
+    //
+    // Shortcuts match terminal-emulator conventions:
+    //   - Cmd-V on macOS
+    //   - Ctrl-Shift-V elsewhere (plain Ctrl-V is reserved for programs
+    //     like vim/readline that treat it as "quoted insert")
+    //   - Shift-Insert on every platform (classic X11 paste)
+    const containerEl = containerRef.current;
+    const pasteClipboard = async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        if (text) term.paste(text);
+      } catch (err) {
+        log.warn("terminal", `clipboard read failed: ${String(err)}`);
+      }
+    };
+    const onPasteKey = (e: KeyboardEvent) => {
+      const keyV = e.key === "v" || e.key === "V";
+      const macPaste = isMacPlatform && e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && keyV;
+      const ctrlShiftV = !isMacPlatform && e.ctrlKey && e.shiftKey && !e.metaKey && !e.altKey && keyV;
+      const shiftInsert = e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && e.key === "Insert";
+      if (!macPaste && !ctrlShiftV && !shiftInsert) return;
+      e.preventDefault();
+      e.stopPropagation();
+      void pasteClipboard();
+    };
+    // Belt-and-suspenders: if the webview *does* fire a native paste event
+    // (context-menu paste, middle-click on X11), short-circuit xterm's own
+    // handler and route through term.paste() for consistent bracketed-paste
+    // behavior.
+    const onPasteEvent = (e: ClipboardEvent) => {
+      const text = e.clipboardData?.getData("text");
+      if (!text) return;
+      e.preventDefault();
+      e.stopPropagation();
+      term.paste(text);
+    };
+    containerEl.addEventListener("keydown", onPasteKey, { capture: true });
+    containerEl.addEventListener("paste", onPasteEvent, { capture: true });
+    pasteCleanupRef.current = () => {
+      containerEl.removeEventListener("keydown", onPasteKey, { capture: true });
+      containerEl.removeEventListener("paste", onPasteEvent, { capture: true });
+    };
+
     return () => {
       // Mark disposed before any teardown so callbacks that slip in between
       // dispose() and the next paint (RAF, ResizeObserver) skip fit().
       disposedRef.current = true;
       termRef.current = null;
       fitRef.current = null;
+      pasteCleanupRef.current?.();
+      pasteCleanupRef.current = null;
       unlisteners.forEach((u) => u());
       invoke("terminal_kill", { id: terminalId }).catch(() => {});
       // Defer dispose() by a tick. xterm schedules its first render via RAF
