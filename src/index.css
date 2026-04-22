@@ -1326,10 +1326,11 @@ kbd {
   white-space: pre !important;
   tab-size: 2;
 }
-.pte-highlight .shiki .line {
-  display: block;
-  min-height: 1em;
-}
+/* Leave `.line` as inline. Shiki emits a literal `\n` between line spans and
+   with `white-space: pre` that newline already produces the row break — so
+   making `.line` a block would add a SECOND row per line (the block plus the
+   whitespace text node between siblings), doubling vertical spacing and
+   misaligning the caret. */
 
 /* ─── Heading fold buttons ────────────────────────────────────────────── */
 .heading-fold-btn {
