@@ -29,11 +29,15 @@ export function ClaudePanel() {
   );
 
   // Auto-select the most recently active session on first mount when none is
-  // persisted, so the drawer isn't empty on a fresh install.
+  // persisted, so the drawer isn't empty on a fresh install. Depend on the
+  // first session id (not the whole `sessions` array) so this effect doesn't
+  // re-fire on every `refreshSessions` — the array reference churns on every
+  // ~/.claude filesystem notification.
+  const firstSessionId = sessions[0]?.session_id ?? null;
   useEffect(() => {
-    if (activeSessionId || sessions.length === 0) return;
-    void selectSession(sessions[0].session_id);
-  }, [activeSessionId, sessions, selectSession]);
+    if (activeSessionId || !firstSessionId) return;
+    void selectSession(firstSessionId);
+  }, [activeSessionId, firstSessionId, selectSession]);
 
   const live = activeSessionId ? watched.has(activeSessionId) : false;
   const setActivePane = useTerminalStore((s) => s.setActivePane);
