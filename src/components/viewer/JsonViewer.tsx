@@ -63,7 +63,7 @@ export function JsonViewer({ tab }: Props) {
       </div>
 
       {mode === "edit" ? (
-        <PlainTextEditor tab={tab} showToolbar showLineNumbers monospace />
+        <PlainTextEditor tab={tab} showToolbar showLineNumbers monospace language="json" />
       ) : (
         <div className="json-viewer selectable fade-in" style={{ flex: 1, overflow: "auto" }}>
           {error ? (

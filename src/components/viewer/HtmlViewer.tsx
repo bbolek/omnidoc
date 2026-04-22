@@ -79,7 +79,7 @@ export function HtmlViewer({ tab }: Props) {
 
       {/* Content */}
       {mode === "edit" ? (
-        <PlainTextEditor tab={tab} showToolbar showLineNumbers monospace />
+        <PlainTextEditor tab={tab} showToolbar showLineNumbers monospace language="html" />
       ) : mode === "preview" ? (
         <iframe
           srcDoc={tab.content}
