@@ -15,6 +15,7 @@ import { getLanguageForExtension } from "../../utils/fileUtils";
 import { MermaidBlock } from "./MermaidBlock";
 import { Callout, extractCalloutFromChildren } from "./Callout";
 import { MarkdownEditor } from "../editor/MarkdownEditor";
+import { ModeToggle } from "./ModeToggle";
 import type { Tab } from "../../types";
 import "katex/dist/katex.min.css";
 
@@ -23,6 +24,7 @@ interface Props {
 }
 
 type ViewMode = "preview" | "source" | "edit";
+const MODES: readonly ViewMode[] = ["preview", "source", "edit"];
 
 function escapeHtml(str: string): string {
   return str
@@ -312,35 +314,7 @@ export function MarkdownViewer({ tab }: Props) {
           flexShrink: 0,
         }}
       >
-        <div
-          style={{
-            display: "inline-flex",
-            border: "1px solid var(--color-border)",
-            borderRadius: "var(--radius-sm)",
-            overflow: "hidden",
-            fontSize: 12,
-          }}
-        >
-          {(["preview", "source", "edit"] as ViewMode[]).map((m) => (
-            <button
-              key={m}
-              onClick={() => setMode(m)}
-              style={{
-                padding: "3px 10px",
-                background: mode === m ? "var(--color-accent)" : "var(--color-bg-subtle)",
-                color: mode === m ? "var(--color-accent-fg)" : "var(--color-text-muted)",
-                border: "none",
-                cursor: "pointer",
-                fontFamily: "Inter, sans-serif",
-                fontWeight: mode === m ? 600 : 400,
-                transition: "background 0.1s",
-                textTransform: "capitalize",
-              }}
-            >
-              {m}
-            </button>
-          ))}
-        </div>
+        <ModeToggle modes={MODES} value={mode} onChange={setMode} />
         <button
           type="button"
           className="present-toggle-btn"

@@ -1,16 +1,21 @@
 import { useState } from "react";
-import { Hash, WrapText, Pencil, Eye } from "lucide-react";
+import { Hash, WrapText } from "lucide-react";
 import { useUiStore } from "../../store/uiStore";
 import { PlainTextEditor } from "../editor/PlainTextEditor";
+import { ModeToggle } from "./ModeToggle";
 import type { Tab } from "../../types";
 
 interface Props {
   tab: Tab;
 }
 
+const MODES = ["view", "edit"] as const;
+type Mode = (typeof MODES)[number];
+
 export function TextViewer({ tab }: Props) {
   const [wrap, setWrap] = useState(true);
-  const [editing, setEditing] = useState(false);
+  const [mode, setMode] = useState<Mode>("view");
+  const editing = mode === "edit";
   const { showLineNumbers, toggleLineNumbers } = useUiStore();
   const lines = tab.content.split("\n");
 
@@ -35,26 +40,7 @@ export function TextViewer({ tab }: Props) {
           <span style={{ color: "var(--color-accent)" }}>• unsaved</span>
         )}
         <div style={{ flex: 1 }} />
-        <button
-          onClick={() => setEditing((v) => !v)}
-          title={editing ? "Switch to view mode" : "Switch to edit mode"}
-          style={{
-            background: editing ? "var(--color-accent-subtle)" : "none",
-            border: "none",
-            borderRadius: "var(--radius-sm)",
-            padding: "2px 6px",
-            cursor: "pointer",
-            color: editing ? "var(--color-accent)" : "var(--color-text-muted)",
-            display: "flex",
-            alignItems: "center",
-            gap: 4,
-            fontSize: 12,
-            fontFamily: "Inter, sans-serif",
-          }}
-        >
-          {editing ? <Eye size={12} /> : <Pencil size={12} />}
-          {editing ? "View" : "Edit"}
-        </button>
+        <ModeToggle modes={MODES} value={mode} onChange={setMode} />
         <button
           onClick={toggleLineNumbers}
           title="Toggle line numbers"
