@@ -3,8 +3,10 @@ import { useShallow } from "zustand/react/shallow";
 import { useClaudeStore, selectActiveSession } from "../../store/claudeStore";
 import { SessionHeader } from "./SessionHeader";
 import { CostMeter } from "./CostMeter";
+import { ContextMeter } from "./ContextMeter";
 import { TranscriptFeed } from "./TranscriptFeed";
 import { SessionPicker } from "./SessionPicker";
+import { ClaudePanelTerminal } from "./ClaudePanelTerminal";
 import { Sparkles, AlertCircle } from "lucide-react";
 import { useTerminalStore } from "../../store/terminalStore";
 import { spawnClaudeTerminal } from "../../store/terminalStore";
@@ -71,7 +73,9 @@ export function ClaudePanel() {
         <>
           <SessionHeader meta={meta} live={live} />
           <CostMeter cost={cost} live={live} />
+          <ContextMeter entries={entries} />
           <TranscriptFeed entries={entries} live={live} />
+          <ClaudePanelTerminal sessionId={activeSessionId} cwd={meta.cwd} />
         </>
       )}
 

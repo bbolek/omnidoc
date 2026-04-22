@@ -85,8 +85,12 @@ function TerminalPaneContent({
   // useShallow: zustand v5 compares snapshots with Object.is, and
   // `.filter(...)` returns a new array every call — without shallow equality
   // React throws #185 "Maximum update depth exceeded" on mount.
+  // Terminals hosted inside the Claude panel are filtered out — they render
+  // in that pane's own slot and must not mount a second xterm instance here.
   const terminals = useTerminalStore(
-    useShallow((s) => s.terminals.filter((t) => t.paneId === pane.id))
+    useShallow((s) =>
+      s.terminals.filter((t) => t.paneId === pane.id && !t.inClaudePanel)
+    )
   );
   const removeTerminal = useTerminalStore((s) => s.removeTerminal);
   const setActive = useTerminalStore((s) => s.setActiveTerminal);
