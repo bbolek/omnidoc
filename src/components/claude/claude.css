@@ -718,34 +718,45 @@
 
 /* ── Sidechain (sub-agent) threads ────────────────────────────────────── */
 
+/* Each sub-agent thread picks an accent color from the folder palette —
+   hashed on the agent's `subagent_type`, so "Code reuse review" and
+   "Efficiency review" land on different hues and read the same color on
+   every run. The accent and tint are published as custom properties on the
+   wrapper (`--sidechain-accent` / `--sidechain-tint`) so the title, left
+   rail, and nested card borders can all pick them up without each needing
+   its own inline style. */
 .claude-sidechain {
-  border-left: 3px solid var(--color-border);
+  border-left: 3px solid var(--sidechain-accent, var(--color-border));
   border-radius: var(--radius);
-  padding: 2px;
+  padding: 2px 2px 4px;
 }
 .claude-sidechain-head {
   width: 100%;
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 8px;
+  padding: 6px 10px;
   background: transparent;
   border: none;
   cursor: pointer;
   color: var(--color-text);
-  font-size: 11px;
+  font-size: 12px;
   text-align: left;
 }
 .claude-sidechain-head:hover {
-  background: color-mix(in srgb, var(--color-bg) 92%, var(--color-text));
+  background: color-mix(in srgb, var(--color-bg) 88%, var(--sidechain-accent, var(--color-text)));
 }
 .claude-sidechain-title {
   font-weight: 700;
   font-family: "Fira Code", monospace;
+  font-size: 12px;
+  letter-spacing: 0.2px;
+  color: var(--sidechain-accent, var(--color-text));
+  text-transform: capitalize;
 }
 .claude-sidechain-desc {
   color: var(--color-text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -755,16 +766,35 @@
 .claude-sidechain-count {
   font-size: 10px;
   color: var(--color-text-muted);
-  padding: 1px 5px;
+  padding: 1px 6px;
   background: var(--color-bg);
   border: 1px solid var(--color-border-muted);
   border-radius: 999px;
+  font-variant-numeric: tabular-nums;
 }
 .claude-sidechain-body {
-  padding: 4px 8px 6px 18px;
-  border-left: 1px dashed var(--color-border-muted);
-  margin-left: 8px;
+  padding: 6px 8px 8px 16px;
+  border-left: 1px dashed color-mix(in srgb, var(--sidechain-accent, var(--color-border)) 55%, transparent);
+  margin-left: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
+/* Align nested message cards with their parent thread's accent so a given
+   sub-agent reads as a single visual unit. */
+.claude-sidechain-body .claude-msg.sidechain {
+  border-left-color: var(--sidechain-accent, var(--color-border));
+}
+/* Inside a sub-agent thread, nudge the small monospace bits (tool chips,
+   tool-result previews/bodies) up one step so the log is readable without
+   zooming. */
+.claude-sidechain-body .claude-md { font-size: 13px; line-height: 1.6; }
+.claude-sidechain-body .claude-tool-chip-head,
+.claude-sidechain-body .claude-tool-chip-name,
+.claude-sidechain-body .claude-tool-chip-summary { font-size: 12px; }
+.claude-sidechain-body .claude-tool-chip-body,
+.claude-sidechain-body .claude-tool-result-body { font-size: 12px; line-height: 1.5; }
+.claude-sidechain-body .claude-tool-result-head { font-size: 11px; }
 
 /* ── Session picker ────────────────────────────────────────────────────── */
 
