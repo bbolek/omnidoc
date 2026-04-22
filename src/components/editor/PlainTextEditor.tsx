@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { RotateCcw, Save } from "lucide-react";
 import { useFileStore } from "../../store/fileStore";
+import { useThemeStore } from "../../store/themeStore";
+import { getShikiTheme } from "../../themes";
+import { highlight } from "../../utils/shikiUtils";
 import type { Tab } from "../../types";
 
 interface Props {
@@ -13,6 +16,12 @@ interface Props {
   monospace?: boolean;
   /** Placeholder to show when the file is empty. */
   placeholder?: string;
+  /**
+   * Shiki language id. When set, the editor layers a syntax-highlighted
+   * `<pre>` behind a transparent `<textarea>` so code keeps its colors in
+   * edit mode. Omit for prose-style plain text.
+   */
+  language?: string;
 }
 
 export function PlainTextEditor({
@@ -21,12 +30,43 @@ export function PlainTextEditor({
   showLineNumbers = false,
   monospace = true,
   placeholder,
+  language,
 }: Props) {
   const { updateTabContent, saveTabContent, discardTabChanges } = useFileStore();
+  const { themeName } = useThemeStore();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const gutterRef = useRef<HTMLDivElement>(null);
+  const overlayInnerRef = useRef<HTMLDivElement>(null);
   const [saving, setSaving] = useState(false);
   const [lineCount, setLineCount] = useState(() => tab.content.split("\n").length);
+  const [highlightedHtml, setHighlightedHtml] = useState<string>("");
+
+  // When a language is supplied, keep a Shiki-highlighted copy of the content
+  // in sync with edits. It's rendered behind a transparent textarea so the
+  // caret, selection, and input handling stay native while the user sees
+  // colored tokens underneath.
+  useEffect(() => {
+    if (!language) {
+      setHighlightedHtml("");
+      return;
+    }
+    let cancelled = false;
+    const shikiTheme = getShikiTheme(themeName);
+    // Keep a trailing newline so the last empty line still renders a slot —
+    // without it, Shiki strips the final line break and the caret appears
+    // above a blank area with no token underneath.
+    const src = tab.content.endsWith("\n") ? tab.content : tab.content + "\n";
+    highlight(src, language, shikiTheme)
+      .then((html) => {
+        if (!cancelled) setHighlightedHtml(html);
+      })
+      .catch(() => {
+        if (!cancelled) setHighlightedHtml("");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tab.content, language, themeName]);
 
   const onChange = useCallback(
     (value: string) => {
@@ -81,10 +121,18 @@ export function PlainTextEditor({
     }
   }, [tab.content]);
 
-  // Keep the line-number gutter aligned with the textarea's scroll position.
+  // Keep the line-number gutter and highlight overlay aligned with the
+  // textarea's scroll position. Both are driven off the same event so they
+  // can't drift — the gutter only scrolls vertically, the overlay is
+  // translated horizontally and vertically so it tracks word-wrap-off code.
   const onScroll = useCallback(() => {
-    if (gutterRef.current && textareaRef.current) {
-      gutterRef.current.scrollTop = textareaRef.current.scrollTop;
+    const ta = textareaRef.current;
+    if (!ta) return;
+    if (gutterRef.current) {
+      gutterRef.current.scrollTop = ta.scrollTop;
+    }
+    if (overlayInnerRef.current) {
+      overlayInnerRef.current.style.transform = `translate(${-ta.scrollLeft}px, ${-ta.scrollTop}px)`;
     }
   }, []);
 
@@ -173,31 +221,67 @@ export function PlainTextEditor({
             ))}
           </div>
         )}
-        <textarea
-          ref={textareaRef}
-          defaultValue={tab.content}
-          placeholder={placeholder}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={onKeyDown}
-          onScroll={showLineNumbers ? onScroll : undefined}
-          spellCheck={false}
-          style={{
-            flex: 1,
-            width: "100%",
-            resize: "none",
-            border: "none",
-            outline: "none",
-            background: "var(--color-bg)",
-            color: "var(--color-text)",
-            fontFamily,
-            fontSize: 13,
-            lineHeight: 1.7,
-            padding: "16px 24px",
-            boxSizing: "border-box",
-            overflowY: "auto",
-            caretColor: "var(--color-accent)",
-          }}
-        />
+        <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
+          {language && highlightedHtml && (
+            <div
+              aria-hidden
+              className="pte-highlight"
+              style={{
+                position: "absolute",
+                inset: 0,
+                overflow: "hidden",
+                pointerEvents: "none",
+                background: "var(--color-bg)",
+              }}
+            >
+              <div
+                ref={overlayInnerRef}
+                style={{
+                  padding: "16px 24px",
+                  fontFamily,
+                  fontSize: 13,
+                  lineHeight: 1.7,
+                  willChange: "transform",
+                }}
+                dangerouslySetInnerHTML={{ __html: highlightedHtml }}
+              />
+            </div>
+          )}
+          <textarea
+            ref={textareaRef}
+            defaultValue={tab.content}
+            placeholder={placeholder}
+            onChange={(e) => onChange(e.target.value)}
+            onKeyDown={onKeyDown}
+            onScroll={showLineNumbers || language ? onScroll : undefined}
+            spellCheck={false}
+            style={{
+              position: language ? "absolute" : "relative",
+              inset: language ? 0 : undefined,
+              width: "100%",
+              height: "100%",
+              resize: "none",
+              border: "none",
+              outline: "none",
+              background: language ? "transparent" : "var(--color-bg)",
+              // Hide the textarea's own text so only the highlighted overlay
+              // is visible — the caret still renders via `caretColor`.
+              color: language ? "transparent" : "var(--color-text)",
+              WebkitTextFillColor: language ? "transparent" : undefined,
+              fontFamily,
+              fontSize: 13,
+              lineHeight: 1.7,
+              padding: "16px 24px",
+              boxSizing: "border-box",
+              // Code needs horizontal scroll (long lines shouldn't wrap or the
+              // overlay would misalign); prose wraps as usual.
+              overflow: language ? "auto" : undefined,
+              overflowY: language ? undefined : "auto",
+              whiteSpace: language ? "pre" : undefined,
+              caretColor: "var(--color-accent)",
+            }}
+          />
+        </div>
       </div>
     </div>
   );

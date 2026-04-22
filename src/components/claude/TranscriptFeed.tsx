@@ -1,9 +1,9 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type CSSProperties } from "react";
 import { Virtuoso, type VirtuosoHandle, type Components } from "react-virtuoso";
 import { ChevronDown, Search, Eye, EyeOff, Bot, User as UserIcon } from "lucide-react";
 import type { LogEntry } from "../../store/claudeStore";
 import { MessageCard, type ToolResultMap } from "./MessageCard";
-import { folderColor } from "../../utils/folderColors";
+import { colorForKey, folderColor } from "../../utils/folderColors";
 
 /**
  * The meat of the drawer: a virtualized list of rendered message cards,
@@ -140,7 +140,13 @@ export function TranscriptFeed({
                 </div>
               );
             }
-            const color = folderColor(it.threadIndex);
+            // Prefer a name-derived color so the same agent type reads the
+            // same shade across runs (and parallel siblings pick up distinct
+            // shades). Fall back to the thread index only when the Task
+            // tool_use didn't carry a subagent_type.
+            const color = it.taskInput?.subagent_type
+              ? colorForKey(it.taskInput.subagent_type)
+              : folderColor(it.threadIndex);
             return (
               <div className="claude-feed-row">
                 <SubAgentThread
@@ -193,15 +199,24 @@ function SubAgentThread({
   taskInput?: { description?: string; subagent_type?: string };
 }) {
   const [open, setOpen] = useState(true);
+  // Publish the thread's accent/tint as custom properties so descendants
+  // (title text, the inner left-rail, nested card border) can pick them up
+  // without each needing its own inline style.
+  const style = {
+    borderLeftColor: accent,
+    background: tint,
+    ["--sidechain-accent" as string]: accent,
+    ["--sidechain-tint" as string]: tint,
+  } as CSSProperties;
   return (
-    <div className="claude-sidechain" style={{ borderLeftColor: accent, background: tint }}>
+    <div className="claude-sidechain" style={style}>
       <button
         type="button"
         className="claude-sidechain-head"
         onClick={() => setOpen((o) => !o)}
       >
-        {open ? <ChevronDown size={11} /> : <ChevronDown size={11} style={{ transform: "rotate(-90deg)" }} />}
-        <Bot size={11} style={{ color: accent }} />
+        {open ? <ChevronDown size={12} /> : <ChevronDown size={12} style={{ transform: "rotate(-90deg)" }} />}
+        <Bot size={12} style={{ color: accent }} />
         <span className="claude-sidechain-title">
           {taskInput?.subagent_type ? `${taskInput.subagent_type}` : "sub-agent"}
         </span>

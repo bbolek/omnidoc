@@ -77,6 +77,7 @@ export function CodeViewer({ tab, ext }: Props) {
           showToolbar
           showLineNumbers={showLineNumbers}
           monospace
+          language={lang}
         />
       ) : (
         <div

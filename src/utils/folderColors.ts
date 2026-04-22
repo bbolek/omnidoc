@@ -34,6 +34,21 @@ export function folderColor(colorIndex: number): FolderColor {
 }
 
 /**
+ * Deterministic color for an arbitrary string key — same key always maps to
+ * the same palette slot, distinct keys tend to land on distinct slots. Used
+ * for e.g. sub-agent threads so a given agent type (like "Code reuse review")
+ * reads the same color across every run, and different types are visually
+ * distinguishable regardless of launch order.
+ */
+export function colorForKey(key: string): FolderColor {
+  let h = 0;
+  for (let i = 0; i < key.length; i++) {
+    h = (h * 31 + key.charCodeAt(i)) | 0;
+  }
+  return folderColor(h);
+}
+
+/**
  * Pick the next `colorIndex` for a newly added folder: the smallest index
  * not already in use. Falls back to `existing.length` (modulo palette) if
  * every palette slot is taken.

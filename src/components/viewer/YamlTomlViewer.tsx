@@ -126,7 +126,7 @@ export function YamlTomlViewer({ tab, format }: Props) {
 
       {/* Content */}
       {mode === "edit" ? (
-        <PlainTextEditor tab={tab} showToolbar showLineNumbers monospace />
+        <PlainTextEditor tab={tab} showToolbar showLineNumbers monospace language={format} />
       ) : (
         <div className="code-viewer selectable fade-in" style={{ flex: 1, overflow: "auto", padding: 12 }}>
           {mode === "tree" ? (
