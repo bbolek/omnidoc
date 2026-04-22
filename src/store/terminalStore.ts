@@ -32,6 +32,12 @@ export interface TerminalInstance {
    * The trailing newline is included.
    */
   startupCommand?: string;
+  /**
+   * True when this PTY is hosted inside the Claude panel's embedded terminal
+   * slot rather than the bottom terminal panel. The bottom panel filters
+   * these out so they never render twice.
+   */
+  inClaudePanel?: boolean;
 }
 
 export interface TerminalPane {
@@ -90,6 +96,11 @@ export const useTerminalStore = create<TerminalState>()(
         set((s) => {
           const paneId = term.paneId ?? s.activePaneId;
           const instance: TerminalInstance = { ...term, paneId };
+          // Claude-panel terminals live in a separate UI slot — they must not
+          // pop open the bottom panel or steal its active tab.
+          if (instance.inClaudePanel) {
+            return { terminals: [...s.terminals, instance] };
+          }
           const panes = s.panes.map((p) =>
             p.id === paneId ? { ...p, activeTerminalId: instance.id } : p
           );
@@ -265,7 +276,8 @@ function shortName(p: string | null): string {
  */
 export async function spawnTerminalForFolder(
   folderPath: string | null,
-  paneId?: string
+  paneId?: string,
+  inClaudePanel = false
 ): Promise<string> {
   const shell = await invoke<string>("terminal_detect_shell").catch(() => "");
   const id = cryptoRandomId();
@@ -276,6 +288,7 @@ export async function spawnTerminalForFolder(
     folderPath,
     shell: shell || defaultShellFallback(),
     started: false,
+    inClaudePanel,
   });
   return id;
 }
@@ -295,7 +308,8 @@ export async function spawnClaudeTerminal(
   cwd: string | null,
   claudeBinary: string | null,
   paneId?: string,
-  titleHint?: string | null
+  titleHint?: string | null,
+  inClaudePanel = false
 ): Promise<string> {
   const shell = await invoke<string>("terminal_detect_shell").catch(() => "");
   const id = cryptoRandomId();
@@ -318,6 +332,7 @@ export async function spawnClaudeTerminal(
     started: false,
     claudeSessionId: sessionId ?? undefined,
     startupCommand,
+    inClaudePanel,
   });
   return id;
 }
