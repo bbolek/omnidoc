@@ -195,17 +195,19 @@ function ToolResultView({ content, isError }: { content: unknown; isError: boole
 }
 
 function renderPreview(content: unknown): string {
-  if (typeof content === "string") return content;
+  if (typeof content === "string") return stripAnsi(content);
   if (Array.isArray(content)) {
-    return content
-      .map((c) => {
-        if (typeof c === "string") return c;
-        if (c && typeof c === "object" && "text" in (c as Record<string, unknown>)) {
-          return String((c as Record<string, unknown>).text ?? "");
-        }
-        return "";
-      })
-      .join("\n");
+    return stripAnsi(
+      content
+        .map((c) => {
+          if (typeof c === "string") return c;
+          if (c && typeof c === "object" && "text" in (c as Record<string, unknown>)) {
+            return String((c as Record<string, unknown>).text ?? "");
+          }
+          return "";
+        })
+        .join("\n")
+    );
   }
   if (content == null) return "";
   try {
@@ -213,6 +215,17 @@ function renderPreview(content: unknown): string {
   } catch {
     return String(content);
   }
+}
+
+// Tool stdout often contains ANSI color / cursor sequences (e.g. a `tree`
+// command's `\x1b[37m…\x1b[39m` coloring) because CLI tools don't always
+// detect that they're piped. A `<pre>` swallows the ESC byte but leaves the
+// `[39m` / `[37m` payload visible as literal text — strip both the escape
+// form and its bare-CSI variant so the preview reads as plain text.
+// eslint-disable-next-line no-control-regex
+const ANSI_RE = /\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g;
+function stripAnsi(s: string): string {
+  return s.replace(ANSI_RE, "");
 }
 
 function approxWords(s: string): number {

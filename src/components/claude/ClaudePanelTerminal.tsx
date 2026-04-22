@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { TerminalSquare, ChevronDown, ChevronUp, X, Play } from "lucide-react";
 import { TerminalView } from "../terminal/TerminalView";
@@ -8,6 +8,9 @@ import {
   spawnClaudeTerminal,
   spawnTerminalForFolder,
 } from "../../store/terminalStore";
+
+const MIN_HEIGHT = 120;
+const MAX_HEIGHT = 720;
 
 /**
  * Embedded terminal slot at the bottom of the Claude panel. One PTY at a
@@ -28,9 +31,35 @@ export function ClaudePanelTerminal({
   const [open, setOpen] = useState(false);
   const [terminalId, setTerminalId] = useState<string | null>(null);
   const [spawning, setSpawning] = useState(false);
+  const [height, setHeight] = useState(260);
   const binary = useClaudeStore((s) => s.binaryPath);
   const terminals = useTerminalStore((s) => s.terminals);
   const removeTerminal = useTerminalStore((s) => s.removeTerminal);
+
+  // Drag-to-resize on the top border of the panel. Dragging up grows the
+  // terminal, down shrinks it. Clamped so the transcript above stays visible.
+  const onResizeStart = useCallback(
+    (e: React.MouseEvent) => {
+      if (!open) return;
+      e.preventDefault();
+      const startY = e.clientY;
+      const startH = height;
+      document.body.classList.add("resizing");
+
+      const onMove = (ev: MouseEvent) => {
+        const next = startH + (startY - ev.clientY);
+        setHeight(Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, next)));
+      };
+      const onUp = () => {
+        document.body.classList.remove("resizing");
+        window.removeEventListener("mousemove", onMove);
+        window.removeEventListener("mouseup", onUp);
+      };
+      window.addEventListener("mousemove", onMove);
+      window.addEventListener("mouseup", onUp);
+    },
+    [open, height]
+  );
 
   // Keep the ref fresh so the session-change cleanup effect (which only
   // depends on sessionId) can tear down the PTY without listing `terminalId`
@@ -106,7 +135,17 @@ export function ClaudePanelTerminal({
   };
 
   return (
-    <div className={`claude-panel-term${open ? " open" : ""}`}>
+    <div
+      className={`claude-panel-term${open ? " open" : ""}`}
+      style={open ? { height } : undefined}
+    >
+      {open && (
+        <div
+          className="claude-panel-term-resize"
+          onMouseDown={onResizeStart}
+          title="Drag to resize"
+        />
+      )}
       <div className="claude-panel-term-head">
         <button
           type="button"
