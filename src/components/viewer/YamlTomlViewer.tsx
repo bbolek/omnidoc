@@ -6,6 +6,7 @@ import { useThemeStore } from "../../store/themeStore";
 import { getShikiTheme } from "../../themes";
 import { highlight } from "../../utils/shikiUtils";
 import { PlainTextEditor } from "../editor/PlainTextEditor";
+import { ModeToggle } from "./ModeToggle";
 import type { Tab } from "../../types";
 
 interface Props {
@@ -61,35 +62,7 @@ export function YamlTomlViewer({ tab, format }: Props) {
           flexWrap: "wrap",
         }}
       >
-        <div
-          style={{
-            display: "inline-flex",
-            border: "1px solid var(--color-border)",
-            borderRadius: "var(--radius-sm)",
-            overflow: "hidden",
-            fontSize: 12,
-          }}
-        >
-          {MODES.map((m) => (
-            <button
-              key={m}
-              onClick={() => setMode(m)}
-              style={{
-                padding: "3px 10px",
-                background: mode === m ? "var(--color-accent)" : "var(--color-bg-subtle)",
-                color: mode === m ? "var(--color-accent-fg)" : "var(--color-text-muted)",
-                border: "none",
-                cursor: "pointer",
-                fontFamily: "Inter, sans-serif",
-                fontWeight: mode === m ? 600 : 400,
-                transition: "background 0.1s",
-                textTransform: "capitalize",
-              }}
-            >
-              {m}
-            </button>
-          ))}
-        </div>
+        <ModeToggle modes={MODES} value={mode} onChange={setMode} />
 
         <span
           style={{

@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { Eye, Pencil } from "lucide-react";
 import { useThemeStore } from "../../store/themeStore";
 import { useUiStore } from "../../store/uiStore";
 import { getShikiTheme } from "../../themes";
 import { highlight } from "../../utils/shikiUtils";
 import { getLanguageForExtension } from "../../utils/fileUtils";
 import { PlainTextEditor } from "../editor/PlainTextEditor";
+import { ModeToggle } from "./ModeToggle";
 import type { Tab } from "../../types";
 
 interface Props {
@@ -13,11 +13,15 @@ interface Props {
   ext: string;
 }
 
+const MODES = ["view", "edit"] as const;
+type Mode = (typeof MODES)[number];
+
 export function CodeViewer({ tab, ext }: Props) {
   const { themeName } = useThemeStore();
   const { showLineNumbers } = useUiStore();
   const [html, setHtml] = useState("");
-  const [editing, setEditing] = useState(false);
+  const [mode, setMode] = useState<Mode>("view");
+  const editing = mode === "edit";
   const lang = getLanguageForExtension(ext);
 
   useEffect(() => {
@@ -49,26 +53,7 @@ export function CodeViewer({ tab, ext }: Props) {
           <span style={{ color: "var(--color-accent)" }}>• unsaved</span>
         )}
         <div style={{ flex: 1 }} />
-        <button
-          onClick={() => setEditing((v) => !v)}
-          title={editing ? "Switch to view mode" : "Switch to edit mode"}
-          style={{
-            background: editing ? "var(--color-accent-subtle)" : "none",
-            border: "none",
-            borderRadius: "var(--radius-sm)",
-            padding: "2px 6px",
-            cursor: "pointer",
-            color: editing ? "var(--color-accent)" : "var(--color-text-muted)",
-            display: "flex",
-            alignItems: "center",
-            gap: 4,
-            fontSize: 12,
-            fontFamily: "Inter, sans-serif",
-          }}
-        >
-          {editing ? <Eye size={12} /> : <Pencil size={12} />}
-          {editing ? "View" : "Edit"}
-        </button>
+        <ModeToggle modes={MODES} value={mode} onChange={setMode} />
       </div>
 
       {editing ? (
