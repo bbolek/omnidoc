@@ -112,6 +112,7 @@
 /* ── Embedded terminal at the bottom of the Claude panel ──────────────── */
 
 .claude-panel-term {
+  position: relative;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -119,9 +120,23 @@
   background: var(--color-bg);
 }
 .claude-panel-term.open {
-  /* Reserve roughly a third of the available vertical space when open so
-     the terminal is usable without squashing the transcript. */
+  /* Default height; component overrides via inline style once the user
+     drags the top border. Reserves roughly a third of the panel so the
+     terminal is usable without squashing the transcript. */
   height: 260px;
+}
+.claude-panel-term-resize {
+  position: absolute;
+  top: -2px;
+  left: 0;
+  right: 0;
+  height: 5px;
+  cursor: row-resize;
+  z-index: 2;
+  transition: background 100ms;
+}
+.claude-panel-term-resize:hover {
+  background: var(--color-accent);
 }
 .claude-panel-term-head {
   display: flex;

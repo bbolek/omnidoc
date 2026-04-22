@@ -311,30 +311,87 @@ export async function spawnClaudeTerminal(
   titleHint?: string | null,
   inClaudePanel = false
 ): Promise<string> {
-  const shell = await invoke<string>("terminal_detect_shell").catch(() => "");
+  const detected = await invoke<string>("terminal_detect_shell").catch(() => "");
+  const shell = detected || defaultShellFallback();
   const id = cryptoRandomId();
   const displayName = titleHint
     ? trimName(titleHint)
     : sessionId
       ? `claude ${sessionId.slice(0, 6)}`
       : "claude";
-  // Shell-quote the resolved binary path so spaces in install paths don't
-  // break the exec. Fall back to `claude` on PATH when resolution failed.
-  const program = claudeBinary ? shellQuote(claudeBinary) : "claude";
-  const args = sessionId ? ` --resume ${shellQuote(sessionId)}` : "";
-  const startupCommand = `${program}${args}\r`;
+  const startupCommand = buildClaudeStartupCommand(shell, claudeBinary, sessionId);
   useTerminalStore.getState().addTerminal({
     id,
     paneId,
     name: displayName,
     folderPath: cwd,
-    shell: shell || defaultShellFallback(),
+    shell,
     started: false,
     claudeSessionId: sessionId ?? undefined,
     startupCommand,
     inClaudePanel,
   });
   return id;
+}
+
+/**
+ * Build the line we type into the PTY to launch / resume Claude Code. Shell
+ * quoting rules differ sharply across PowerShell, cmd.exe, and POSIX shells —
+ * the same `'C:\path\claude.exe' --resume <id>` string that works in bash
+ * fails in PowerShell with "Unexpected token 'resume'" because a quoted path
+ * at the start of a pipeline is parsed as a string literal. PowerShell needs
+ * the call operator (`&`), cmd.exe needs double-quotes, bash wants POSIX
+ * single-quote escaping.
+ */
+export function buildClaudeStartupCommand(
+  shell: string,
+  claudeBinary: string | null,
+  sessionId: string | null
+): string {
+  const kind = detectShellKind(shell);
+  const args = sessionId ? ["--resume", sessionId] : [];
+  if (kind === "powershell") {
+    const program = claudeBinary
+      ? `& ${psQuote(claudeBinary)}`
+      : "claude";
+    const quoted = args.map(psQuote).join(" ");
+    return `${program}${quoted ? " " + quoted : ""}\r`;
+  }
+  if (kind === "cmd") {
+    const program = claudeBinary ? cmdQuote(claudeBinary) : "claude";
+    const quoted = args.map(cmdQuote).join(" ");
+    return `${program}${quoted ? " " + quoted : ""}\r`;
+  }
+  const program = claudeBinary ? shellQuote(claudeBinary) : "claude";
+  const quoted = args.map(shellQuote).join(" ");
+  return `${program}${quoted ? " " + quoted : ""}\r`;
+}
+
+type ShellKind = "powershell" | "cmd" | "posix";
+
+function detectShellKind(shell: string): ShellKind {
+  const s = shell.toLowerCase();
+  // Match both bare names ("pwsh") and absolute paths ("C:\\...\\powershell.exe").
+  if (/(^|[\\/])(pwsh|powershell)(\.exe)?$/.test(s) || s === "pwsh" || s === "powershell") {
+    return "powershell";
+  }
+  if (/(^|[\\/])cmd(\.exe)?$/.test(s) || s === "cmd") return "cmd";
+  return "posix";
+}
+
+// PowerShell: single-quoted strings are literal, with `''` escaping a single
+// quote. A path-shaped string at the start of a statement is parsed as a
+// string expression, so we prefix the call operator `&` at the caller.
+function psQuote(s: string): string {
+  return `'${s.replace(/'/g, "''")}'`;
+}
+
+// cmd.exe: no single-quote strings; double-quotes group a token but don't
+// provide escape semantics. Embedded double-quotes are rare in binary paths —
+// the common case is spaces, which double-quotes handle on their own.
+function cmdQuote(s: string): string {
+  if (/^[A-Za-z0-9_\-./:\\=+@]+$/.test(s)) return s;
+  return `"${s.replace(/"/g, '""')}"`;
 }
 
 function trimName(s: string): string {
