@@ -38,11 +38,22 @@ export function MessageCard({
 
   // User messages sometimes carry a plain string, sometimes an array of
   // content blocks. Assistant messages are always arrays of blocks.
-  const blocks = Array.isArray(content)
+  const rawBlocks: ContentBlock[] = Array.isArray(content)
     ? (content as ContentBlock[])
     : typeof content === "string"
-      ? ([{ type: "text", text: content }] as ContentBlock[])
+      ? [{ type: "text", text: content }]
       : [];
+
+  // Drop blocks that would render nothing so the `(no content)` placeholder
+  // below fires instead of leaving the bubble visually blank. An assistant
+  // turn with only whitespace text or only empty thinking would otherwise
+  // show just the header and an empty body.
+  const blocks = rawBlocks.filter((b) => {
+    if (b.type === "text") return ((b as TextBlock).text ?? "").trim().length > 0;
+    if (b.type === "thinking")
+      return ((b as ThinkingBlock).thinking ?? "").trim().length > 0;
+    return true;
+  });
 
   const isAssistant = role === "assistant";
   const RoleIcon = isAssistant ? Sparkles : role === "user" ? User : AlertTriangle;
