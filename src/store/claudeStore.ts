@@ -284,30 +284,34 @@ export const useClaudeStore = create<ClaudeState>()(
 
 // ── Selectors ───────────────────────────────────────────────────────────────
 
+// Hoisted fallback refs: every consumer that reads the active session goes
+// through `useShallow` (or similar equality-based subscription). Returning
+// freshly-allocated `[]` / `{ main: emptyBreakdown(), … }` on the no-session
+// or not-yet-hydrated paths would fail that equality check on every store
+// write and force a re-render of the whole Claude panel — which, combined
+// with the virtualized transcript's ResizeObserver-based measurement,
+// cascaded into React's "maximum update depth" (#185) error.
+const EMPTY_ENTRIES: LogEntry[] = [];
+const EMPTY_COST: SessionCost = {
+  main: emptyBreakdown(),
+  sub: emptyBreakdown(),
+  total: emptyBreakdown(),
+};
+const EMPTY_ACTIVE_SESSION: {
+  meta: SessionMeta | null;
+  entries: LogEntry[];
+  cost: SessionCost;
+} = { meta: null, entries: EMPTY_ENTRIES, cost: EMPTY_COST };
+
 export function selectActiveSession(
   s: ClaudeState
 ): { meta: SessionMeta | null; entries: LogEntry[]; cost: SessionCost } {
   const id = s.activeSessionId;
-  if (!id) {
-    return {
-      meta: null,
-      entries: [],
-      cost: {
-        main: emptyBreakdown(),
-        sub: emptyBreakdown(),
-        total: emptyBreakdown(),
-      },
-    };
-  }
+  if (!id) return EMPTY_ACTIVE_SESSION;
   return {
     meta: s.sessions.find((x) => x.session_id === id) ?? null,
-    entries: s.entriesBySession[id] ?? [],
-    cost:
-      s.costBySession[id] ?? {
-        main: emptyBreakdown(),
-        sub: emptyBreakdown(),
-        total: emptyBreakdown(),
-      },
+    entries: s.entriesBySession[id] ?? EMPTY_ENTRIES,
+    cost: s.costBySession[id] ?? EMPTY_COST,
   };
 }
 
