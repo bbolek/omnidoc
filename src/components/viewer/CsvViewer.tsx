@@ -1,6 +1,8 @@
 import { useEffect, useState, useMemo } from "react";
 import Papa from "papaparse";
 import { ChevronUp, ChevronDown } from "lucide-react";
+import { ModeToggle } from "./ModeToggle";
+import { PlainTextEditor } from "../editor/PlainTextEditor";
 import type { Tab } from "../../types";
 
 interface Props {
@@ -8,6 +10,8 @@ interface Props {
 }
 
 type SortConfig = { col: number; asc: boolean } | null;
+const MODES = ["table", "edit"] as const;
+type Mode = (typeof MODES)[number];
 
 export function CsvViewer({ tab }: Props) {
   const [headers, setHeaders] = useState<string[]>([]);
@@ -15,6 +19,7 @@ export function CsvViewer({ tab }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [sortConfig, setSortConfig] = useState<SortConfig>(null);
   const [page, setPage] = useState(0);
+  const [mode, setMode] = useState<Mode>("table");
   const PAGE_SIZE = 100;
 
   useEffect(() => {
@@ -64,20 +69,12 @@ export function CsvViewer({ tab }: Props) {
     });
   };
 
-  if (error) {
-    return (
-      <div style={{ padding: 24, color: "#cf222e", fontSize: 13 }}>
-        CSV parse error: {error}
-      </div>
-    );
-  }
-
   return (
-    <div className="selectable fade-in" style={{ height: "100%", overflow: "auto", padding: 0 }}>
-      {/* Row count info */}
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      {/* Toolbar: mode toggle + row/column info */}
       <div
         style={{
-          padding: "8px 16px",
+          padding: "6px 12px",
           fontSize: 12,
           color: "var(--color-text-muted)",
           borderBottom: "1px solid var(--color-border-muted)",
@@ -86,13 +83,22 @@ export function CsvViewer({ tab }: Props) {
           gap: 8,
           flexShrink: 0,
           background: "var(--color-bg-subtle)",
-          position: "sticky",
-          top: 0,
-          zIndex: 2,
+          flexWrap: "wrap",
         }}
       >
-        <span>{sortedRows.length} rows · {headers.length} columns</span>
-        {totalPages > 1 && (
+        <ModeToggle modes={MODES} value={mode} onChange={setMode} />
+        {mode === "table" && !error && (
+          <span>
+            {sortedRows.length} rows · {headers.length} columns
+          </span>
+        )}
+        {mode === "edit" && tab.isDirty && (
+          <span style={{ color: "var(--color-accent)" }}>• unsaved</span>
+        )}
+        {error && mode === "table" && (
+          <span style={{ color: "#cf222e" }}>CSV parse error: {error}</span>
+        )}
+        {mode === "table" && totalPages > 1 && (
           <>
             <span style={{ marginLeft: "auto" }}>
               Page {page + 1} / {totalPages}
@@ -115,31 +121,41 @@ export function CsvViewer({ tab }: Props) {
         )}
       </div>
 
-      <table className="csv-table">
-        <thead>
-          <tr>
-            {headers.map((h, i) => (
-              <th key={i} onClick={() => handleSort(i)}>
-                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                  {h}
-                  {sortConfig?.col === i ? (
-                    sortConfig.asc ? <ChevronUp size={12} /> : <ChevronDown size={12} />
-                  ) : null}
-                </div>
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {pageRows.map((row, ri) => (
-            <tr key={ri}>
-              {headers.map((_, ci) => (
-                <td key={ci}>{row[ci] ?? ""}</td>
+      {mode === "edit" ? (
+        <PlainTextEditor tab={tab} showToolbar showLineNumbers monospace />
+      ) : error ? (
+        <div style={{ padding: 24, color: "#cf222e", fontSize: 13 }}>
+          CSV parse error: {error}
+        </div>
+      ) : (
+        <div className="selectable fade-in" style={{ flex: 1, overflow: "auto" }}>
+          <table className="csv-table">
+            <thead>
+              <tr>
+                {headers.map((h, i) => (
+                  <th key={i} onClick={() => handleSort(i)}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                      {h}
+                      {sortConfig?.col === i ? (
+                        sortConfig.asc ? <ChevronUp size={12} /> : <ChevronDown size={12} />
+                      ) : null}
+                    </div>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {pageRows.map((row, ri) => (
+                <tr key={ri}>
+                  {headers.map((_, ci) => (
+                    <td key={ci}>{row[ci] ?? ""}</td>
+                  ))}
+                </tr>
               ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

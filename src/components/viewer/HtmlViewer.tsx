@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import { useThemeStore } from "../../store/themeStore";
 import { getShikiTheme } from "../../themes";
 import { highlight } from "../../utils/shikiUtils";
+import { PlainTextEditor } from "../editor/PlainTextEditor";
 import type { Tab } from "../../types";
 
-type ViewMode = "preview" | "source";
+type ViewMode = "preview" | "source" | "edit";
+const MODES: readonly ViewMode[] = ["preview", "source", "edit"];
 
 interface Props {
   tab: Tab;
@@ -25,11 +27,13 @@ export function HtmlViewer({ tab }: Props) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      {/* Toggle bar — matches MarkdownViewer style */}
+      {/* Toggle bar */}
       <div
         style={{
           display: "flex",
+          alignItems: "center",
           justifyContent: "flex-end",
+          gap: 8,
           padding: "8px 48px",
           flexShrink: 0,
           background: "var(--color-bg)",
@@ -37,6 +41,11 @@ export function HtmlViewer({ tab }: Props) {
           zIndex: 10,
         }}
       >
+        {mode === "edit" && tab.isDirty && (
+          <span style={{ fontSize: 12, color: "var(--color-accent)", marginRight: "auto" }}>
+            • unsaved
+          </span>
+        )}
         <div
           style={{
             display: "inline-flex",
@@ -46,7 +55,7 @@ export function HtmlViewer({ tab }: Props) {
             fontSize: 12,
           }}
         >
-          {(["preview", "source"] as ViewMode[]).map((m) => (
+          {MODES.map((m) => (
             <button
               key={m}
               onClick={() => setMode(m)}
@@ -69,7 +78,9 @@ export function HtmlViewer({ tab }: Props) {
       </div>
 
       {/* Content */}
-      {mode === "preview" ? (
+      {mode === "edit" ? (
+        <PlainTextEditor tab={tab} showToolbar showLineNumbers monospace />
+      ) : mode === "preview" ? (
         <iframe
           srcDoc={tab.content}
           style={{ flex: 1, border: "none", width: "100%", background: "#fff" }}

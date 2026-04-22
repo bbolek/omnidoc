@@ -5,6 +5,7 @@ import { parse as parseToml } from "smol-toml";
 import { useThemeStore } from "../../store/themeStore";
 import { getShikiTheme } from "../../themes";
 import { highlight } from "../../utils/shikiUtils";
+import { PlainTextEditor } from "../editor/PlainTextEditor";
 import type { Tab } from "../../types";
 
 interface Props {
@@ -12,7 +13,8 @@ interface Props {
   format: "yaml" | "toml";
 }
 
-type ViewMode = "tree" | "source";
+type ViewMode = "tree" | "source" | "edit";
+const MODES: readonly ViewMode[] = ["tree", "source", "edit"];
 
 export function YamlTomlViewer({ tab, format }: Props) {
   const { themeName } = useThemeStore();
@@ -45,14 +47,17 @@ export function YamlTomlViewer({ tab, format }: Props) {
   const label = format === "yaml" ? "YAML" : "TOML";
 
   return (
-    <div className="code-viewer selectable fade-in">
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       {/* Header: mode toggle + error */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
           gap: 8,
-          marginBottom: 12,
+          padding: "6px 12px",
+          borderBottom: "1px solid var(--color-border-muted)",
+          background: "var(--color-bg-subtle)",
+          flexShrink: 0,
           flexWrap: "wrap",
         }}
       >
@@ -65,7 +70,7 @@ export function YamlTomlViewer({ tab, format }: Props) {
             fontSize: 12,
           }}
         >
-          {(["tree", "source"] as ViewMode[]).map((m) => (
+          {MODES.map((m) => (
             <button
               key={m}
               onClick={() => setMode(m)}
@@ -98,7 +103,11 @@ export function YamlTomlViewer({ tab, format }: Props) {
           {label}
         </span>
 
-        {error && (
+        {mode === "edit" && tab.isDirty && (
+          <span style={{ fontSize: 12, color: "var(--color-accent)" }}>• unsaved</span>
+        )}
+
+        {error && mode !== "edit" && (
           <div
             style={{
               flex: 1,
@@ -116,28 +125,34 @@ export function YamlTomlViewer({ tab, format }: Props) {
       </div>
 
       {/* Content */}
-      {mode === "tree" ? (
-        parsed !== null && parsed !== undefined ? (
-          <div
-            style={{
-              fontFamily: "'Fira Code', monospace",
-              fontSize: 13,
-              lineHeight: 1.7,
-            }}
-          >
-            <TreeNode value={parsed} depth={0} />
-          </div>
-        ) : (
-          <div style={{ color: "var(--color-text-muted)", fontSize: 13 }}>
-            {error ? "Cannot render tree — parse error above." : "Empty document."}
-          </div>
-        )
-      ) : html ? (
-        <div dangerouslySetInnerHTML={{ __html: html }} />
+      {mode === "edit" ? (
+        <PlainTextEditor tab={tab} showToolbar showLineNumbers monospace />
       ) : (
-        <pre style={{ fontFamily: "'Fira Code', monospace", fontSize: 13, lineHeight: 1.6 }}>
-          {tab.content}
-        </pre>
+        <div className="code-viewer selectable fade-in" style={{ flex: 1, overflow: "auto", padding: 12 }}>
+          {mode === "tree" ? (
+            parsed !== null && parsed !== undefined ? (
+              <div
+                style={{
+                  fontFamily: "'Fira Code', monospace",
+                  fontSize: 13,
+                  lineHeight: 1.7,
+                }}
+              >
+                <TreeNode value={parsed} depth={0} />
+              </div>
+            ) : (
+              <div style={{ color: "var(--color-text-muted)", fontSize: 13 }}>
+                {error ? "Cannot render tree — parse error above." : "Empty document."}
+              </div>
+            )
+          ) : html ? (
+            <div dangerouslySetInnerHTML={{ __html: html }} />
+          ) : (
+            <pre style={{ fontFamily: "'Fira Code', monospace", fontSize: 13, lineHeight: 1.6 }}>
+              {tab.content}
+            </pre>
+          )}
+        </div>
       )}
     </div>
   );
