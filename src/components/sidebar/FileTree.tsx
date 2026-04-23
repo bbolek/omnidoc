@@ -5,7 +5,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import {
   ChevronRight, ChevronDown, FolderOpen, Folder, FolderPlus,
   ChevronsDownUp, Search, X, FilePlus, Star, Pencil, Trash2,
-  ExternalLink, Copy, Scissors, Clipboard, TerminalSquare,
+  ExternalLink, Copy, Scissors, Clipboard, TerminalSquare, Locate,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useFileStore } from "../../store/fileStore";
@@ -1294,26 +1294,22 @@ function FolderSection({ folder }: FolderSectionProps) {
             {folderName}
           </span>
 
-          {/* New File */}
+          {/* Focus Selected File */}
           <button
-            onClick={() => setInlineCreate({ parentPath: currentFolder, type: "file" })}
-            title="New File"
+            onClick={() => {
+              const active = useFileStore.getState().getActiveTab();
+              if (!active?.path) return;
+              if (!active.path.startsWith(currentFolder)) return;
+              window.dispatchEvent(
+                new CustomEvent("omnidoc:reveal-path", { detail: { path: active.path } })
+              );
+            }}
+            title="Focus Selected File"
             style={{ background: "none", border: "none", padding: "2px 3px", cursor: "pointer", color: "var(--color-text-muted)", display: "flex", alignItems: "center", borderRadius: "var(--radius-sm)", flexShrink: 0 }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--color-text)"; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--color-text-muted)"; }}
           >
-            <FilePlus size={13} />
-          </button>
-
-          {/* New Folder */}
-          <button
-            onClick={() => setInlineCreate({ parentPath: currentFolder, type: "folder" })}
-            title="New Folder"
-            style={{ background: "none", border: "none", padding: "2px 3px", cursor: "pointer", color: "var(--color-text-muted)", display: "flex", alignItems: "center", borderRadius: "var(--radius-sm)", flexShrink: 0 }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--color-text)"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--color-text-muted)"; }}
-          >
-            <FolderPlus size={13} />
+            <Locate size={13} />
           </button>
 
           {/* Open Terminal rooted in this folder */}
