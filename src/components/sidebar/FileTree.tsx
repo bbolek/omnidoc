@@ -6,6 +6,7 @@ import {
   ChevronRight, ChevronDown, FolderOpen, Folder, FolderPlus,
   ChevronsDownUp, Search, X, FilePlus, Star, Pencil, Trash2,
   ExternalLink, Copy, Scissors, Clipboard, TerminalSquare, Locate,
+  RefreshCw,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useFileStore } from "../../store/fileStore";
@@ -912,10 +913,23 @@ function FolderSection({ folder }: FolderSectionProps) {
     }
   }, [currentFolder, refreshRoot]);
 
+  // Re-list the root AND invalidate every mounted subfolder. Used by the
+  // manual refresh button and by the Claude hook listener — the fs-watcher
+  // alone misses rapid create-dir-then-create-file-inside bursts.
+  const refreshAll = useCallback(() => {
+    refreshRoot();
+    for (const refresh of nodeRefreshersRef.current.values()) {
+      try { refresh(); } catch { /* per-node errors shouldn't stop the rest */ }
+    }
+  }, [refreshRoot]);
+
   // Stable ref so the watcher effect below can call the latest refreshFolder
   // without needing to re-subscribe (and re-register the Rust-side watcher).
   const refreshFolderRef = useRef(refreshFolder);
   useEffect(() => { refreshFolderRef.current = refreshFolder; }, [refreshFolder]);
+
+  const refreshAllRef = useRef(refreshAll);
+  useEffect(() => { refreshAllRef.current = refreshAll; }, [refreshAll]);
 
   // ── folder watcher: drives both git status and file-tree refreshes ────────
   //
@@ -1038,6 +1052,53 @@ function FolderSection({ folder }: FolderSectionProps) {
       if (watching) {
         invoke("unwatch_git_folder", { folder: currentFolder }).catch(() => {});
       }
+    };
+  }, [currentFolder]);
+
+  // ── Claude hook listener: refresh tree after any tool use ────────────────
+  //
+  // The fs-watcher alone is unreliable when Claude creates a directory and
+  // files inside it in rapid succession — child TreeNodes haven't mounted
+  // yet when the watcher debounce fires, so the per-node refreshers aren't
+  // registered. Listening on the Claude hook channel gives us a direct,
+  // reliable trigger: after every PostToolUse / Stop / SubagentStop event,
+  // re-list the root and all mounted subfolders. Debounced to coalesce
+  // rapid-fire tool bursts (MultiEdit, chained Writes, etc.).
+
+  useEffect(() => {
+    if (!currentFolder) return;
+    let cancelled = false;
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    let unlisten: (() => void) | null = null;
+
+    const schedule = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        if (!cancelled) refreshAllRef.current();
+      }, 250);
+    };
+
+    (async () => {
+      try {
+        const un = await listen<Record<string, unknown>>("claude:hook", (event) => {
+          const body = event.payload;
+          if (!body || typeof body !== "object") return;
+          const name = (body as { hook_event_name?: string }).hook_event_name;
+          if (name === "PostToolUse" || name === "Stop" || name === "SubagentStop") {
+            schedule();
+          }
+        });
+        if (cancelled) { un(); return; }
+        unlisten = un;
+      } catch (err) {
+        console.warn("claude:hook listener failed:", err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (debounceTimer) clearTimeout(debounceTimer);
+      unlisten?.();
     };
   }, [currentFolder]);
 
@@ -1332,6 +1393,17 @@ function FolderSection({ folder }: FolderSectionProps) {
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--color-text-muted)"; }}
           >
             <TerminalSquare size={13} />
+          </button>
+
+          {/* Manual refresh */}
+          <button
+            onClick={() => refreshAll()}
+            title="Refresh Folder"
+            style={{ background: "none", border: "none", padding: "2px 3px", cursor: "pointer", color: "var(--color-text-muted)", display: "flex", alignItems: "center", borderRadius: "var(--radius-sm)", flexShrink: 0 }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--color-text)"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--color-text-muted)"; }}
+          >
+            <RefreshCw size={13} />
           </button>
 
           {/* Collapse All children */}
