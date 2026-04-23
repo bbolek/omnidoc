@@ -1074,6 +1074,17 @@ function FolderSection({ folder }: FolderSectionProps) {
       if (!detail?.path || !currentFolder) return;
       if (!detail.path.startsWith(currentFolder)) return;
 
+      // Child TreeNodes are unmounted while the section is collapsed — nothing
+      // to expand or scroll to. Expand the section first and wait a tick for
+      // the initial mount so deeper handlers can register.
+      const folderState = useFileStore
+        .getState()
+        .folders.find((f) => f.path === currentFolder);
+      if (folderState?.collapsed) {
+        setFolderCollapsed(currentFolder, false);
+        await new Promise((r) => setTimeout(r, 80));
+      }
+
       const rel = detail.path.slice(currentFolder.length).replace(/^[/\\]/, "");
       const parts = rel ? rel.split(/[/\\]/).filter(Boolean) : [];
 
@@ -1102,7 +1113,7 @@ function FolderSection({ folder }: FolderSectionProps) {
     };
     window.addEventListener("omnidoc:reveal-path", handler);
     return () => window.removeEventListener("omnidoc:reveal-path", handler);
-  }, [currentFolder]);
+  }, [currentFolder, setFolderCollapsed]);
 
   // ── keyboard navigation ───────────────────────────────────────────────────
 
