@@ -5,7 +5,7 @@ use commands::claude::ClaudeWatchState;
 use commands::claude_hooks::{self, ClaudeHookServerState};
 use commands::terminal::TerminalState;
 use commands::watcher::WatcherState;
-use tauri::{Emitter, Manager};
+use tauri::{Emitter, Listener, Manager};
 
 // The `log_*!` macros are placed at the crate root by `#[macro_export]`
 // in `logger.rs`, so they're callable here without an explicit `use` (a
@@ -91,6 +91,22 @@ pub fn run() {
     log_info!("boot", "building tauri app");
 
     tauri::Builder::default()
+        // Single-instance must be the first plugin registered. When the user
+        // launches Omnidoc a second time (e.g. via the "Open with Omnidoc"
+        // shell context menu or by double-clicking another file), the OS
+        // spawns a fresh process; this callback fires in the already-running
+        // instance with that process's argv + cwd, and we forward the path to
+        // the frontend instead of opening a second window.
+        .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
+            log_info!("single-instance", "second launch args={:?} cwd={}", args, cwd);
+            if let Some(path) = resolve_launch_path(&args, &cwd) {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.set_focus();
+                    let _ = window.unminimize();
+                }
+                let _ = app.emit("open-path", path);
+            }
+        }))
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
@@ -121,6 +137,22 @@ pub fn run() {
             match claude_hooks::start_hook_server(app.handle().clone()) {
                 Ok(port) => log_info!("boot", "claude hook server port={}", port),
                 Err(e) => log_error!("boot", "claude hook server failed: {}", e),
+            }
+            // Honor a path passed on the command line (shell "Open with
+            // Omnidoc" integration, `omnidoc path/to/file`, drag-onto-icon,
+            // macOS LaunchServices). Deferred until after the frontend is
+            // ready so `emit` actually reaches the webview — the frontend
+            // re-requests the path via a dedicated event on mount.
+            let launch_args: Vec<String> = std::env::args().collect();
+            let cwd = std::env::current_dir()
+                .map(|p| p.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            if let Some(path) = resolve_launch_path(&launch_args, &cwd) {
+                log_info!("boot", "launch path={}", path);
+                let handle = app.handle().clone();
+                app.listen_any("frontend-ready", move |_| {
+                    let _ = handle.emit("open-path", path.clone());
+                });
             }
             Ok(())
         })
@@ -203,4 +235,31 @@ pub fn run() {
         });
 
     log_info!("boot", "tauri event loop exited");
+}
+
+/// Pick a filesystem path out of a process's argv.
+///
+/// Shell integrations hand us the selected file or folder as the first
+/// non-flag argument, but argv[0] is the executable and Tauri may inject
+/// its own flags (e.g. `--no-default-features`, profiling hooks). We skip
+/// argv[0], ignore anything that starts with `-`, and resolve the first
+/// remaining token — absolute paths pass through, relative paths are
+/// anchored to the launching process's cwd. A path that doesn't exist
+/// on disk is rejected so a stray flag value can't redirect the UI.
+fn resolve_launch_path(args: &[String], cwd: &str) -> Option<String> {
+    let raw = args.iter().skip(1).find(|a| !a.starts_with('-'))?;
+    let candidate = std::path::Path::new(raw);
+    let absolute = if candidate.is_absolute() {
+        candidate.to_path_buf()
+    } else {
+        std::path::Path::new(cwd).join(candidate)
+    };
+    if !absolute.exists() {
+        log_warn!("launch-path", "argv path does not exist: {}", absolute.display());
+        return None;
+    }
+    match absolute.canonicalize() {
+        Ok(p) => Some(p.to_string_lossy().into_owned()),
+        Err(_) => Some(absolute.to_string_lossy().into_owned()),
+    }
 }
