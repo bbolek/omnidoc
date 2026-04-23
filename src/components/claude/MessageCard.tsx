@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 import type { LogEntry } from "../../store/claudeStore";
 import { ToolUseChip } from "./ToolUseChip";
+import { relTime } from "./relTime";
+import { useNow } from "./useNow";
 
 /** Map from tool_use id → whether its matching tool_result arrived (and if errored). */
 export type ToolResultMap = Map<string, { error: boolean }>;
@@ -34,6 +36,7 @@ export function MessageCard({
   const role = entry.message?.role ?? (entry.type === "user" ? "user" : entry.type === "assistant" ? "assistant" : "system");
   const model = entry.message?.model;
   const ts = entry.timestamp ? new Date(entry.timestamp) : null;
+  const now = useNow();
   const content = entry.message?.content;
 
   // User messages sometimes carry a plain string, sometimes an array of
@@ -81,10 +84,13 @@ export function MessageCard({
         {ts && (
           <time
             className="claude-msg-time"
-            title={ts.toLocaleString()}
+            title={`${ts.toLocaleString()} · ${ts.toISOString()}`}
             dateTime={ts.toISOString()}
           >
-            {ts.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+            <span className="claude-msg-time-rel">{relTime(ts.getTime(), now)}</span>
+            <span className="claude-msg-time-abs">
+              {ts.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+            </span>
           </time>
         )}
       </div>

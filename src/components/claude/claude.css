@@ -1266,6 +1266,395 @@
   font-size: 11px;
 }
 
+/* ── Live ticker (hook-event driven "what's happening now") ───────────── */
+
+.claude-live-ticker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  font-size: 11px;
+  border-bottom: 1px solid var(--color-border-muted);
+  background: var(--color-bg-subtle);
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.claude-live-ticker-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border-muted);
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+.claude-live-ticker-head {
+  font-weight: 600;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.claude-live-ticker-detail {
+  color: var(--color-text-muted);
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+}
+.claude-live-ticker-sub-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-bg) 80%, #8250df);
+  border: 1px solid color-mix(in srgb, var(--color-border-muted) 50%, #8250df);
+  color: #8250df;
+  font-size: 10px;
+  font-weight: 600;
+}
+.claude-live-ticker-rel {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+.claude-live-ticker.tone-running .claude-live-ticker-icon {
+  color: #fff;
+  background: #1f883d;
+  border-color: #1f883d;
+  animation: claude-live-breathe 1.4s ease-in-out infinite;
+}
+.claude-live-ticker.tone-subagent .claude-live-ticker-icon {
+  color: #fff;
+  background: #8250df;
+  border-color: #8250df;
+  animation: claude-live-breathe 1.4s ease-in-out infinite;
+}
+.claude-live-ticker.tone-error .claude-live-ticker-icon {
+  color: #fff;
+  background: #cf222e;
+  border-color: #cf222e;
+}
+.claude-live-ticker.tone-idle .claude-live-ticker-icon {
+  color: var(--color-text-muted);
+}
+@keyframes claude-live-breathe {
+  0%, 100% { box-shadow: 0 0 0 0 currentColor; opacity: 1; }
+  50%      { box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 30%, transparent); opacity: 0.85; }
+}
+
+/* ── Agent swim-lane timeline ────────────────────────────────────────── */
+
+.claude-lanes {
+  padding: 6px 10px 8px;
+  border-bottom: 1px solid var(--color-border-muted);
+  background: linear-gradient(
+    180deg,
+    var(--color-bg) 0%,
+    var(--color-bg-subtle) 100%
+  );
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.claude-lanes-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.claude-lanes-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+}
+.claude-lanes-meta {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 10px;
+  color: var(--color-text-muted);
+}
+.claude-lanes-concurrent {
+  color: #8250df;
+  font-weight: 600;
+}
+.claude-lanes-empty {
+  font-style: italic;
+}
+.claude-lanes-clear {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-size: 10px;
+  text-transform: none;
+  letter-spacing: 0;
+  transition: all 100ms;
+}
+.claude-lanes-clear:hover {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+.claude-lanes-track {
+  position: relative;
+  display: grid;
+  grid-template-rows: repeat(var(--lane-rows, 1), 12px);
+  row-gap: 3px;
+  min-height: 12px;
+  padding: 2px 0;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      transparent 0,
+      transparent calc(25% - 1px),
+      color-mix(in srgb, var(--color-border-muted) 55%, transparent) calc(25% - 1px),
+      color-mix(in srgb, var(--color-border-muted) 55%, transparent) 25%
+    );
+  border-radius: var(--radius-sm);
+}
+.claude-lane-bar {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 6px;
+  height: 12px;
+  border: none;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--color-bg) 45%, var(--lane-accent, #888));
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  overflow: hidden;
+  outline: 1px solid color-mix(in srgb, var(--lane-accent, #888) 55%, transparent);
+  outline-offset: 0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+  transition: transform 100ms, outline-color 120ms;
+  white-space: nowrap;
+}
+.claude-lane-bar.main {
+  background: color-mix(in srgb, var(--color-bg) 30%, var(--lane-accent, #0969da));
+}
+.claude-lane-bar:hover {
+  transform: translateY(-1px);
+  outline-color: var(--lane-accent);
+}
+.claude-lane-bar.selected {
+  outline: 2px solid var(--lane-accent);
+  outline-offset: 1px;
+  transform: translateY(-1px);
+}
+.claude-lane-bar.live::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, #fff 55%, transparent) 45%,
+    transparent 80%
+  );
+  animation: claude-lane-sweep 1.8s linear infinite;
+  pointer-events: none;
+}
+@keyframes claude-lane-sweep {
+  0%   { transform: translateX(-60%); }
+  100% { transform: translateX(160%); }
+}
+.claude-lane-bar-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  position: relative;
+  z-index: 1;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
+}
+.claude-lane-bar-label span {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.claude-lanes-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+.claude-lane-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px 2px 5px;
+  font-size: 10px;
+  border-radius: 999px;
+  background: var(--lane-tint, var(--color-bg-subtle));
+  border: 1px solid color-mix(in srgb, var(--lane-accent, var(--color-border)) 30%, var(--color-border-muted));
+  color: var(--color-text);
+  cursor: pointer;
+  transition: all 100ms;
+  max-width: 100%;
+  min-width: 0;
+  line-height: 1.4;
+}
+.claude-lane-chip:hover {
+  border-color: var(--lane-accent, var(--color-accent));
+  background: color-mix(in srgb, var(--lane-tint, var(--color-bg)) 70%, var(--lane-accent, var(--color-bg)) 0);
+}
+.claude-lane-chip.selected {
+  border-color: var(--lane-accent, var(--color-accent));
+  background: color-mix(in srgb, var(--lane-tint, var(--color-bg)) 30%, var(--lane-accent) 18%);
+  box-shadow: 0 0 0 1px var(--lane-accent);
+}
+.claude-lane-chip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--lane-accent, var(--color-border));
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--lane-accent, #000) 25%, transparent);
+}
+.claude-lane-chip.live .claude-lane-chip-dot {
+  animation: claude-chip-pulse 1.2s ease-out infinite;
+}
+@keyframes claude-chip-pulse {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--lane-accent, #1f883d) 55%, transparent); }
+  70%  { box-shadow: 0 0 0 6px color-mix(in srgb, var(--lane-accent, #1f883d) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--lane-accent, #1f883d) 0%, transparent); }
+}
+.claude-lane-chip-name {
+  font-weight: 700;
+  color: var(--lane-accent, var(--color-text));
+  text-transform: capitalize;
+  flex-shrink: 0;
+}
+.claude-lane-chip-desc {
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  max-width: 180px;
+}
+.claude-lane-chip-count {
+  font-size: 9px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border-muted);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.claude-lane-chip-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: var(--color-bg);
+  border: 1px dashed var(--lane-accent, var(--color-border));
+  color: var(--lane-accent, var(--color-text));
+  font-family: "Fira Code", monospace;
+  flex-shrink: 0;
+}
+.claude-lane-chip-elapsed,
+.claude-lane-chip-rel {
+  font-size: 9px;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.claude-lane-chip-filter {
+  color: var(--lane-accent, var(--color-accent));
+  flex-shrink: 0;
+}
+
+/* ── Sub-agent thread header: live badge + tool + duration ────────────── */
+
+.claude-sidechain.live {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--sidechain-accent, var(--color-accent)) 55%, transparent);
+}
+.claude-sidechain-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 1px 6px;
+  border-radius: 999px;
+  color: #fff;
+  background: var(--sidechain-accent, #1f883d);
+  animation: claude-chip-pulse 1.2s ease-out infinite;
+  flex-shrink: 0;
+}
+.claude-sidechain-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--color-bg);
+  border: 1px dashed var(--sidechain-accent, var(--color-border));
+  color: var(--sidechain-accent, var(--color-text));
+  font-family: "Fira Code", monospace;
+  flex-shrink: 0;
+}
+.claude-sidechain-duration {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border-muted);
+  flex-shrink: 0;
+}
+
+/* ── MessageCard timestamp: relative + absolute ───────────────────────── */
+
+.claude-msg-time {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+}
+.claude-msg-time-rel {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.claude-msg-time-abs {
+  font-size: 9px;
+  color: var(--color-text-muted);
+  opacity: 0.65;
+  font-variant-numeric: tabular-nums;
+}
+
 /* ── Utility animations ────────────────────────────────────────────────── */
 
 .claude-spin {

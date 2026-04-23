@@ -26,7 +26,7 @@ export function ClaudePanel() {
   const hooksInstalled = useClaudeStore((s) => s.hooksInstalled);
   const hookPort = useClaudeStore((s) => s.hookPort);
 
-  const { meta, entries, cost } = useClaudeStore(
+  const { meta, entries, cost, activity } = useClaudeStore(
     useShallow((s) => selectActiveSession(s))
   );
 
@@ -74,7 +74,7 @@ export function ClaudePanel() {
           <SessionHeader meta={meta} live={live} />
           <CostMeter cost={cost} live={live} />
           <ContextMeter entries={entries} />
-          <TranscriptFeed entries={entries} live={live} />
+          <TranscriptFeed entries={entries} live={live} activity={activity} />
           <ClaudePanelTerminal sessionId={activeSessionId} cwd={meta.cwd} />
         </>
       )}
