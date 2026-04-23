@@ -4,6 +4,8 @@ import { Loader2 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { platform } from "@tauri-apps/plugin-os";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { emit, listen } from "@tauri-apps/api/event";
+import { invoke } from "@tauri-apps/api/core";
 import { useThemeInit } from "./hooks/useTheme";
 import { useThemeStore } from "./store/themeStore";
 import { usePluginStore } from "./store/pluginStore";
@@ -136,6 +138,55 @@ function AppInner() {
 
     return () => { unlisten?.(); };
   }, [openFile]);
+
+  // Receive paths handed to Omnidoc by the OS — the launch-time path picked
+  // up by `resolve_launch_path` in Rust, and every subsequent "Open with
+  // Omnidoc" invocation that the single-instance plugin forwards into the
+  // already-running process. Files open in a tab; folders replace (primary
+  // launch, or an empty workspace) or augment (any other time) the sidebar.
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    let cancelled = false;
+
+    (async () => {
+      unlisten = await listen<string>("open-path", async (event) => {
+        const path = event.payload;
+        if (!path) return;
+        log.info("App.openPath", `received path=${path}`);
+        try {
+          const info = await invoke<{ is_dir: boolean }>("get_file_info", { path });
+          if (info.is_dir) {
+            const store = useFileStore.getState();
+            if (store.folders.length === 0) {
+              store.replaceFolders([path]);
+            } else {
+              await store.addFolder(path);
+            }
+          } else {
+            const { content, info: fileInfo } = await loadFileForOpen(path);
+            useFileStore.getState().openFile(path, getFileName(path), content, fileInfo);
+          }
+        } catch (err) {
+          log.error("App.openPath", `failed for path=${path}`, err);
+          showToast({ message: `Could not open ${getFileName(path)}`, type: "error" });
+        }
+      });
+      if (cancelled) unlisten?.();
+      // Tell the Rust side the frontend is ready to receive `open-path`
+      // events. The launch-time handler in `lib.rs` holds onto the argv
+      // path until this fires so the very first event isn't dropped.
+      try {
+        await emit("frontend-ready");
+      } catch (err) {
+        log.warn("App.openPath", "emit(frontend-ready) failed", err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, []);
 
   return (
     <>

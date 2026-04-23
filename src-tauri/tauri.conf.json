@@ -36,6 +36,46 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "fileAssociations": [
+      {
+        "ext": [
+          "md", "markdown", "mdx",
+          "pdf",
+          "docx",
+          "xlsx", "xls", "xlsm",
+          "pptx",
+          "csv", "tsv",
+          "json", "jsonc", "ndjson",
+          "yaml", "yml",
+          "toml",
+          "html", "htm", "svg",
+          "png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "avif",
+          "mp4", "webm", "ogv", "mov", "m4v",
+          "zip",
+          "vtt", "srt",
+          "ts", "tsx", "js", "jsx", "py", "rs", "go", "java", "cpp", "c",
+          "rb", "php", "sh", "css", "scss", "sql", "swift", "kt", "dart",
+          "lua", "r", "hs", "ex", "clj", "vue", "svelte",
+          "txt", "log", "env", "gitignore"
+        ],
+        "name": "Omnidoc Document",
+        "description": "Document viewable in Omnidoc",
+        "role": "Viewer"
+      }
+    ],
+    "windows": {
+      "nsis": {
+        "installerHooks": "installer/windows/context-menu.nsh"
+      }
+    },
+    "linux": {
+      "deb": {
+        "desktopTemplate": "installer/linux/omnidoc.desktop"
+      },
+      "rpm": {
+        "desktopTemplate": "installer/linux/omnidoc.desktop"
+      }
+    }
   }
 }
