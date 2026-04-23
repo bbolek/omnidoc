@@ -255,6 +255,11 @@ export function PlainTextEditor({
             onKeyDown={onKeyDown}
             onScroll={showLineNumbers || language ? onScroll : undefined}
             spellCheck={false}
+            // With a language overlay, disable the textarea's own soft-wrap so
+            // each logical line stays on a single visual row — otherwise it
+            // wraps long lines while the overlay (`white-space: pre`) does
+            // not, and the caret ends up rows away from the token you clicked.
+            wrap={language ? "off" : "soft"}
             style={{
               position: language ? "absolute" : "relative",
               inset: language ? 0 : undefined,
@@ -273,6 +278,9 @@ export function PlainTextEditor({
               lineHeight: 1.7,
               padding: "16px 24px",
               boxSizing: "border-box",
+              // Match the overlay's tab width so literal tab chars line up
+              // with the highlighted tokens underneath.
+              tabSize: language ? 2 : undefined,
               // Code needs horizontal scroll (long lines shouldn't wrap or the
               // overlay would misalign); prose wraps as usual.
               overflow: language ? "auto" : undefined,
