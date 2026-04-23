@@ -1,9 +1,14 @@
 import { useMemo, useRef, useState, type CSSProperties } from "react";
 import { Virtuoso, type VirtuosoHandle, type Components } from "react-virtuoso";
-import { ChevronDown, Search, Eye, EyeOff, Bot, User as UserIcon } from "lucide-react";
-import type { LogEntry } from "../../store/claudeStore";
+import { ChevronDown, Search, Eye, EyeOff, Bot, User as UserIcon, Zap } from "lucide-react";
+import type { LogEntry, SessionActivity } from "../../store/claudeStore";
 import { MessageCard, type ToolResultMap } from "./MessageCard";
 import { colorForKey, folderColor } from "../../utils/folderColors";
+import { AgentTimeline } from "./AgentTimeline";
+import { LiveTicker } from "./LiveTicker";
+import { buildLaneModel, isLaneLive } from "./agentLanes";
+import { useNow } from "./useNow";
+import { formatDuration } from "./relTime";
 
 /**
  * The meat of the drawer: a virtualized list of rendered message cards,
@@ -20,15 +25,19 @@ import { colorForKey, folderColor } from "../../utils/folderColors";
 export function TranscriptFeed({
   entries,
   live,
+  activity,
 }: {
   entries: LogEntry[];
   live: boolean;
+  activity: SessionActivity;
 }) {
   const [query, setQuery] = useState("");
   const [showThinking, setShowThinking] = useState(false);
   const [showSidechain, setShowSidechain] = useState(true);
   const [atBottom, setAtBottom] = useState(true);
+  const [selectedLaneId, setSelectedLaneId] = useState<string | null>(null);
   const virtuosoRef = useRef<VirtuosoHandle | null>(null);
+  const now = useNow();
 
   // Build a map of tool_use_id → result info so chips can show status.
   const toolResults: ToolResultMap = useMemo(() => {
@@ -50,24 +59,49 @@ export function TranscriptFeed({
   // a `message` field they'd render as empty "(no content)" system cards.
   const renderable = useMemo(() => entries.filter((e) => e.message != null), [entries]);
 
-  // Group entries into linear items and sidechain threads.
-  // A sidechain thread is a consecutive run of entries with isSidechain === true.
-  // We keep the preceding Task tool_use entry outside the thread — it becomes
-  // the header row, and the thread slots in right after it.
-  const items = useMemo(() => groupSidechains(renderable, showSidechain), [renderable, showSidechain]);
+  // Build the lane model once per render — the timeline above and the
+  // per-thread coloring below both key off it, so a shared derivation avoids
+  // the two diverging (e.g. the timeline showing 3 lanes while the feed
+  // labels the 3rd thread as "sub-agent 2").
+  const laneModel = useMemo(() => buildLaneModel(renderable), [renderable]);
+
+  // Group entries into linear items and sidechain threads. Each thread's
+  // taskInput + matching lane is attached so colors stay consistent with the
+  // timeline bars.
+  const items = useMemo(
+    () => groupSidechains(renderable, showSidechain, laneModel),
+    [renderable, showSidechain, laneModel],
+  );
+
+  // If a lane is solo-selected, drop items that don't belong to it before
+  // the text filter runs.
+  const laneFiltered = useMemo(() => {
+    if (!selectedLaneId) return items;
+    if (selectedLaneId === "main") return items.filter((it) => it.kind === "entry");
+    return items.filter(
+      (it) => it.kind === "thread" && it.laneId === selectedLaneId,
+    );
+  }, [items, selectedLaneId]);
 
   // Filter by query (case-insensitive substring on text / tool_use input).
   const filtered = useMemo(() => {
-    if (!query.trim()) return items;
+    if (!query.trim()) return laneFiltered;
     const q = query.toLowerCase();
-    return items.filter((it) => {
+    return laneFiltered.filter((it) => {
       if (it.kind === "entry") return entryMatches(it.entry, q);
       return it.entries.some((e) => entryMatches(e, q));
     });
-  }, [items, query]);
+  }, [laneFiltered, query]);
 
   return (
     <div className="claude-feed">
+      <LiveTicker activity={activity} />
+      <AgentTimeline
+        model={laneModel}
+        activity={activity}
+        selectedLaneId={selectedLaneId}
+        onSelectLane={setSelectedLaneId}
+      />
       <div className="claude-feed-toolbar">
         <label className="claude-feed-search">
           <Search size={12} />
@@ -140,13 +174,20 @@ export function TranscriptFeed({
                 </div>
               );
             }
-            // Prefer a name-derived color so the same agent type reads the
-            // same shade across runs (and parallel siblings pick up distinct
-            // shades). Fall back to the thread index only when the Task
-            // tool_use didn't carry a subagent_type.
-            const color = it.taskInput?.subagent_type
-              ? colorForKey(it.taskInput.subagent_type)
-              : folderColor(it.threadIndex);
+            // Pull color + live-state from the shared lane model so the
+            // timeline bar at the top and the thread card in the feed always
+            // agree on visuals.
+            const lane = laneModel.lanes.find((l) => l.id === it.laneId);
+            const color = lane
+              ? lane.color
+              : it.taskInput?.subagent_type
+                ? colorForKey(it.taskInput.subagent_type)
+                : folderColor(it.threadIndex);
+            const laneLive = lane ? isLaneLive(lane, activity, now) : false;
+            const currentTool =
+              lane && lane.sessionId
+                ? activity.activeSubagents[lane.sessionId]?.currentTool
+                : undefined;
             return (
               <div className="claude-feed-row">
                 <SubAgentThread
@@ -156,6 +197,10 @@ export function TranscriptFeed({
                   tint={color.tint}
                   showThinking={showThinking}
                   taskInput={it.taskInput}
+                  startedAt={lane?.startedAt}
+                  endedAt={lane?.endedAt}
+                  live={laneLive}
+                  currentTool={currentTool?.name}
                 />
               </div>
             );
@@ -190,6 +235,10 @@ function SubAgentThread({
   tint,
   showThinking,
   taskInput,
+  startedAt,
+  endedAt,
+  live,
+  currentTool,
 }: {
   entries: LogEntry[];
   toolResults: ToolResultMap;
@@ -197,8 +246,13 @@ function SubAgentThread({
   tint: string;
   showThinking: boolean;
   taskInput?: { description?: string; subagent_type?: string };
+  startedAt?: number;
+  endedAt?: number;
+  live?: boolean;
+  currentTool?: string;
 }) {
   const [open, setOpen] = useState(true);
+  const now = useNow();
   // Publish the thread's accent/tint as custom properties so descendants
   // (title text, the inner left-rail, nested card border) can pick them up
   // without each needing its own inline style.
@@ -208,8 +262,12 @@ function SubAgentThread({
     ["--sidechain-accent" as string]: accent,
     ["--sidechain-tint" as string]: tint,
   } as CSSProperties;
+  const duration =
+    startedAt && (endedAt || live)
+      ? formatDuration((live ? now : endedAt!) - startedAt)
+      : "";
   return (
-    <div className="claude-sidechain" style={style}>
+    <div className={`claude-sidechain${live ? " live" : ""}`} style={style}>
       <button
         type="button"
         className="claude-sidechain-head"
@@ -222,6 +280,26 @@ function SubAgentThread({
         </span>
         {taskInput?.description && (
           <span className="claude-sidechain-desc">{taskInput.description}</span>
+        )}
+        {live && currentTool && (
+          <span className="claude-sidechain-tool" title={`Running ${currentTool}`}>
+            <Zap size={10} /> {currentTool}
+          </span>
+        )}
+        {live && <span className="claude-sidechain-live" title="Active sub-agent">live</span>}
+        {duration && (
+          <span
+            className="claude-sidechain-duration"
+            title={
+              startedAt
+                ? `Started ${new Date(startedAt).toLocaleString()}${
+                    endedAt ? `, ended ${new Date(endedAt).toLocaleString()}` : ""
+                  }`
+                : undefined
+            }
+          >
+            {duration}
+          </span>
         )}
         <span className="claude-sidechain-count">{entries.length} msg</span>
       </button>
@@ -247,6 +325,7 @@ type Item =
   | { kind: "entry"; entry: LogEntry }
   | {
       kind: "thread";
+      laneId: string;
       entries: LogEntry[];
       threadIndex: number;
       taskInput?: { description?: string; subagent_type?: string };
@@ -262,15 +341,37 @@ const FEED_COMPONENTS: Components<Item> = {
 /**
  * Walk entries and bundle every consecutive run of `isSidechain: true`
  * messages into a thread item. The most recent Task tool_use preceding the
- * thread supplies a header (agent type + description).
+ * thread supplies a header (agent type + description). Attach the matching
+ * lane id from the shared lane model so the thread and the timeline agree
+ * on identity + color.
  */
-function groupSidechains(entries: LogEntry[], show: boolean): Item[] {
+function groupSidechains(
+  entries: LogEntry[],
+  show: boolean,
+  laneModel: import("./agentLanes").LaneModel,
+): Item[] {
   const out: Item[] = [];
   let threadIndex = 0;
   let currentThread: LogEntry[] | null = null;
   let lastTaskInput:
     | { description?: string; subagent_type?: string }
     | undefined;
+  // `buildLaneModel` assigns sub-agent lanes in start-order, so walking the
+  // sub-agent lanes with a parallel cursor keeps thread ↔ lane alignment.
+  const subLanes = laneModel.lanes.filter((l) => l.kind === "subagent");
+  let subCursor = 0;
+  const pushThread = (thread: LogEntry[]) => {
+    const lane = subLanes[subCursor++];
+    out.push({
+      kind: "thread",
+      laneId: lane?.id ?? `sub:${threadIndex}`,
+      entries: thread,
+      threadIndex: threadIndex++,
+      taskInput: lane
+        ? { description: lane.description, subagent_type: lane.subagentType }
+        : lastTaskInput,
+    });
+  };
   for (const e of entries) {
     // Track the latest Task tool_use input so we can label the next thread.
     const content = e.message?.content;
@@ -292,25 +393,13 @@ function groupSidechains(entries: LogEntry[], show: boolean): Item[] {
       continue;
     }
     if (currentThread) {
-      if (show) {
-        out.push({
-          kind: "thread",
-          entries: currentThread,
-          threadIndex: threadIndex++,
-          taskInput: lastTaskInput,
-        });
-      }
+      if (show) pushThread(currentThread);
       currentThread = null;
     }
     out.push({ kind: "entry", entry: e });
   }
   if (currentThread && show) {
-    out.push({
-      kind: "thread",
-      entries: currentThread,
-      threadIndex: threadIndex++,
-      taskInput: lastTaskInput,
-    });
+    pushThread(currentThread);
   }
   return out;
 }
