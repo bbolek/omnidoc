@@ -1,7 +1,8 @@
 import { useState, type ReactNode } from "react";
-import ReactMarkdown from "react-markdown";
+import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
+import { open as openExternal } from "@tauri-apps/plugin-shell";
 import {
   User,
   Sparkles,
@@ -14,6 +15,125 @@ import type { LogEntry } from "../../store/claudeStore";
 import { ToolUseChip } from "./ToolUseChip";
 import { relTime } from "./relTime";
 import { useNow } from "./useNow";
+
+// Inline URL matcher used to linkify plain-text tool output. Anchored on
+// protocol, non-greedy up to the first whitespace or common trailing
+// punctuation, so "See https://example.com." doesn't drag the period into
+// the link.
+const URL_RE = /\bhttps?:\/\/[^\s<>"'()\]]+[^\s<>"'()\].,;:!?]/g;
+
+function handleExternalLink(e: React.MouseEvent<HTMLAnchorElement>, href?: string) {
+  if (!href) return;
+  if (!/^https?:/i.test(href)) return;
+  e.preventDefault();
+  openExternal(href).catch((err) => console.warn("[claude] openExternal failed:", err));
+}
+
+/** ReactMarkdown component overrides: intercept link clicks so they open in
+ *  the user's default browser instead of navigating the Tauri webview. */
+const MD_COMPONENTS: Components = {
+  a: ({ href, children, ...props }) => (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer noopener"
+      onClick={(e) => handleExternalLink(e, href)}
+      {...props}
+    >
+      {children}
+    </a>
+  ),
+};
+
+const MD_REMARK_PLUGINS = [remarkGfm, remarkBreaks];
+
+/** Try to parse `text` as JSON and return a pretty-printed version. Returns
+ *  `null` if the input isn't JSON (or is a bare scalar — pretty-printing
+ *  `"hello"` as `"hello"` is pointless). Handles whitespace tolerantly so
+ *  tool output with a trailing newline still succeeds. */
+function tryPrettyJson(text: string): string | null {
+  const t = text.trim();
+  if (t.length < 2) return null;
+  const first = t[0];
+  const last = t[t.length - 1];
+  if (!((first === "{" && last === "}") || (first === "[" && last === "]"))) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(t);
+    if (parsed == null || typeof parsed !== "object") return null;
+    return JSON.stringify(parsed, null, 2);
+  } catch {
+    return null;
+  }
+}
+
+/** Cheap heuristic: does this text contain enough Markdown-ish markers to be
+ *  worth rendering via the markdown pipeline? Plain CLI output (like `ls`
+ *  stdout, stack traces) renders badly through Markdown — leading `#` turns
+ *  into a heading, indented blocks collapse, etc. Only flip to Markdown when
+ *  we see clear authored structure. */
+function looksLikeMarkdown(text: string): boolean {
+  // Headings (`# `, `## `, …), fenced code blocks, inline links, bullet/numbered
+  // lists at line start, bold/italic, or blockquotes. Anchored to line starts
+  // (via `\n` / string start) to avoid matching random `#` inside log output.
+  return /(^|\n)(#{1,6} |> |[-*] |\d+\. )|```|\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*/.test(text);
+}
+
+/** Best-effort smart renderer: JSON → syntax-highlighted pretty block,
+ *  Markdown-shaped text → ReactMarkdown, anything else → a plain-text block
+ *  with autolinked URLs. Used in both message text blocks and tool-result
+ *  previews, so every surface in the panel formats the same way. */
+function SmartText({ text, dense }: { text: string; dense?: boolean }) {
+  const json = tryPrettyJson(text);
+  if (json != null) {
+    return (
+      <pre className={`claude-code-block${dense ? " dense" : ""}`}>
+        <code>{json}</code>
+      </pre>
+    );
+  }
+  if (looksLikeMarkdown(text)) {
+    return (
+      <div className="claude-md">
+        <ReactMarkdown remarkPlugins={MD_REMARK_PLUGINS} components={MD_COMPONENTS}>
+          {text}
+        </ReactMarkdown>
+      </div>
+    );
+  }
+  return (
+    <pre className={`claude-plain${dense ? " dense" : ""}`}>{linkifyText(text)}</pre>
+  );
+}
+
+/** Split a plain-text string into an array of strings and <a> nodes for
+ *  every URL found. Used inside `<pre>` tool-result bodies where we can't
+ *  run a markdown parser but still want click-through links. */
+function linkifyText(text: string): ReactNode[] {
+  const out: ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  URL_RE.lastIndex = 0;
+  while ((match = URL_RE.exec(text)) != null) {
+    if (match.index > lastIndex) out.push(text.slice(lastIndex, match.index));
+    const url = match[0];
+    out.push(
+      <a
+        key={`${match.index}-${url}`}
+        href={url}
+        target="_blank"
+        rel="noreferrer noopener"
+        onClick={(e) => handleExternalLink(e, url)}
+      >
+        {url}
+      </a>,
+    );
+    lastIndex = match.index + url.length;
+  }
+  if (lastIndex < text.length) out.push(text.slice(lastIndex));
+  return out.length > 0 ? out : [text];
+}
 
 /** Map from tool_use id → whether its matching tool_result arrived (and if errored). */
 export type ToolResultMap = Map<string, { error: boolean }>;
@@ -126,11 +246,7 @@ function Block({
     case "text": {
       const text = (block as TextBlock).text ?? "";
       if (!text.trim()) return null;
-      return (
-        <div className="claude-md">
-          <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{text}</ReactMarkdown>
-        </div>
-      );
+      return <SmartText text={text} />;
     }
     case "thinking":
       return <ThinkingDisclosure text={(block as ThinkingBlock).thinking ?? ""} startOpen={showThinking} />;
@@ -176,7 +292,7 @@ function ThinkingDisclosure({ text, startOpen }: { text: string; startOpen: bool
         <span>Thinking</span>
         <span className="claude-thinking-count">{approxWords(text)} words</span>
       </button>
-      {open && <div className="claude-thinking-body">{text}</div>}
+      {open && <div className="claude-thinking-body">{linkifyText(text)}</div>}
     </div>
   );
 }
@@ -195,7 +311,11 @@ function ToolResultView({ content, isError }: { content: unknown; isError: boole
         <span>{isError ? "error" : "result"}</span>
         <span className="claude-tool-result-preview">{shorten(preview, 90)}</span>
       </button>
-      {open && <pre className="claude-tool-result-body">{preview}</pre>}
+      {open && (
+        <div className="claude-tool-result-body">
+          <SmartText text={preview} dense />
+        </div>
+      )}
     </div>
   );
 }

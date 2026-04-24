@@ -46,13 +46,17 @@ export interface LaneModel {
 
 /**
  * Walk entries once, bucket them into the main lane or a sub-agent lane.
- * Consecutive isSidechain entries form one lane; a non-sidechain entry breaks
- * the run. The Task tool_use preceding the sidechain supplies the lane's
- * subagent_type + description; we also record the sub-agent's sessionId from
- * the first sidechain entry so hook events can be matched.
+ * Sub-agent entries (`isSidechain: true`) are grouped by their `sessionId` —
+ * Claude Code writes one JSONL per sub-agent run, so the sessionId is the
+ * stable identity of a sub-agent across interleaved timestamps. This
+ * correctly handles parallel sub-agents whose messages arrive interleaved by
+ * time (an older "consecutive run" grouper would have merged them).
+ *
+ * The most recent Task tool_use on the main thread supplies the lane's
+ * subagent_type + description — we pair it with the sub-session it spawned
+ * by taking the first sidechain-sessionId to appear after each Task.
  */
 export function buildLaneModel(entries: LogEntry[]): LaneModel {
-  const lanes: AgentLane[] = [];
   const mainLane: AgentLane = {
     id: "main",
     kind: "main",
@@ -65,8 +69,12 @@ export function buildLaneModel(entries: LogEntry[]): LaneModel {
     color: folderColor(0),
   };
 
-  let lastTaskInput: { description?: string; subagent_type?: string } | undefined;
-  let currentSub: AgentLane | null = null;
+  // Pending Task invocations from the main thread that haven't yet been
+  // matched to a sub-session. FIFO — the first new sidechain sessionId we
+  // see claims the oldest pending Task.
+  const pendingTasks: Array<{ description?: string; subagent_type?: string }> = [];
+  // sessionId → lane (created lazily on first sidechain entry for that id).
+  const subLanes = new Map<string, AgentLane>();
   let subIndex = 0;
   let minT = Number.POSITIVE_INFINITY;
   let maxT = 0;
@@ -79,30 +87,32 @@ export function buildLaneModel(entries: LogEntry[]): LaneModel {
       if (t > maxT) maxT = t;
     }
 
-    // Track the latest Task tool_use's input so we can label the next sub-agent lane.
     const content = e.message?.content;
-    if (Array.isArray(content)) {
+    if (Array.isArray(content) && !e.isSidechain) {
       for (const b of content as Array<Record<string, unknown>>) {
         if (b.type === "tool_use" && b.name === "Task") {
           const inp = b.input as Record<string, unknown> | undefined;
-          lastTaskInput = {
+          pendingTasks.push({
             description: typeof inp?.description === "string" ? inp.description : undefined,
             subagent_type:
               typeof inp?.subagent_type === "string" ? inp.subagent_type : undefined,
-          };
+          });
         }
       }
     }
 
     if (e.isSidechain) {
-      if (!currentSub) {
-        const key = lastTaskInput?.subagent_type ?? `sub-${subIndex}`;
-        currentSub = {
+      const sid = typeof e.sessionId === "string" ? e.sessionId : `anon:${subIndex}`;
+      let lane = subLanes.get(sid);
+      if (!lane) {
+        const taskInput = pendingTasks.shift();
+        const key = taskInput?.subagent_type ?? `sub-${subIndex}`;
+        lane = {
           id: `sub:${subIndex}`,
           kind: "subagent",
-          label: lastTaskInput?.subagent_type ?? `sub-agent ${subIndex + 1}`,
-          subagentType: lastTaskInput?.subagent_type,
-          description: lastTaskInput?.description,
+          label: taskInput?.subagent_type ?? `sub-agent ${subIndex + 1}`,
+          subagentType: taskInput?.subagent_type,
+          description: taskInput?.description,
           startIdx: i,
           endIdx: i,
           startedAt: t,
@@ -111,21 +121,18 @@ export function buildLaneModel(entries: LogEntry[]): LaneModel {
           color: colorForKey(key + ":" + subIndex),
           sessionId: typeof e.sessionId === "string" ? e.sessionId : undefined,
         };
+        subLanes.set(sid, lane);
         subIndex++;
       }
-      currentSub.entryIdxs.push(i);
-      currentSub.endIdx = i;
-      if (t) currentSub.endedAt = t;
-      if (!currentSub.sessionId && typeof e.sessionId === "string") {
-        currentSub.sessionId = e.sessionId;
+      lane.entryIdxs.push(i);
+      lane.endIdx = i;
+      if (t) {
+        if (!lane.startedAt) lane.startedAt = t;
+        lane.endedAt = t;
       }
       continue;
     }
 
-    if (currentSub) {
-      lanes.push(currentSub);
-      currentSub = null;
-    }
     if (mainLane.startIdx < 0) mainLane.startIdx = i;
     mainLane.endIdx = i;
     if (t) {
@@ -134,8 +141,14 @@ export function buildLaneModel(entries: LogEntry[]): LaneModel {
     }
     mainLane.entryIdxs.push(i);
   }
-  if (currentSub) lanes.push(currentSub);
 
+  // Order sub-agent lanes by first timestamp (falling back to entry index),
+  // so the timeline reads left-to-right by start time.
+  const lanes = [...subLanes.values()].sort((a, b) => {
+    const as = a.startedAt || a.startIdx;
+    const bs = b.startedAt || b.startIdx;
+    return as - bs;
+  });
   const ordered: AgentLane[] = [mainLane, ...lanes];
   // Pick a nice main-agent color distinct from the palette-hashed sub-agents.
   mainLane.color = { accent: "#0969da", tint: "rgba(9,105,218,0.12)" };
