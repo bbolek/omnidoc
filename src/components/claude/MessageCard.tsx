@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
@@ -15,6 +15,9 @@ import type { LogEntry } from "../../store/claudeStore";
 import { ToolUseChip } from "./ToolUseChip";
 import { relTime } from "./relTime";
 import { useNow } from "./useNow";
+import { useThemeStore } from "../../store/themeStore";
+import { getShikiTheme } from "../../themes";
+import { highlight } from "../../utils/shikiUtils";
 
 // Inline URL matcher used to linkify plain-text tool output. Anchored on
 // protocol, non-greedy up to the first whitespace or common trailing
@@ -29,8 +32,76 @@ function handleExternalLink(e: React.MouseEvent<HTMLAnchorElement>, href?: strin
   openExternal(href).catch((err) => console.warn("[claude] openExternal failed:", err));
 }
 
+/** Shiki-highlighted block. Renders a plain `<pre>` fallback until the
+ *  async highlighter resolves, then swaps to the themed HTML. Used by both
+ *  the JSON pretty-print path in SmartText and the Markdown fenced-code
+ *  override below. */
+function ShikiBlock({
+  code,
+  lang,
+  dense,
+}: {
+  code: string;
+  lang: string;
+  dense?: boolean;
+}) {
+  const { themeName } = useThemeStore();
+  const [html, setHtml] = useState("");
+  useEffect(() => {
+    let cancelled = false;
+    highlight(code, lang, getShikiTheme(themeName))
+      .then((out) => {
+        if (!cancelled) setHtml(out);
+      })
+      .catch(() => {
+        if (!cancelled) setHtml("");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [code, lang, themeName]);
+
+  const cls = `claude-shiki${dense ? " dense" : ""}`;
+  if (!html) {
+    return (
+      <pre className={`claude-code-block${dense ? " dense" : ""}`}>
+        <code>{code}</code>
+      </pre>
+    );
+  }
+  return <div className={cls} dangerouslySetInnerHTML={{ __html: html }} />;
+}
+
+/** Map common language aliases used in Markdown fence info strings to the
+ *  language names Shiki knows about. Unknown values fall through to "text"
+ *  inside `highlight()`. */
+function normalizeLang(input: string | undefined): string {
+  if (!input) return "text";
+  const l = input.toLowerCase();
+  const map: Record<string, string> = {
+    js: "javascript",
+    mjs: "javascript",
+    cjs: "javascript",
+    ts: "typescript",
+    py: "python",
+    rb: "ruby",
+    rs: "rust",
+    sh: "bash",
+    shell: "bash",
+    zsh: "bash",
+    yml: "yaml",
+    md: "markdown",
+    "c++": "cpp",
+    cs: "csharp",
+    ps1: "powershell",
+  };
+  return map[l] ?? l;
+}
+
 /** ReactMarkdown component overrides: intercept link clicks so they open in
- *  the user's default browser instead of navigating the Tauri webview. */
+ *  the user's default browser instead of navigating the Tauri webview, and
+ *  route fenced code blocks through Shiki so ```json / ```python etc. get
+ *  proper syntax highlighting in the panel. */
 const MD_COMPONENTS: Components = {
   a: ({ href, children, ...props }) => (
     <a
@@ -43,6 +114,18 @@ const MD_COMPONENTS: Components = {
       {children}
     </a>
   ),
+  code: ({ className, children, ...props }) => {
+    const langMatch = className?.match(/language-(\w+)/);
+    const code = String(children ?? "").replace(/\n$/, "");
+    // react-markdown v9 dropped the `inline` prop. A fenced block always has
+    // a language class or a newline; inline `` `code` `` has neither.
+    const inline = !langMatch && !/\n/.test(code);
+    if (inline) {
+      return <code className={className} {...props}>{children}</code>;
+    }
+    return <ShikiBlock code={code} lang={normalizeLang(langMatch?.[1])} />;
+  },
+  pre: ({ children }) => <>{children}</>,
 };
 
 const MD_REMARK_PLUGINS = [remarkGfm, remarkBreaks];
@@ -85,13 +168,9 @@ function looksLikeMarkdown(text: string): boolean {
  *  with autolinked URLs. Used in both message text blocks and tool-result
  *  previews, so every surface in the panel formats the same way. */
 function SmartText({ text, dense }: { text: string; dense?: boolean }) {
-  const json = tryPrettyJson(text);
+  const json = useMemo(() => tryPrettyJson(text), [text]);
   if (json != null) {
-    return (
-      <pre className={`claude-code-block${dense ? " dense" : ""}`}>
-        <code>{json}</code>
-      </pre>
-    );
+    return <ShikiBlock code={json} lang="json" dense={dense} />;
   }
   if (looksLikeMarkdown(text)) {
     return (
