@@ -1725,11 +1725,54 @@
 }
 .claude-tool-result-body > .claude-code-block,
 .claude-tool-result-body > .claude-plain,
-.claude-tool-result-body > .claude-md {
+.claude-tool-result-body > .claude-md,
+.claude-tool-result-body > .claude-shiki {
   margin: 0;
   border: 0;
   border-top: 1px solid var(--color-border-muted);
   border-radius: 0;
+}
+
+/* ── Shiki-highlighted code blocks ──────────────────────────────────────
+   Output of `ShikiBlock` in MessageCard.tsx. Shiki emits its own <pre
+   class="shiki">; we just size/frame the wrapper so JSON and fenced code
+   blocks inside messages read like the rest of the app's syntax-aware UI
+   (MarkdownViewer) without the viewer's roomy padding. */
+.claude-shiki {
+  margin: 0 0 0.6em 0;
+  border: 1px solid var(--color-border-muted);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  min-width: 0;
+  background: var(--color-syntax-bg, var(--color-bg-subtle));
+}
+.claude-shiki pre.shiki {
+  margin: 0;
+  padding: 8px 10px;
+  background: var(--color-syntax-bg, var(--color-bg-subtle)) !important;
+  font-family: var(--font-mono, "Fira Code", Menlo, Consolas, monospace);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-x: auto;
+  white-space: pre;
+  word-break: normal;
+  overflow-wrap: normal;
+}
+.claude-shiki pre.shiki code {
+  background: transparent;
+  padding: 0;
+  border: 0;
+  font: inherit;
+}
+/* Dense variant — nested tool-result bodies shouldn't double up padding. */
+.claude-shiki.dense pre.shiki {
+  padding: 6px 8px;
+  font-size: 11.5px;
+}
+/* Markdown bodies host their own fenced code via the same ShikiBlock, so
+   give that wrapper a little top/bottom rhythm to match surrounding text. */
+.claude-md .claude-shiki {
+  margin: 0.6em 0;
 }
 
 /* ── Text selection ─────────────────────────────────────────────────────
@@ -1744,6 +1787,8 @@
 .claude-msg-body *,
 .claude-md,
 .claude-md *,
+.claude-shiki,
+.claude-shiki *,
 .claude-thinking-body,
 .claude-tool-result-body,
 .claude-tool-result-preview,
