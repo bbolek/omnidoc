@@ -29,16 +29,27 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use crate::{log_debug, log_error, log_info};
 
-// Per-session tailing state. We hold both the notify watcher (so dropping it
-// stops the OS subscription) and the last-read byte offset so appended bytes
-// can be streamed efficiently on each modify event.
-struct SessionTail {
-    _watcher: RecommendedWatcher,
+// Per-file tailing state: last-read byte offset and any incomplete trailing
+// line carried across reads (Claude can flush mid-line).
+struct FileTail {
     offset: u64,
-    /// Bytes of an incomplete trailing line carried across reads. Claude can
-    /// flush mid-line; we buffer until a newline arrives.
     partial: Vec<u8>,
-    path: PathBuf,
+    origin: &'static str,
+}
+
+// Per-session tailing state. Holds the notify watchers (dropping them stops
+// the OS subscription) and one `FileTail` per tracked file — the main JSONL
+// plus any `subagents/<sub-session>.jsonl` sidecar files.
+struct SessionTail {
+    _watchers: Vec<RecommendedWatcher>,
+    files: HashMap<PathBuf, FileTail>,
+    /// `<project>/<session-id>/subagents/` — populated once the dir exists.
+    /// We defer its creation until Claude Code spawns the first sub-agent,
+    /// so this may be `None` at watch-start and flip to `Some` mid-session.
+    sidecar_dir: Option<PathBuf>,
+    /// Main `<session-id>.jsonl` path — stashed so the callback can derive
+    /// the expected sidecar dir location without re-scanning project dirs.
+    main_path: PathBuf,
 }
 
 #[derive(Default)]
@@ -274,8 +285,49 @@ fn find_session_path(session_id: &str) -> Option<PathBuf> {
         if sub.is_file() {
             return Some(sub);
         }
+        // Newer Claude Code layout: `<project>/<session-id>/subagents/…` —
+        // the main file may still live at `<project>/<session-id>.jsonl`,
+        // but the sub-sessions are nested one level deeper.
+        let nested = pp
+            .join(session_id)
+            .join("subagents")
+            .join(format!("{session_id}.jsonl"));
+        if nested.is_file() {
+            return Some(nested);
+        }
     }
     None
+}
+
+/// Sidecar directory for a main session file: `<project>/<session-id>/subagents/`.
+/// Claude Code writes one `.jsonl` per sub-agent run in there. Returns `None`
+/// if the directory does not exist (older layouts, or sessions with no
+/// sub-agent runs yet).
+fn sidecar_subagents_dir(main_path: &Path) -> Option<PathBuf> {
+    let parent = main_path.parent()?;
+    let stem = main_path.file_stem()?.to_string_lossy().to_string();
+    let dir = parent.join(&stem).join("subagents");
+    if dir.is_dir() {
+        Some(dir)
+    } else {
+        None
+    }
+}
+
+/// Enumerate existing `*.jsonl` files inside the `subagents/` sidecar dir.
+fn list_subagent_files(dir: &Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    if let Ok(it) = fs::read_dir(dir) {
+        for child in it.flatten() {
+            let p = child.path();
+            if p.is_file() && p.extension().and_then(|e| e.to_str()) == Some("jsonl") {
+                out.push(p);
+            }
+        }
+    }
+    // Deterministic order — easier to reason about in the frontend & tests.
+    out.sort();
+    out
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -294,6 +346,47 @@ pub struct SessionEntryPayload {
     pub origin: String,
 }
 
+/// Stream every JSONL record of `path`, emitting one event per parsed record
+/// under `event_name`. Returns the number of records emitted.
+fn emit_jsonl_file(
+    path: &Path,
+    app: &AppHandle,
+    event_name: &str,
+    session_id: &str,
+    origin: &str,
+    start_index: u64,
+) -> u64 {
+    let Ok(file) = File::open(path) else {
+        log_debug!("claude::emit_jsonl", "open fail: {}", path.display());
+        return 0;
+    };
+    let reader = BufReader::new(file);
+    let mut n: u64 = 0;
+    for line in reader.lines().flatten() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        match serde_json::from_str::<Value>(&line) {
+            Ok(v) => {
+                let _ = app.emit(
+                    event_name,
+                    SessionEntryPayload {
+                        session_id: session_id.to_string(),
+                        entry: v,
+                        index: start_index + n,
+                        origin: origin.to_string(),
+                    },
+                );
+                n += 1;
+            }
+            Err(e) => {
+                log_debug!("claude::emit_jsonl", "skip bad line: {e}");
+            }
+        }
+    }
+    n
+}
+
 #[tauri::command]
 pub fn claude_read_session(
     session_id: String,
@@ -304,38 +397,179 @@ pub fn claude_read_session(
     };
     log_info!("claude::read_session", "id={} path={}", session_id, path.display());
 
-    let file = File::open(&path).map_err(|e| format!("open {path:?}: {e}"))?;
-    let reader = BufReader::new(file);
-    let mut index: u64 = 0;
     let event_name = format!("claude:session:{session_id}");
-    for line in reader.lines().flatten() {
-        if line.trim().is_empty() {
+    let mut total = emit_jsonl_file(&path, &app, &event_name, &session_id, "main", 0);
+
+    // Claude Code writes each sub-agent run's transcript to a sibling
+    // `<session-id>/subagents/*.jsonl` file. Stream them too so the UI can
+    // render the sidechain threads — otherwise the Task tool_use rows in
+    // the main transcript have nothing to group.
+    if let Some(dir) = sidecar_subagents_dir(&path) {
+        for sub_path in list_subagent_files(&dir) {
+            let n = emit_jsonl_file(&sub_path, &app, &event_name, &session_id, "subagent", total);
+            log_info!(
+                "claude::read_session",
+                "sub {} -> {} entries",
+                sub_path.display(),
+                n
+            );
+            total += n;
+        }
+    }
+    Ok(total)
+}
+
+/// Pull the bytes appended to `path` since `tail.offset`, split on newlines
+/// (buffering any incomplete trailing fragment), parse as JSON, and emit one
+/// event per record. Shared helper so the notify callback can poll the main
+/// file and every subagent file with identical semantics.
+fn drain_file_tail(
+    path: &Path,
+    tail: &mut FileTail,
+    app: &AppHandle,
+    event_name: &str,
+    session_id: &str,
+) {
+    let Ok(mut f) = File::open(path) else { return };
+    let Ok(end) = f.seek(SeekFrom::End(0)) else { return };
+    // File was truncated / replaced — reset.
+    if end < tail.offset {
+        tail.offset = 0;
+        tail.partial.clear();
+    }
+    if end <= tail.offset {
+        return;
+    }
+    if f.seek(SeekFrom::Start(tail.offset)).is_err() {
+        return;
+    }
+    let mut buf = Vec::with_capacity((end - tail.offset) as usize);
+    let _ = f.read_to_end(&mut buf);
+    tail.offset = end;
+
+    if !tail.partial.is_empty() {
+        let mut stitched = std::mem::take(&mut tail.partial);
+        stitched.extend_from_slice(&buf);
+        buf = stitched;
+    }
+    let last_nl = buf.iter().rposition(|&b| b == b'\n');
+    let (complete, leftover): (&[u8], &[u8]) = match last_nl {
+        Some(pos) => (&buf[..=pos], &buf[pos + 1..]),
+        None => (&[], &buf[..]),
+    };
+    if !leftover.is_empty() {
+        tail.partial = leftover.to_vec();
+    }
+    for raw in complete.split(|&b| b == b'\n') {
+        if raw.is_empty() {
             continue;
         }
-        match serde_json::from_str::<Value>(&line) {
+        match serde_json::from_slice::<Value>(raw) {
             Ok(v) => {
                 let _ = app.emit(
-                    &event_name,
+                    event_name,
                     SessionEntryPayload {
-                        session_id: session_id.clone(),
+                        session_id: session_id.to_string(),
                         entry: v,
-                        index,
-                        origin: "main".into(),
+                        index: 0,
+                        origin: tail.origin.to_string(),
                     },
                 );
-                index += 1;
             }
             Err(e) => {
-                log_debug!("claude::read_session", "skip bad line: {e}");
+                log_debug!("claude::tail", "skip bad line: {e}");
             }
         }
     }
-    Ok(index)
 }
 
-/// Register a notify watcher for `session_id`'s file. On every modify event,
-/// read the bytes appended since the last poll, split into lines (buffering
-/// partial fragments), parse as JSON, and emit one event per record.
+/// Handle one notify event for a session's tail: late-discover the sidecar
+/// `subagents/` directory if it appeared after watch-start, register any
+/// new subagent JSONL files, then stream appended lines of every tracked
+/// file. Extracted out of `make_tail_callback` so the callback can spawn
+/// additional watchers that reuse this handler without the compiler hitting
+/// an opaque-return-type inference cycle.
+fn handle_tail_event(
+    res: notify::Result<Event>,
+    app: &AppHandle,
+    session_id: &str,
+) {
+    let Ok(event) = res else { return };
+    match event.kind {
+        notify::EventKind::Modify(_) | notify::EventKind::Create(_) => {}
+        _ => return,
+    }
+    let Some(state) = app.try_state::<ClaudeWatchState>() else { return };
+    let mut tails = match state.tails.lock() {
+        Ok(t) => t,
+        Err(_) => return,
+    };
+    let Some(tail) = tails.get_mut(session_id) else { return };
+
+    // Late discovery: if the sidecar dir didn't exist at watch-start but
+    // Claude Code has since spawned its first sub-agent and created it,
+    // start tracking it now. A fresh watcher is attached to the dir so we
+    // pick up subsequent file creations + modifications directly, without
+    // relying on the broader discovery watcher's events.
+    if tail.sidecar_dir.is_none() {
+        if let Some(dir) = sidecar_subagents_dir(&tail.main_path) {
+            tail.sidecar_dir = Some(dir.clone());
+            if let Ok(mut w) = RecommendedWatcher::new(
+                make_tail_callback(app.clone(), session_id.to_string()),
+                Config::default(),
+            ) {
+                if w.watch(&dir, RecursiveMode::NonRecursive).is_ok() {
+                    tail._watchers.push(w);
+                    log_info!(
+                        "claude::tail",
+                        "sidecar discovered id={} dir={}",
+                        session_id,
+                        dir.display()
+                    );
+                }
+            }
+        }
+    }
+
+    if let Some(ref dir) = tail.sidecar_dir {
+        for sub in list_subagent_files(dir) {
+            if !tail.files.contains_key(&sub) {
+                tail.files.insert(
+                    sub,
+                    FileTail {
+                        offset: 0,
+                        partial: Vec::new(),
+                        origin: "subagent",
+                    },
+                );
+            }
+        }
+    }
+
+    let event_name = format!("claude:session:{session_id}");
+    let paths: Vec<PathBuf> = tail.files.keys().cloned().collect();
+    for p in paths {
+        if let Some(ft) = tail.files.get_mut(&p) {
+            drain_file_tail(&p, ft, app, &event_name, session_id);
+        }
+    }
+}
+
+/// Build a notify callback for a session's tail. Returning a fresh callback
+/// per watcher (main file + sidecar dir + optional discovery target) keeps
+/// the underlying `notify` plumbing simple — each watcher owns its own
+/// callback instance.
+fn make_tail_callback(
+    app: AppHandle,
+    session_id: String,
+) -> impl FnMut(notify::Result<Event>) + Send + 'static {
+    move |res: notify::Result<Event>| handle_tail_event(res, &app, &session_id)
+}
+
+/// Register notify watchers for `session_id`: one for the main JSONL and, if
+/// present, one for the sidecar `subagents/` directory. On every modify/create
+/// event the callback polls every tracked file (detecting new subagent files
+/// that appear after `watch` starts) and streams appended lines to the UI.
 #[tauri::command]
 pub fn claude_watch_session(
     session_id: String,
@@ -345,117 +579,137 @@ pub fn claude_watch_session(
     let Some(path) = find_session_path(&session_id) else {
         return Err(format!("session not found: {session_id}"));
     };
+    let sidecar_dir = sidecar_subagents_dir(&path);
     log_info!(
         "claude::watch_session",
-        "id={} path={}",
+        "id={} path={} sidecar={}",
         session_id,
-        path.display()
+        path.display(),
+        sidecar_dir
+            .as_deref()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|| "-".into()),
     );
 
-    // If we were already watching, drop the previous watcher (Drop stops it).
+    // If we were already watching, drop the previous watchers (Drop stops them).
     {
         let mut tails = state.tails.lock().map_err(|e| format!("Lock: {e}"))?;
         tails.remove(&session_id);
     }
 
-    // Initial offset = end of file, because the frontend calls `read_session`
-    // to backfill and then `watch_session` to stream the delta.
-    let initial_offset = fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
-
-    let app_clone = app.clone();
-    let id_clone = session_id.clone();
-    let path_clone = path.clone();
-
-    // Shared offset cell so the notify callback and the tail state mutate the
-    // same value. We stash it inside the tails map after creation.
-    let watcher = RecommendedWatcher::new(
-        move |res: notify::Result<Event>| {
-            let Ok(event) = res else { return };
-            match event.kind {
-                notify::EventKind::Modify(_)
-                | notify::EventKind::Create(_) => {}
-                _ => return,
-            }
-            // Read the delta. Access the tails map to pull our own offset.
-            let Some(state) = app_clone.try_state::<ClaudeWatchState>() else { return };
-            let mut tails = match state.tails.lock() {
-                Ok(t) => t,
-                Err(_) => return,
-            };
-            let Some(tail) = tails.get_mut(&id_clone) else { return };
-            let Ok(mut f) = File::open(&tail.path) else { return };
-            let Ok(end) = f.seek(SeekFrom::End(0)) else { return };
-            if end <= tail.offset {
-                return;
-            }
-            if f.seek(SeekFrom::Start(tail.offset)).is_err() {
-                return;
-            }
-            let mut buf = Vec::with_capacity((end - tail.offset) as usize);
-            let _ = f.read_to_end(&mut buf);
-            tail.offset = end;
-
-            // Stitch buffered partial with new bytes.
-            if !tail.partial.is_empty() {
-                let mut stitched = std::mem::take(&mut tail.partial);
-                stitched.extend_from_slice(&buf);
-                buf = stitched;
-            }
-            // Split on newline; if the trailing fragment isn't terminated, save
-            // it for the next event.
-            let last_nl = buf.iter().rposition(|&b| b == b'\n');
-            let (complete, leftover): (&[u8], &[u8]) = match last_nl {
-                Some(pos) => (&buf[..=pos], &buf[pos + 1..]),
-                None => (&[], &buf[..]),
-            };
-            if !leftover.is_empty() {
-                tail.partial = leftover.to_vec();
-            }
-            let event_name = format!("claude:session:{id_clone}");
-            for raw in complete.split(|&b| b == b'\n') {
-                if raw.is_empty() {
-                    continue;
-                }
-                match serde_json::from_slice::<Value>(raw) {
-                    Ok(v) => {
-                        let _ = app_clone.emit(
-                            &event_name,
-                            SessionEntryPayload {
-                                session_id: id_clone.clone(),
-                                entry: v,
-                                index: 0,
-                                origin: "main".into(),
-                            },
-                        );
-                    }
-                    Err(e) => {
-                        log_debug!("claude::tail", "skip bad line: {e}");
-                    }
-                }
-            }
+    // Initial offsets = end of each file, because `read_session` already
+    // backfilled the existing content.
+    let mut files: HashMap<PathBuf, FileTail> = HashMap::new();
+    let main_end = fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+    files.insert(
+        path.clone(),
+        FileTail {
+            offset: main_end,
+            partial: Vec::new(),
+            origin: "main",
         },
+    );
+    if let Some(ref dir) = sidecar_dir {
+        for sub in list_subagent_files(dir) {
+            let end = fs::metadata(&sub).map(|m| m.len()).unwrap_or(0);
+            files.insert(
+                sub,
+                FileTail {
+                    offset: end,
+                    partial: Vec::new(),
+                    origin: "subagent",
+                },
+            );
+        }
+    }
+
+    state.tails.lock().map_err(|e| format!("Lock: {e}"))?.insert(
+        session_id.clone(),
+        SessionTail {
+            _watchers: Vec::new(),
+            files,
+            sidecar_dir: sidecar_dir.clone(),
+            main_path: path.clone(),
+        },
+    );
+
+    let mut watchers: Vec<RecommendedWatcher> = Vec::new();
+
+    let mut main_watcher = RecommendedWatcher::new(
+        make_tail_callback(app.clone(), session_id.clone()),
         Config::default(),
     )
     .map_err(|e| format!("Failed to create watcher: {e}"))?;
-
-    let mut watcher = watcher;
-    watcher
-        .watch(&path_clone, RecursiveMode::NonRecursive)
+    main_watcher
+        .watch(&path, RecursiveMode::NonRecursive)
         .map_err(|e| format!("Failed to watch: {e}"))?;
+    watchers.push(main_watcher);
 
-    state
+    if let Some(ref dir) = sidecar_dir {
+        // Sidecar already exists — watch it directly so every new subagent
+        // file and every append to an existing one is picked up immediately.
+        let mut dir_watcher = RecommendedWatcher::new(
+            make_tail_callback(app.clone(), session_id.clone()),
+            Config::default(),
+        )
+        .map_err(|e| format!("Failed to create sidecar watcher: {e}"))?;
+        dir_watcher
+            .watch(dir, RecursiveMode::NonRecursive)
+            .map_err(|e| format!("Failed to watch sidecar: {e}"))?;
+        watchers.push(dir_watcher);
+    } else {
+        // No sidecar yet — Claude Code hasn't spawned a sub-agent in this
+        // session. Attach a "discovery" watcher whose only job is to fire
+        // the callback once events appear near the expected sidecar path,
+        // so the late-discovery branch in `make_tail_callback` can promote
+        // it to a fully-tracked dir without requiring the user to
+        // re-select the session. We prefer the session-local parent
+        // (`<project>/<session-id>/`) if it already exists, falling back
+        // to the project slug dir so we still catch the very first
+        // `<session-id>/` creation event.
+        let session_dir = path.parent().and_then(|p| {
+            path.file_stem()
+                .map(|s| p.join(s.to_string_lossy().to_string()))
+        });
+        let discovery_target = match session_dir {
+            Some(ref d) if d.is_dir() => Some((d.clone(), RecursiveMode::Recursive)),
+            _ => path
+                .parent()
+                .map(|p| (p.to_path_buf(), RecursiveMode::NonRecursive)),
+        };
+        if let Some((target, mode)) = discovery_target {
+            match RecommendedWatcher::new(
+                make_tail_callback(app.clone(), session_id.clone()),
+                Config::default(),
+            ) {
+                Ok(mut w) => {
+                    if let Err(e) = w.watch(&target, mode) {
+                        log_debug!(
+                            "claude::watch_session",
+                            "discovery watch failed {}: {}",
+                            target.display(),
+                            e
+                        );
+                    } else {
+                        watchers.push(w);
+                    }
+                }
+                Err(e) => {
+                    log_debug!("claude::watch_session", "discovery watcher new: {e}");
+                }
+            }
+        }
+    }
+
+    // Stash watchers onto the tail so they live as long as the subscription.
+    if let Some(tail) = state
         .tails
         .lock()
         .map_err(|e| format!("Lock: {e}"))?
-        .insert(
-            session_id,
-            SessionTail {
-                _watcher: watcher,
-                offset: initial_offset,
-                partial: Vec::new(),
-                path,
-            },
-        );
+        .get_mut(&session_id)
+    {
+        tail._watchers = watchers;
+    }
     Ok(())
 }
 

@@ -57,7 +57,20 @@ export function TranscriptFeed({
   // Drop bookkeeping records (queue-operation, attachment, last-prompt,
   // ai-title, …) — the CLI writes these alongside real messages, and without
   // a `message` field they'd render as empty "(no content)" system cards.
-  const renderable = useMemo(() => entries.filter((e) => e.message != null), [entries]);
+  // Also sort by timestamp: since sub-agent transcripts arrive from separate
+  // files after the main stream, raw append-order would lump all sidechain
+  // runs at the end. A stable timestamp sort interleaves them inline, so each
+  // thread card lands near the Task tool_use that spawned it.
+  const renderable = useMemo(() => {
+    const kept = entries.filter((e) => e.message != null);
+    kept.sort((a, b) => {
+      const ta = a.timestamp ? Date.parse(a.timestamp) : 0;
+      const tb = b.timestamp ? Date.parse(b.timestamp) : 0;
+      if (ta && tb && ta !== tb) return ta - tb;
+      return 0;
+    });
+    return kept;
+  }, [entries]);
 
   // Build the lane model once per render — the timeline above and the
   // per-thread coloring below both key off it, so a shared derivation avoids
@@ -339,11 +352,17 @@ const FEED_COMPONENTS: Components<Item> = {
 };
 
 /**
- * Walk entries and bundle every consecutive run of `isSidechain: true`
- * messages into a thread item. The most recent Task tool_use preceding the
- * thread supplies a header (agent type + description). Attach the matching
- * lane id from the shared lane model so the thread and the timeline agree
- * on identity + color.
+ * Walk entries once and assemble a linear list of items. Sidechain entries
+ * are bucketed by their `sessionId` — since Claude Code writes each sub-agent
+ * run to its own `subagents/<sid>.jsonl`, the sessionId uniquely identifies a
+ * thread even when multiple sub-agents run in parallel (their entries would
+ * otherwise interleave by timestamp and confuse a "consecutive run" grouper).
+ *
+ * Each thread's position in the output is the point at which its first
+ * sidechain entry appears in time-order, so the collapsible thread card lands
+ * near the Task tool_use that spawned it. Lane metadata (color, start/end
+ * timestamps, subagent_type) is looked up by sessionId in the shared lane
+ * model so the timeline bars and the inline threads stay in sync.
  */
 function groupSidechains(
   entries: LogEntry[],
@@ -351,29 +370,22 @@ function groupSidechains(
   laneModel: import("./agentLanes").LaneModel,
 ): Item[] {
   const out: Item[] = [];
+  // sessionId → index into `out`. Also buffers a fallback taskInput captured
+  // from the most recent Task tool_use so older transcripts (no sessionId on
+  // sidechain entries, no lane match) still get a reasonable label.
+  const threadAt = new Map<string, number>();
+  const laneBySessionId = new Map<string, import("./agentLanes").AgentLane>();
+  for (const lane of laneModel.lanes) {
+    if (lane.kind === "subagent" && lane.sessionId) {
+      laneBySessionId.set(lane.sessionId, lane);
+    }
+  }
   let threadIndex = 0;
-  let currentThread: LogEntry[] | null = null;
   let lastTaskInput:
     | { description?: string; subagent_type?: string }
     | undefined;
-  // `buildLaneModel` assigns sub-agent lanes in start-order, so walking the
-  // sub-agent lanes with a parallel cursor keeps thread ↔ lane alignment.
-  const subLanes = laneModel.lanes.filter((l) => l.kind === "subagent");
-  let subCursor = 0;
-  const pushThread = (thread: LogEntry[]) => {
-    const lane = subLanes[subCursor++];
-    out.push({
-      kind: "thread",
-      laneId: lane?.id ?? `sub:${threadIndex}`,
-      entries: thread,
-      threadIndex: threadIndex++,
-      taskInput: lane
-        ? { description: lane.description, subagent_type: lane.subagentType }
-        : lastTaskInput,
-    });
-  };
+
   for (const e of entries) {
-    // Track the latest Task tool_use input so we can label the next thread.
     const content = e.message?.content;
     if (Array.isArray(content)) {
       for (const b of content as Array<Record<string, unknown>>) {
@@ -387,19 +399,34 @@ function groupSidechains(
         }
       }
     }
+
     if (e.isSidechain) {
-      if (!currentThread) currentThread = [];
-      currentThread.push(e);
+      if (!show) continue;
+      // Key by sessionId; fall back to a per-thread "anon" bucket so
+      // malformed entries still render somewhere rather than vanishing.
+      const sid = typeof e.sessionId === "string" ? e.sessionId : `anon:${threadIndex}`;
+      const existing = threadAt.get(sid);
+      if (existing != null) {
+        const item = out[existing];
+        if (item.kind === "thread") item.entries.push(e);
+        continue;
+      }
+      const lane = laneBySessionId.get(sid);
+      const taskInput = lane
+        ? { description: lane.description, subagent_type: lane.subagentType }
+        : lastTaskInput;
+      out.push({
+        kind: "thread",
+        laneId: lane?.id ?? `sub:${sid}`,
+        entries: [e],
+        threadIndex: threadIndex++,
+        taskInput,
+      });
+      threadAt.set(sid, out.length - 1);
       continue;
     }
-    if (currentThread) {
-      if (show) pushThread(currentThread);
-      currentThread = null;
-    }
+
     out.push({ kind: "entry", entry: e });
-  }
-  if (currentThread && show) {
-    pushThread(currentThread);
   }
   return out;
 }

@@ -1664,3 +1664,101 @@
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
 }
+
+/* ── Smart text renderer ────────────────────────────────────────────────
+   Used by `SmartText` in MessageCard.tsx for text that isn't markdown — pretty
+   JSON and plain-text blocks. Mirrors the existing `.claude-md pre` styling so
+   the three rendering paths (markdown fenced code, pretty JSON, plain) share
+   visual weight inside a message body. */
+.claude-code-block,
+.claude-plain {
+  margin: 0 0 0.6em 0;
+  padding: 8px 10px;
+  background: var(--color-bg-subtle);
+  border: 1px solid var(--color-border-muted);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--color-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+}
+.claude-code-block code {
+  background: transparent;
+  padding: 0;
+  border: 0;
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+/* Dense variant for nested contexts (tool-result preview) — smaller padding
+   so the disclosure doesn't balloon the message card. */
+.claude-code-block.dense,
+.claude-plain.dense {
+  padding: 6px 8px;
+  font-size: 11.5px;
+}
+.claude-plain a,
+.claude-code-block a {
+  color: var(--color-accent, #0969da);
+  text-decoration: underline;
+}
+.claude-plain a:hover,
+.claude-code-block a:hover {
+  text-decoration: none;
+}
+/* tool-result-body was a `<pre>`; it's now a `<div>` wrapper that holds a
+   SmartText child (which picks its own `<pre>` / `<div class="claude-md">`
+   container). Strip the wrapper's code-block-ish visuals — the child block
+   paints them — but keep the max-height + scroll so massive tool output
+   can't fill the screen. */
+.claude-tool-result-body {
+  padding: 0;
+  background: transparent;
+  border: 0;
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  white-space: normal;
+}
+.claude-tool-result-body > .claude-code-block,
+.claude-tool-result-body > .claude-plain,
+.claude-tool-result-body > .claude-md {
+  margin: 0;
+  border: 0;
+  border-top: 1px solid var(--color-border-muted);
+  border-radius: 0;
+}
+
+/* ── Text selection ─────────────────────────────────────────────────────
+   The app-wide default is `user-select: none` on <body> (see index.css), so
+   that dragging inside the shell doesn't create stray selections while
+   working with files. Inside the Claude panel we want the opposite: message
+   bodies, markdown output, thinking disclosures and tool-result previews
+   should be selectable and copyable. Buttons / toolbars keep the global
+   `none` default so clicking chevrons to expand a section doesn't highlight
+   the button label. */
+.claude-msg-body,
+.claude-msg-body *,
+.claude-md,
+.claude-md *,
+.claude-thinking-body,
+.claude-tool-result-body,
+.claude-tool-result-preview,
+.claude-session-id,
+.claude-session-title,
+.claude-session-meta {
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+/* Buttons inside selectable areas (e.g. the "result" / "thinking" toggles)
+   should stay clickable with a pointer — revert the inherited text cursor. */
+.claude-msg-body button,
+.claude-msg-body button *,
+.claude-thinking-body button,
+.claude-thinking-body button * {
+  cursor: pointer;
+}
