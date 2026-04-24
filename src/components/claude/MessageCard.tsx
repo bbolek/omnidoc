@@ -53,7 +53,11 @@ function ShikiBlock({
       .then((out) => {
         if (!cancelled) setHtml(out);
       })
-      .catch(() => {
+      .catch((err) => {
+        // Surface highlight failures so the next person doesn't have to guess
+        // why the plain-text fallback never swaps in. See shikiUtils for the
+        // common causes (unsupported theme, highlighter init, etc).
+        console.warn("[claude] ShikiBlock highlight failed:", err);
         if (!cancelled) setHtml("");
       });
     return () => {
@@ -116,13 +120,17 @@ const MD_COMPONENTS: Components = {
   ),
   code: ({ className, children, ...props }) => {
     const langMatch = className?.match(/language-(\w+)/);
-    const code = String(children ?? "").replace(/\n$/, "");
-    // react-markdown v9 dropped the `inline` prop. A fenced block always has
-    // a language class or a newline; inline `` `code` `` has neither.
-    const inline = !langMatch && !/\n/.test(code);
+    const raw = String(children ?? "");
+    // react-markdown v9 dropped the `inline` prop. Fenced blocks pass through
+    // remark with a trailing "\n" in their value; inline `` `code` `` never
+    // has one. Using the raw newline (before we strip it) reliably
+    // distinguishes the two even when a fenced block has no language and
+    // only one line of content.
+    const inline = !langMatch && !raw.endsWith("\n");
     if (inline) {
       return <code className={className} {...props}>{children}</code>;
     }
+    const code = raw.replace(/\n$/, "");
     return <ShikiBlock code={code} lang={normalizeLang(langMatch?.[1])} />;
   },
   pre: ({ children }) => <>{children}</>,
