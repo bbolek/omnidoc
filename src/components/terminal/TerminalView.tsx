@@ -1,7 +1,11 @@
 import { useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { readText as readClipboardText } from "@tauri-apps/plugin-clipboard-manager";
+import {
+  readText as readClipboardText,
+  writeText as writeClipboardText,
+} from "@tauri-apps/plugin-clipboard-manager";
+import { open as openExternal } from "@tauri-apps/plugin-shell";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
@@ -88,7 +92,17 @@ export function TerminalView({
     });
     const fit = new FitAddon();
     term.loadAddon(fit);
-    term.loadAddon(new WebLinksAddon());
+    // WebLinksAddon's default click handler calls `window.open()`, which is a
+    // no-op in Tauri's webview (especially webkit2gtk on Linux) — so links
+    // emitted by e.g. Claude Code appeared unclickable. Route through the
+    // shell plugin so the URL opens in the user's OS-level browser.
+    term.loadAddon(
+      new WebLinksAddon((_event, uri) => {
+        openExternal(uri).catch((err) =>
+          log.warn("terminal", `open link failed: ${String(err)}`)
+        );
+      })
+    );
     term.open(containerRef.current);
 
     // Xterm needs to be in the DOM *and* have a measurable size before fit()
@@ -158,22 +172,30 @@ export function TerminalView({
       });
     })();
 
-    // Paste support. Two things conspire against the obvious approach:
-    //   1. `navigator.clipboard.readText()` is gated behind permissions the
-    //      Tauri webview (especially webkit2gtk on Linux) does not grant —
-    //      it throws NotAllowedError, so the previous fix silently failed.
-    //      We read via the tauri clipboard-manager plugin instead, which
-    //      talks directly to the OS clipboard.
+    // Copy/paste support. Two things conspire against the obvious approach:
+    //   1. `navigator.clipboard.{readText,writeText}()` is gated behind
+    //      permissions the Tauri webview (especially webkit2gtk on Linux)
+    //      does not grant — it throws NotAllowedError, so the naive fix
+    //      silently fails. We go through the tauri clipboard-manager plugin
+    //      instead, which talks directly to the OS clipboard.
     //   2. xterm's own keydown handler runs before any DOM listener attached
     //      to an ancestor during the bubble phase, so by the time we'd see
-    //      Ctrl-V it has already been sent to the PTY. We use
+    //      the shortcut it has already been sent to the PTY. We use
     //      `attachCustomKeyEventHandler` (xterm's official intercept point)
     //      and return `false` to stop xterm from also forwarding the keys.
     //
-    // Shortcuts accepted:
+    // Copy shortcuts:
+    //   - Cmd-C on macOS (never overlaps with SIGINT, which is Ctrl-C)
+    //   - Ctrl-Shift-C on Windows/Linux (the GNOME / xterm convention; plain
+    //     Ctrl-C is left alone so it still sends SIGINT to the running
+    //     foreground process, e.g. Claude Code)
+    //   - Ctrl-Insert on every platform (classic X11 copy)
+    //   When no text is selected, the shortcut falls through so the user can
+    //   still send Cmd-C / Ctrl-Shift-C to the process if they want.
+    //
+    // Paste shortcuts:
     //   - Cmd-V on macOS
-    //   - Ctrl-V and Ctrl-Shift-V on Windows/Linux (Ctrl-V is what most
-    //     users reach for; Ctrl-Shift-V is the GNOME/xterm convention)
+    //   - Ctrl-V on Windows/Linux (what most users reach for)
     //   - Shift-Insert on every platform (classic X11 paste)
     const pasteClipboard = async () => {
       try {
@@ -183,6 +205,11 @@ export function TerminalView({
         log.warn("terminal", `clipboard read failed: ${String(err)}`);
       }
     };
+    const copySelection = (selection: string) => {
+      writeClipboardText(selection).catch((err) =>
+        log.warn("terminal", `clipboard write failed: ${String(err)}`)
+      );
+    };
     const isPasteShortcut = (e: KeyboardEvent) => {
       const keyV = e.key === "v" || e.key === "V";
       const macPaste = isMacPlatform && e.metaKey && !e.ctrlKey && !e.altKey && keyV;
@@ -190,12 +217,30 @@ export function TerminalView({
       const shiftInsert = e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && e.key === "Insert";
       return macPaste || ctrlV || shiftInsert;
     };
+    const isCopyShortcut = (e: KeyboardEvent) => {
+      const keyC = e.key === "c" || e.key === "C";
+      const macCopy = isMacPlatform && e.metaKey && !e.ctrlKey && !e.altKey && keyC;
+      const ctrlShiftC = !isMacPlatform && e.ctrlKey && e.shiftKey && !e.metaKey && !e.altKey && keyC;
+      const ctrlInsert = e.ctrlKey && !e.shiftKey && !e.metaKey && !e.altKey && e.key === "Insert";
+      return macCopy || ctrlShiftC || ctrlInsert;
+    };
     term.attachCustomKeyEventHandler((e) => {
-      if (e.type !== "keydown" || !isPasteShortcut(e)) return true;
-      e.preventDefault();
-      e.stopPropagation();
-      void pasteClipboard();
-      return false;
+      if (e.type !== "keydown") return true;
+      if (isPasteShortcut(e)) {
+        e.preventDefault();
+        e.stopPropagation();
+        void pasteClipboard();
+        return false;
+      }
+      if (isCopyShortcut(e)) {
+        const selection = term.getSelection();
+        if (!selection) return true;
+        e.preventDefault();
+        e.stopPropagation();
+        copySelection(selection);
+        return false;
+      }
+      return true;
     });
     // Context-menu paste / middle-click on X11 fire a native `paste` event
     // on xterm's hidden textarea. Let it through xterm's own paste pipeline
