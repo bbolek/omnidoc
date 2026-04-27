@@ -149,6 +149,31 @@ export function buildLaneModel(entries: LogEntry[]): LaneModel {
     const bs = b.startedAt || b.startIdx;
     return as - bs;
   });
+  // Disambiguate labels when the same `subagent_type` runs more than once —
+  // without this, two parallel "general-purpose" agents render identical text
+  // on both lanes and read as a single agent. We suffix " #N" only when
+  // duplicates exist; uniquely-named lanes keep their bare type.
+  const typeCounts = new Map<string, number>();
+  for (const lane of lanes) {
+    const t = lane.subagentType;
+    if (!t) continue;
+    typeCounts.set(t, (typeCounts.get(t) ?? 0) + 1);
+  }
+  const typeSeen = new Map<string, number>();
+  for (const lane of lanes) {
+    const t = lane.subagentType;
+    if (!t) {
+      lane.label = lane.label || `sub-agent`;
+      continue;
+    }
+    if ((typeCounts.get(t) ?? 0) > 1) {
+      const n = (typeSeen.get(t) ?? 0) + 1;
+      typeSeen.set(t, n);
+      lane.label = `${t} #${n}`;
+    } else {
+      lane.label = t;
+    }
+  }
   const ordered: AgentLane[] = [mainLane, ...lanes];
   // Pick a nice main-agent color distinct from the palette-hashed sub-agents.
   mainLane.color = { accent: "#0969da", tint: "rgba(9,105,218,0.12)" };
@@ -180,38 +205,24 @@ export function buildLaneModel(entries: LogEntry[]): LaneModel {
 }
 
 /**
- * Assign each sub-agent lane to the lowest-numbered "row" such that no earlier
- * lane on that row overlaps. Greedy interval-graph coloring — gives the
- * timeline a clean stacked view where concurrent lanes occupy distinct rows.
+ * Assign each sub-agent lane to its own row, in start-time order. Every
+ * sub-agent gets a distinct swimlane — sequential and parallel runs alike —
+ * so the user can read at a glance how many agents Claude spawned across the
+ * session and trace each one's timing on its own line. (An earlier version
+ * greedy-packed non-overlapping lanes onto shared rows, which collapsed two
+ * sequential sub-agents into what looked like a single agent.)
  */
 export function assignLaneRows(model: LaneModel): Map<string, number> {
-  const rowEnds: number[] = []; // end (exclusive) of last lane on each row
   const rows = new Map<string, number>();
   rows.set("main", 0);
-  const subs = model.lanes.filter((l) => l.kind === "subagent");
-  // Sort by start so the greedy assignment is stable.
-  const sorted = [...subs].sort((a, b) => {
-    const as = a.startedAt || a.startIdx;
-    const bs = b.startedAt || b.startIdx;
-    return as - bs;
-  });
-  for (const lane of sorted) {
-    const start = lane.startedAt || lane.startIdx;
-    const end = (lane.endedAt || lane.endIdx) + 1;
-    let placed = false;
-    for (let r = 0; r < rowEnds.length; r++) {
-      if (rowEnds[r] <= start) {
-        rowEnds[r] = end;
-        rows.set(lane.id, r + 1); // +1 so main occupies row 0
-        placed = true;
-        break;
-      }
-    }
-    if (!placed) {
-      rowEnds.push(end);
-      rows.set(lane.id, rowEnds.length); // new row below
-    }
-  }
+  const subs = model.lanes
+    .filter((l) => l.kind === "subagent")
+    .sort((a, b) => {
+      const as = a.startedAt || a.startIdx;
+      const bs = b.startedAt || b.startIdx;
+      return as - bs;
+    });
+  subs.forEach((lane, i) => rows.set(lane.id, i + 1));
   return rows;
 }
 
