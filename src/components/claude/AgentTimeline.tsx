@@ -153,7 +153,7 @@ function LaneBar({
   const title =
     lane.kind === "main"
       ? `main agent · ${lane.entryIdxs.length} msgs${dur ? ` · ${dur}` : ""}`
-      : `${lane.subagentType ?? "sub-agent"}${
+      : `${lane.label}${
           lane.description ? `: ${lane.description}` : ""
         } · ${lane.entryIdxs.length} msgs${dur ? ` · ${dur}` : ""}`;
 
@@ -173,7 +173,7 @@ function LaneBar({
         ) : (
           <Bot size={9} />
         )}
-        <span>{lane.kind === "main" ? "main" : lane.subagentType ?? "sub"}</span>
+        <span>{lane.kind === "main" ? "main" : lane.label}</span>
       </span>
     </button>
   );
@@ -231,7 +231,7 @@ function LaneLegend({
             title={
               lane.kind === "main"
                 ? `Solo-view the main agent`
-                : `${lane.subagentType ?? "sub-agent"}${
+                : `${lane.label}${
                     lane.description ? ` — ${lane.description}` : ""
                   }`
             }
@@ -243,7 +243,7 @@ function LaneLegend({
               <Bot size={10} />
             )}
             <span className="claude-lane-chip-name">
-              {lane.kind === "main" ? "main" : lane.subagentType ?? "sub"}
+              {lane.kind === "main" ? "main" : lane.label}
             </span>
             {lane.kind !== "main" && lane.description && (
               <span className="claude-lane-chip-desc">{lane.description}</span>
