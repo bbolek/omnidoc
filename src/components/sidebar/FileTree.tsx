@@ -936,14 +936,16 @@ function FolderSection({ folder }: FolderSectionProps) {
   // Strategy:
   //   1. Register a recursive folder watcher on the Rust side that emits
   //      `git-folder-changed` for create/modify/remove events (minus noisy
-  //      paths like `node_modules`, `.git/objects`). The watcher runs for
-  //      every workspace folder, not just git repos — the tree still needs
-  //      to refresh when files appear/disappear externally.
+  //      paths like `node_modules` and the entire `.git/` directory). The
+  //      watcher runs for every workspace folder, not just git repos — the
+  //      tree still needs to refresh when files appear/disappear externally.
   //   2. On each event, schedule a file-tree refresh (re-list parent dir)
   //      and, if the folder is a git repo, also schedule a git-status
   //      refresh. Both are debounced.
-  //   3. Keep a slow safety interval (30s) on the git-status side to catch
-  //      anything the watcher might miss (network-triggered state, etc.).
+  //   3. Keep a slow safety interval on the git-status side to catch the
+  //      rare event the watcher misses (network-triggered state, etc.).
+  //      We deliberately keep this long: with many worktrees open this
+  //      runs once per workspace folder and adds up.
 
   useEffect(() => {
     if (!currentFolder) {
@@ -1038,9 +1040,11 @@ function FolderSection({ folder }: FolderSectionProps) {
       await refresh();
       if (cancelled) return;
 
-      // Safety poll — much slower than before since the watcher covers the
-      // common case. Catches things like remote-driven branch updates.
-      safetyInterval = setInterval(refresh, 30_000);
+      // Safety poll — fires only when the watcher misses something
+      // (e.g. remote-driven branch updates). Kept deliberately slow because
+      // this interval runs *per workspace folder*, and with several
+      // worktrees open the per-folder cost compounds quickly.
+      safetyInterval = setInterval(refresh, 120_000);
     })();
 
     return () => {

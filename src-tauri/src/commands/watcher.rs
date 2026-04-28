@@ -128,15 +128,21 @@ pub struct GitFolderChangedPayload {
     pub path: String,
 }
 
-/// Paths inside a repo that should NOT trigger a git-status refresh:
-/// - `.git/objects/` — writes every `git gc`/fetch/commit; contents don't
-///   affect `git status` output.
-/// - common build/dependency directories — high-churn, typically `.gitignore`d,
-///   and git status output doesn't change for ignored files.
+/// Paths inside a repo that should NOT trigger a git-status refresh.
+///
+/// The big one is `/.git/` — every git invocation we make ourselves
+/// (`status`, `add`, `commit`, `checkout`, `fetch`, …) writes inside the
+/// `.git` directory (index, HEAD, refs, FETCH_HEAD, packed-refs, lock files,
+/// objects, logs). If those events drove a refresh we'd self-trigger an
+/// endless loop of git calls. Out-of-band repo state changes (terminal
+/// commits, external fetches) are picked up by the slow safety poll on the
+/// frontend.
+///
+/// Build / dependency directories are also filtered: they're high-churn,
+/// typically `.gitignore`d, and `git status` output for them doesn't change.
 fn is_noisy_path(path: &str) -> bool {
     const NOISY: &[&str] = &[
-        "/.git/objects/",
-        "/.git/logs/",
+        "/.git/",
         "/node_modules/",
         "/target/",
         "/dist/",
@@ -144,7 +150,23 @@ fn is_noisy_path(path: &str) -> bool {
         "/.next/",
     ];
     let normalized = path.replace('\\', "/");
-    NOISY.iter().any(|needle| normalized.contains(needle))
+    if NOISY.iter().any(|needle| normalized.contains(needle)) {
+        return true;
+    }
+    // Editor scratch/atomic-save artefacts that don't represent meaningful
+    // changes (vim swap files, emacs lockfiles, IDE atomic-save probes).
+    if let Some(name) = normalized.rsplit('/').next() {
+        if name.ends_with('~')
+            || name.ends_with(".swp")
+            || name.ends_with(".swx")
+            || name.ends_with(".tmp")
+            || name.starts_with(".#")
+            || name == "4913"
+        {
+            return true;
+        }
+    }
+    false
 }
 
 /// Watch a folder recursively and emit `git-folder-changed` events so the
