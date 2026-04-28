@@ -37,6 +37,13 @@ interface GitStoreState {
 
   setActiveRepo: (folder: string | null) => Promise<void>;
   refresh: (folder: string) => Promise<void>;
+  /**
+   * Cheap refresh: re-fetches `git status` only. Used by the filesystem
+   * watcher and by stage/unstage/discard, where branches/log/remotes
+   * cannot have changed — running the full 5-command `refresh()` for every
+   * keystroke-save was the main source of git-process churn.
+   */
+  refreshStatus: (folder: string) => Promise<void>;
   loadMoreLog: (folder: string) => Promise<void>;
   loadCommitChangedFiles: (folder: string, sha: string) => Promise<void>;
 
@@ -106,7 +113,7 @@ export const useGitStore = create<GitStoreState>((set, get) => {
           folder,
           setTimeout(() => {
             refreshTimers.delete(folder);
-            void get().refresh(folder);
+            void get().refreshStatus(folder);
           }, 200),
         );
       },
@@ -184,6 +191,17 @@ export const useGitStore = create<GitStoreState>((set, get) => {
       }
     },
 
+    refreshStatus: async (folder) => {
+      try {
+        const status = await invoke<GitStatusEntry[]>("get_git_status", {
+          folder,
+        });
+        mutateRepo(folder, { status, error: null });
+      } catch (e) {
+        mutateRepo(folder, { error: String(e) });
+      }
+    },
+
     loadMoreLog: async (folder) => {
       const state = get().repos[folder];
       if (!state || !state.logHasMore) return;
@@ -244,17 +262,17 @@ export const useGitStore = create<GitStoreState>((set, get) => {
 
     stage: async (folder, paths) => {
       await invoke("git_stage", { folder, paths });
-      await get().refresh(folder);
+      await get().refreshStatus(folder);
     },
 
     unstage: async (folder, paths) => {
       await invoke("git_unstage", { folder, paths });
-      await get().refresh(folder);
+      await get().refreshStatus(folder);
     },
 
     discard: async (folder, paths) => {
       await invoke("git_discard", { folder, paths });
-      await get().refresh(folder);
+      await get().refreshStatus(folder);
     },
 
     commit: async (folder, message, amend) => {
