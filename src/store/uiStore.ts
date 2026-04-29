@@ -15,7 +15,6 @@ interface UiState {
   zoomLevel: number;
   globalSearchQuery: string;
   pendingFindQuery: string | null;
-  showLineNumbers: boolean;
   zenMode: boolean;
   presentationVisible: boolean;
   livePreviewEnabled: boolean;
@@ -39,8 +38,6 @@ interface UiState {
   resetZoom: () => void;
   setGlobalSearchQuery: (q: string) => void;
   setPendingFindQuery: (q: string | null) => void;
-  toggleLineNumbers: () => void;
-  setShowLineNumbers: (v: boolean) => void;
   toggleZenMode: () => void;
   setZenMode: (v: boolean) => void;
   setPresentationVisible: (v: boolean) => void;
@@ -68,7 +65,6 @@ export const useUiStore = create<UiState>()(
       zoomLevel: 1.0,
       globalSearchQuery: "",
       pendingFindQuery: null,
-      showLineNumbers: false,
       zenMode: false,
       presentationVisible: false,
       livePreviewEnabled: false,
@@ -93,8 +89,6 @@ export const useUiStore = create<UiState>()(
       resetZoom: () => get().setZoomLevel(1.0),
       setGlobalSearchQuery: (q) => set({ globalSearchQuery: q }),
       setPendingFindQuery: (q) => set({ pendingFindQuery: q }),
-      toggleLineNumbers: () => set((s) => ({ showLineNumbers: !s.showLineNumbers })),
-      setShowLineNumbers: (v) => set({ showLineNumbers: v }),
       toggleZenMode: () => set((s) => ({ zenMode: !s.zenMode })),
       setZenMode: (v) => set({ zenMode: v }),
       setPresentationVisible: (v) => set({ presentationVisible: v }),
@@ -115,7 +109,6 @@ export const useUiStore = create<UiState>()(
         activeSidebarPanel: state.activeSidebarPanel,
         zoomLevel: state.zoomLevel,
         globalSearchQuery: state.globalSearchQuery,
-        showLineNumbers: state.showLineNumbers,
         livePreviewEnabled: state.livePreviewEnabled,
         minimapVisible: state.minimapVisible,
         claudeDrawerVisible: state.claudeDrawerVisible,

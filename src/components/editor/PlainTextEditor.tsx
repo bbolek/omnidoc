@@ -27,7 +27,7 @@ interface Props {
 export function PlainTextEditor({
   tab,
   showToolbar = true,
-  showLineNumbers = false,
+  showLineNumbers = true,
   monospace = true,
   placeholder,
   language,
