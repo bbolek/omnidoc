@@ -206,7 +206,7 @@ export const components: Components = {
 
 export function MarkdownViewer({ tab }: Props) {
   const { themeName } = useThemeStore();
-  const { showLineNumbers, setPresentationVisible } = useUiStore();
+  const { setPresentationVisible } = useUiStore();
   const [mode, setMode] = useState<ViewMode>("preview");
   const [sourceHtml, setSourceHtml] = useState("");
   const [foldedSlugs, setFoldedSlugs] = useState<Set<string>>(new Set());
@@ -333,7 +333,7 @@ export function MarkdownViewer({ tab }: Props) {
         <FoldContext.Provider value={{ foldedSlugs, toggleFold }}>
           <div
             ref={previewRef}
-            className={`markdown-body selectable fade-in${showLineNumbers ? " show-line-numbers" : ""}`}
+            className="markdown-body selectable fade-in show-line-numbers"
           >
             <ReactMarkdown
               remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]}
@@ -345,11 +345,11 @@ export function MarkdownViewer({ tab }: Props) {
           </div>
         </FoldContext.Provider>
       ) : sourceHtml ? (
-        <div className={`code-viewer selectable fade-in${showLineNumbers ? " show-line-numbers" : ""}`}>
+        <div className="code-viewer selectable fade-in show-line-numbers">
           <div dangerouslySetInnerHTML={{ __html: sourceHtml }} />
         </div>
       ) : (
-        <div className={`code-viewer selectable fade-in${showLineNumbers ? " show-line-numbers" : ""}`}>
+        <div className="code-viewer selectable fade-in show-line-numbers">
           <pre style={{ fontFamily: "'Fira Code', monospace", fontSize: 13, lineHeight: 1.6, color: "var(--color-text)" }}>
             {tab.content}
           </pre>

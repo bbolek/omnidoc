@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useThemeStore } from "../../store/themeStore";
-import { useUiStore } from "../../store/uiStore";
 import { getShikiTheme } from "../../themes";
 import { highlight } from "../../utils/shikiUtils";
 import { getLanguageForExtension } from "../../utils/fileUtils";
@@ -18,7 +17,6 @@ type Mode = (typeof MODES)[number];
 
 export function CodeViewer({ tab, ext }: Props) {
   const { themeName } = useThemeStore();
-  const { showLineNumbers } = useUiStore();
   const [html, setHtml] = useState("");
   const [mode, setMode] = useState<Mode>("view");
   const editing = mode === "edit";
@@ -60,13 +58,13 @@ export function CodeViewer({ tab, ext }: Props) {
         <PlainTextEditor
           tab={tab}
           showToolbar
-          showLineNumbers={showLineNumbers}
+          showLineNumbers
           monospace
           language={lang}
         />
       ) : (
         <div
-          className={`code-viewer selectable fade-in${showLineNumbers ? " show-line-numbers" : ""}`}
+          className="code-viewer selectable fade-in show-line-numbers"
           style={{ flex: 1, overflow: "auto" }}
         >
           {html ? (

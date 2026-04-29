@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Hash, Pencil, Plus, Wand2, ZoomIn, ZoomOut } from "lucide-react";
+import { Pencil, Plus, Wand2, ZoomIn, ZoomOut } from "lucide-react";
 import { useFileStore } from "../../store/fileStore";
 import { useThemeStore } from "../../store/themeStore";
 import { useUiStore } from "../../store/uiStore";
@@ -15,7 +15,7 @@ import type { ThemeDefinition } from "../../types";
 export function StatusBar() {
   const { tabs, activeTabId, updateTabContent } = useFileStore();
   const { themeName, setTheme } = useThemeStore();
-  const { zoomLevel, increaseZoom, decreaseZoom, resetZoom, showLineNumbers, toggleLineNumbers } = useUiStore();
+  const { zoomLevel, increaseZoom, decreaseZoom, resetZoom } = useUiStore();
   const [showThemePicker, setShowThemePicker] = useState(false);
   const [editingTheme, setEditingTheme] = useState<ThemeDefinition | null | undefined>(undefined);
   const themeButtonRef = useRef<HTMLButtonElement>(null);
@@ -112,24 +112,6 @@ export function StatusBar() {
               style={{ display: "flex", alignItems: "center", padding: "0 3px", opacity: zoomLevel >= 2.0 ? 0.4 : 1 }}
             >
               <ZoomIn size={11} />
-            </button>
-          </div>
-          <div className="status-separator" />
-          {/* Line numbers toggle */}
-          <div className="status-item">
-            <button
-              onClick={toggleLineNumbers}
-              title={showLineNumbers ? "Hide line numbers" : "Show line numbers"}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 3,
-                opacity: showLineNumbers ? 1 : 0.7,
-                fontWeight: showLineNumbers ? 600 : 400,
-              }}
-            >
-              <Hash size={11} />
-              Lines
             </button>
           </div>
           <div className="status-separator" />
