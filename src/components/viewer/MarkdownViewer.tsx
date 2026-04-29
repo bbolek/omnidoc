@@ -308,7 +308,7 @@ export function MarkdownViewer({ tab }: Props) {
           zIndex: 10,
           display: "flex",
           justifyContent: "flex-end",
-          padding: "8px 48px",
+          padding: "8px 24px",
           background: "var(--color-bg)",
           borderBottom: "1px solid var(--color-border-muted, var(--color-border))",
           flexShrink: 0,

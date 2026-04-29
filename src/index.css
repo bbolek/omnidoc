@@ -450,9 +450,9 @@ body {
 
 /* ─── Markdown viewer ─────────────────────────────────────────────────── */
 .markdown-body {
-  max-width: 860px;
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 32px 48px;
+  padding: 32px 24px;
   color: var(--color-text);
   font-family: "Inter", system-ui, sans-serif;
   font-size: calc(15px * var(--content-zoom, 1));
