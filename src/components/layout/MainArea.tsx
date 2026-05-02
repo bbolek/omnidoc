@@ -7,6 +7,24 @@ import { Breadcrumb } from "./Breadcrumb";
 import { ViewerRouter } from "../viewer/ViewerRouter";
 import { WelcomeScreen } from "../welcome/WelcomeScreen";
 import { TerminalPanel } from "../terminal/TerminalPanel";
+import { ErrorBoundary } from "../ui/ErrorBoundary";
+import type { Tab } from "../../types";
+
+// Each tab's viewer sits behind its own boundary keyed by tab.id so a render
+// crash in one editor (e.g. a transient `removeChild` from the live preview
+// reconciling rapid edits) stays scoped to that tab — the rest of the app
+// keeps working and the user can retry or switch tabs instead of restarting.
+function TabViewer({ tab }: { tab: Tab }) {
+  return (
+    <ErrorBoundary
+      key={tab.id}
+      label={`Viewer:${tab.name}`}
+      resetKeys={[tab.id, tab.path]}
+    >
+      <ViewerRouter tab={tab} />
+    </ErrorBoundary>
+  );
+}
 
 export function MainArea() {
   const { tabs, activeTabId, splitView, rightPaneTabId, setActiveTab, setRightPaneTab } =
@@ -23,7 +41,7 @@ export function MainArea() {
       <TabBar />
       <Breadcrumb />
       <div className="viewer-area">
-        {activeTab ? <ViewerRouter tab={activeTab} /> : <WelcomeScreen />}
+        {activeTab ? <TabViewer tab={activeTab} /> : <WelcomeScreen />}
       </div>
     </div>
   ) : (
@@ -33,7 +51,7 @@ export function MainArea() {
           <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
             <SplitTabBar paneId="left" activeId={activeTabId} onActivate={(id) => id && setActiveTab(id)} />
             <div className="viewer-area" style={{ flex: 1, overflow: "hidden" }}>
-              {activeTab ? <ViewerRouter tab={activeTab} /> : <WelcomeScreen />}
+              {activeTab ? <TabViewer tab={activeTab} /> : <WelcomeScreen />}
             </div>
           </div>
         </Allotment.Pane>
@@ -41,7 +59,7 @@ export function MainArea() {
           <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
             <SplitTabBar paneId="right" activeId={rightPaneTabId} onActivate={(id) => setRightPaneTab(id)} />
             <div className="viewer-area" style={{ flex: 1, overflow: "hidden" }}>
-              {rightPaneTab ? <ViewerRouter tab={rightPaneTab} /> : <WelcomeScreen />}
+              {rightPaneTab ? <TabViewer tab={rightPaneTab} /> : <WelcomeScreen />}
             </div>
           </div>
         </Allotment.Pane>

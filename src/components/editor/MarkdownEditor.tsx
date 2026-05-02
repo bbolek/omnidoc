@@ -28,6 +28,7 @@ import rehypeRaw from "rehype-raw";
 import { useFileStore } from "../../store/fileStore";
 import { useUiStore } from "../../store/uiStore";
 import { components as markdownComponents } from "../viewer/MarkdownViewer";
+import { ErrorBoundary } from "../ui/ErrorBoundary";
 import type { Tab } from "../../types";
 
 interface Props {
@@ -540,13 +541,52 @@ export function MarkdownEditor({ tab }: Props) {
                   borderLeft: "1px solid var(--color-border-muted, var(--color-border))",
                 }}
               >
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]}
-                  rehypePlugins={[rehypeKatex, rehypeRaw]}
-                  components={markdownComponents}
+                {/* ReactMarkdown + rehype-raw can throw `removeChild` during
+                    rapid edits when intermediate content is briefly invalid
+                    HTML (e.g. mid-deletion of a tag). Reset on the next
+                    content change so a one-off render glitch in the preview
+                    can't crash the whole editor. */}
+                <ErrorBoundary
+                  label="LivePreview"
+                  resetKeys={[tab.content]}
+                  fallback={(_err, reset) => (
+                    <div
+                      style={{
+                        padding: "16px 20px",
+                        fontSize: 12,
+                        color: "var(--color-text-muted)",
+                        fontFamily: "Inter, sans-serif",
+                      }}
+                    >
+                      Preview hit a render error. Keep typing or{" "}
+                      <button
+                        type="button"
+                        onClick={reset}
+                        style={{
+                          background: "none",
+                          border: "1px solid var(--color-border-muted)",
+                          borderRadius: "var(--radius-sm)",
+                          color: "var(--color-text)",
+                          padding: "1px 8px",
+                          fontSize: 11,
+                          cursor: "pointer",
+                          marginLeft: 4,
+                        }}
+                      >
+                        Retry
+                      </button>
+                      .
+                    </div>
+                  )}
                 >
-                  {tab.content}
-                </ReactMarkdown>
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]}
+                    rehypePlugins={[rehypeKatex, rehypeRaw]}
+                    components={markdownComponents}
+                  >
+                    {tab.content}
+                  </ReactMarkdown>
+                </ErrorBoundary>
               </div>
             </Allotment.Pane>
           </Allotment>
