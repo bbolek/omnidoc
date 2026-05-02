@@ -261,6 +261,9 @@ class BootErrorBoundary extends React.Component<
       info.componentStack ?? "",
     );
   }
+  reset = () => {
+    this.setState({ error: null });
+  };
   render() {
     if (!this.state.error) return this.props.children;
     const err = this.state.error;
@@ -277,12 +280,47 @@ class BootErrorBoundary extends React.Component<
           zIndex: 99999,
         }}
       >
-        <h2 style={{ marginTop: 0, color: "#ff7b72" }}>Omnidoc crashed on startup</h2>
+        <h2 style={{ marginTop: 0, color: "#ff7b72" }}>Something went wrong</h2>
         <p style={{ fontSize: 13, opacity: 0.8 }}>
-          The React tree threw an unrecoverable error. The stack trace below
-          (and any entries written to <code>%LOCALAPPDATA%\Omnidoc\omnidoc-startup.log</code>)
-          should point at the cause.
+          The React tree threw an unrecoverable error. Try reloading the UI —
+          if it crashes again immediately you may need to restart Omnidoc. A
+          full trace was written to <code>%LOCALAPPDATA%\Omnidoc\omnidoc-startup.log</code>.
         </p>
+        <div style={{ display: "flex", gap: 8, margin: "12px 0 16px" }}>
+          <button
+            type="button"
+            onClick={this.reset}
+            style={{
+              background: "#238636",
+              color: "#fff",
+              border: "none",
+              borderRadius: 6,
+              padding: "6px 14px",
+              fontFamily: "Inter, system-ui, sans-serif",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            Reload UI
+          </button>
+          <button
+            type="button"
+            onClick={() => location.reload()}
+            style={{
+              background: "transparent",
+              color: "#e6edf3",
+              border: "1px solid rgba(255,255,255,0.2)",
+              borderRadius: 6,
+              padding: "6px 14px",
+              fontFamily: "Inter, system-ui, sans-serif",
+              fontSize: 13,
+              cursor: "pointer",
+            }}
+          >
+            Reload window
+          </button>
+        </div>
         <pre
           style={{
             whiteSpace: "pre-wrap",

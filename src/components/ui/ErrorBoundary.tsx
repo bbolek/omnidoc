@@ -17,6 +17,14 @@ interface Props {
    * mounting again (e.g. after the user fixes the underlying problem).
    */
   fallback?: (error: Error, reset: () => void) => React.ReactNode;
+  /**
+   * When the boundary is in an error state and any value in this array
+   * changes (shallow compare), the error is cleared and children remount.
+   * Lets callers auto-recover from transient render failures — e.g. a
+   * rapid-edit `removeChild` glitch in the live preview that clears itself
+   * on the next keystroke.
+   */
+  resetKeys?: ReadonlyArray<unknown>;
   children: React.ReactNode;
 }
 
@@ -46,6 +54,23 @@ export class ErrorBoundary extends React.Component<Props, State> {
       info.componentStack ?? "",
     );
     this.props.onError?.(error);
+  }
+
+  componentDidUpdate(prevProps: Props): void {
+    if (!this.state.error) return;
+    const prev = prevProps.resetKeys;
+    const next = this.props.resetKeys;
+    if (!next || !prev) return;
+    if (prev.length !== next.length) {
+      this.reset();
+      return;
+    }
+    for (let i = 0; i < next.length; i++) {
+      if (!Object.is(prev[i], next[i])) {
+        this.reset();
+        return;
+      }
+    }
   }
 
   reset = (): void => {
