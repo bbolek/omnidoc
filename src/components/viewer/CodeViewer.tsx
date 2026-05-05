@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useThemeStore } from "../../store/themeStore";
 import { getShikiTheme } from "../../themes";
 import { highlight } from "../../utils/shikiUtils";
 import { getLanguageForExtension } from "../../utils/fileUtils";
+import { useTabScrollMemory } from "../../hooks/useTabScrollMemory";
 import { PlainTextEditor } from "../editor/PlainTextEditor";
 import { ModeToggle } from "./ModeToggle";
 import type { Tab } from "../../types";
@@ -21,6 +22,8 @@ export function CodeViewer({ tab, ext }: Props) {
   const [mode, setMode] = useState<Mode>("view");
   const editing = mode === "edit";
   const lang = getLanguageForExtension(ext);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useTabScrollMemory(scrollRef, tab.id, "code");
 
   useEffect(() => {
     if (editing) return;
@@ -64,6 +67,7 @@ export function CodeViewer({ tab, ext }: Props) {
         />
       ) : (
         <div
+          ref={scrollRef}
           className="code-viewer selectable fade-in show-line-numbers"
           style={{ flex: 1, overflow: "auto" }}
         >

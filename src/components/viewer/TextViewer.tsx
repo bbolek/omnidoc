@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { WrapText } from "lucide-react";
 import { PlainTextEditor } from "../editor/PlainTextEditor";
 import { ModeToggle } from "./ModeToggle";
+import { useTabScrollMemory } from "../../hooks/useTabScrollMemory";
 import type { Tab } from "../../types";
 
 interface Props {
@@ -16,6 +17,8 @@ export function TextViewer({ tab }: Props) {
   const [mode, setMode] = useState<Mode>("view");
   const editing = mode === "edit";
   const lines = tab.content.split("\n");
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useTabScrollMemory(scrollRef, tab.id, "text");
 
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
@@ -73,6 +76,7 @@ export function TextViewer({ tab }: Props) {
         />
       ) : (
         <div
+          ref={scrollRef}
           className="selectable fade-in"
           style={{
             flex: 1,
