@@ -1,18 +1,21 @@
 import { useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { homeDir, resolve as resolvePath } from "@tauri-apps/api/path";
 import {
   readText as readClipboardText,
   writeText as writeClipboardText,
 } from "@tauri-apps/plugin-clipboard-manager";
 import { open as openExternal } from "@tauri-apps/plugin-shell";
 import { Terminal } from "@xterm/xterm";
+import type { ILink, ILinkProvider } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import "@xterm/xterm/css/xterm.css";
 import { useTerminalStore } from "../../store/terminalStore";
 import { folderColor } from "../../utils/folderColors";
 import { useFileStore } from "../../store/fileStore";
+import { loadFileForOpen } from "../../utils/fileUtils";
 import { log } from "../../utils/logger";
 
 const isMacPlatform =
@@ -101,6 +104,18 @@ export function TerminalView({
         openExternal(uri).catch((err) =>
           log.warn("terminal", `open link failed: ${String(err)}`)
         );
+      })
+    );
+    // File-path links: detect things like `requirements.md`, `./foo/bar.ts`,
+    // `/abs/path/file.txt`, `~/work/file.md`, optionally with `:line(:col)`.
+    // Resolve relative paths against the terminal's spawn cwd. Note: we don't
+    // track dynamic `cd` movements — paths shown after the user changes
+    // directories may not resolve (absolute paths and tools that emit project-
+    // root-relative paths like Claude Code work fine).
+    const cwdAtSpawn = terminal.folderPath;
+    const pathLinkDisposable = term.registerLinkProvider(
+      makePathLinkProvider(term, (raw) => {
+        void openTerminalPath(raw, cwdAtSpawn);
       })
     );
     term.open(containerRef.current);
@@ -268,6 +283,7 @@ export function TerminalView({
       fitRef.current = null;
       pasteCleanupRef.current?.();
       pasteCleanupRef.current = null;
+      pathLinkDisposable.dispose();
       unlisteners.forEach((u) => u());
       invoke("terminal_kill", { id: terminalId }).catch(() => {});
       // Defer dispose() by a tick. xterm schedules its first render via RAF
@@ -337,6 +353,82 @@ export function TerminalView({
       }}
     />
   );
+}
+
+// Matches paths that look like files. Pattern shape:
+//   - optional prefix: ~ or . or ..
+//   - optional leading /
+//   - zero or more dir segments separated by /
+//   - filename + .ext (extension must start with a letter so things like
+//     IP addresses "1.2.3.4" don't match)
+//   - optional :line(:col) suffix
+// The leading lookbehind keeps the matcher from starting in the middle of a
+// dotted token — without it, "a.b.c.md" would also match starting at "b.c.md".
+const FILE_PATH_PATTERN =
+  /(?<![\w./~])((?:~|\.{1,2})?\/?(?:[\w.\-]+\/)*[\w.\-]+\.[a-zA-Z][a-zA-Z0-9]{0,7}(?::\d+(?::\d+)?)?)/g;
+
+function makePathLinkProvider(
+  term: Terminal,
+  onActivate: (raw: string) => void
+): ILinkProvider {
+  return {
+    provideLinks(bufferLineNumber, callback) {
+      const line = term.buffer.active.getLine(bufferLineNumber - 1);
+      if (!line) return callback(undefined);
+      const text = line.translateToString(true);
+      if (!text) return callback(undefined);
+
+      const links: ILink[] = [];
+      FILE_PATH_PATTERN.lastIndex = 0;
+      let m: RegExpExecArray | null;
+      while ((m = FILE_PATH_PATTERN.exec(text))) {
+        const raw = m[1];
+        if (!raw) continue;
+        const offset = m.index + (m[0].length - raw.length);
+
+        // If "://" sits between the previous whitespace and the match start,
+        // this is the path part of a URL — WebLinksAddon already handles the
+        // whole URL, so don't double-decorate.
+        const lhs = text.slice(0, offset);
+        const lastWs = Math.max(lhs.lastIndexOf(" "), lhs.lastIndexOf("\t"));
+        if (lhs.slice(lastWs + 1).includes("://")) continue;
+
+        // xterm columns are 1-based; range end is inclusive.
+        links.push({
+          range: {
+            start: { x: offset + 1, y: bufferLineNumber },
+            end: { x: offset + raw.length, y: bufferLineNumber },
+          },
+          text: raw,
+          activate: (_event, t) => onActivate(t),
+        });
+      }
+      callback(links.length ? links : undefined);
+    },
+  };
+}
+
+async function openTerminalPath(raw: string, cwd: string | null): Promise<void> {
+  // Strip optional :line(:col) suffix; line jumping isn't wired through the
+  // editor yet, so we just open the file.
+  const m = /^(.*?)(?::\d+(?::\d+)?)?$/.exec(raw);
+  let p = m?.[1] ?? raw;
+
+  try {
+    if (p === "~" || p.startsWith("~/")) {
+      p = (await homeDir()) + p.slice(1);
+    }
+    if (!p.startsWith("/")) {
+      if (!cwd) return;
+      p = await resolvePath(cwd, p);
+    }
+    const { content, info } = await loadFileForOpen(p);
+    if (info.is_dir) return;
+    const name = p.split(/[/\\]/).pop() ?? p;
+    useFileStore.getState().openFile(p, name, content, info);
+  } catch (err) {
+    log.warn("terminal", `open path "${raw}" failed: ${String(err)}`);
+  }
 }
 
 /**
