@@ -4,6 +4,7 @@ import { useFileStore } from "../../store/fileStore";
 import { useThemeStore } from "../../store/themeStore";
 import { getShikiTheme } from "../../themes";
 import { highlight } from "../../utils/shikiUtils";
+import { useTabScrollMemory } from "../../hooks/useTabScrollMemory";
 import type { Tab } from "../../types";
 
 interface Props {
@@ -37,6 +38,7 @@ export function PlainTextEditor({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const gutterRef = useRef<HTMLDivElement>(null);
   const overlayInnerRef = useRef<HTMLDivElement>(null);
+  useTabScrollMemory(textareaRef, tab.id, "editor");
   const [saving, setSaving] = useState(false);
   const [lineCount, setLineCount] = useState(() => tab.content.split("\n").length);
   const [highlightedHtml, setHighlightedHtml] = useState<string>("");

@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { getFileType, getFileExtension } from "../../utils/fileUtils";
 import { pluginManager } from "../../plugins/pluginManager";
 import { useUiStore } from "../../store/uiStore";
+import { useTabScrollMemory } from "../../hooks/useTabScrollMemory";
 import { Minimap } from "./Minimap";
 import { MarkdownViewer } from "./MarkdownViewer";
 import { HtmlViewer } from "./HtmlViewer";
@@ -53,6 +54,7 @@ export function ViewerRouter({ tab }: Props) {
   const pluginViewer = pluginManager.getViewerForExtension(ext);
   const minimapVisible = useUiStore((s) => s.minimapVisible);
   const scrollRef = useRef<HTMLDivElement>(null);
+  useTabScrollMemory(scrollRef, tab.id, "viewer");
 
   // Synthetic diff tabs short-circuit the usual extension-based dispatch —
   // their `path` is the document being diffed but the content must come from
