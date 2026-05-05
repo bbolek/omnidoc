@@ -771,6 +771,64 @@ function StarredSection({ starredPaths, onToggleStar }: StarredSectionProps) {
   );
 }
 
+// ─── Global Explorer toolbar ─────────────────────────────────────────────────
+
+/**
+ * Workspace-wide actions that aren't tied to a single folder section.
+ * The Focus Selected File button dispatches `omnidoc:reveal-path`; whichever
+ * `FolderSection` owns the active tab's path picks it up and reveals it.
+ */
+function ExplorerToolbar() {
+  const activeTabId = useFileStore((s) => s.activeTabId);
+  const hasActive = activeTabId !== null;
+
+  const handleFocusSelected = () => {
+    const active = useFileStore.getState().getActiveTab();
+    if (!active?.path) return;
+    window.dispatchEvent(
+      new CustomEvent("omnidoc:reveal-path", { detail: { path: active.path } })
+    );
+  };
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "flex-end",
+        gap: 2,
+        padding: "2px 6px",
+        borderBottom: "1px solid var(--color-border-muted)",
+      }}
+    >
+      <button
+        onClick={handleFocusSelected}
+        disabled={!hasActive}
+        title="Focus Selected File"
+        style={{
+          background: "none",
+          border: "none",
+          padding: "3px 4px",
+          cursor: hasActive ? "pointer" : "default",
+          color: "var(--color-text-muted)",
+          opacity: hasActive ? 1 : 0.4,
+          display: "flex",
+          alignItems: "center",
+          borderRadius: "var(--radius-sm)",
+        }}
+        onMouseEnter={(e) => {
+          if (hasActive) (e.currentTarget as HTMLElement).style.color = "var(--color-text)";
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLElement).style.color = "var(--color-text-muted)";
+        }}
+      >
+        <Locate size={13} />
+      </button>
+    </div>
+  );
+}
+
 // ─── FileTree (root): multi-folder workspace ─────────────────────────────────
 
 /**
@@ -816,6 +874,9 @@ export function FileTree() {
 
   return (
     <div style={{ flex: 1, overflow: "auto", display: "flex", flexDirection: "column" }}>
+      {/* Global Explorer toolbar */}
+      <ExplorerToolbar />
+
       {/* Starred items shared across all folders */}
       <StarredSection starredPaths={starredPaths} onToggleStar={toggleStar} />
 
@@ -1137,7 +1198,12 @@ function FolderSection({ folder }: FolderSectionProps) {
     const handler = async (ev: Event) => {
       const detail = (ev as CustomEvent<{ path: string }>).detail;
       if (!detail?.path || !currentFolder) return;
-      if (!detail.path.startsWith(currentFolder)) return;
+      // Strict prefix check so e.g. `/a/foo` doesn't claim `/a/foobar/x`.
+      const inFolder =
+        detail.path === currentFolder ||
+        detail.path.startsWith(currentFolder + "/") ||
+        detail.path.startsWith(currentFolder + "\\");
+      if (!inFolder) return;
 
       // Child TreeNodes are unmounted while the section is collapsed — nothing
       // to expand or scroll to. Expand the section first and wait a tick for
@@ -1369,24 +1435,6 @@ function FolderSection({ folder }: FolderSectionProps) {
           <span title={currentFolder} style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, color: "var(--color-text)" }}>
             {folderName}
           </span>
-
-          {/* Focus Selected File */}
-          <button
-            onClick={() => {
-              const active = useFileStore.getState().getActiveTab();
-              if (!active?.path) return;
-              if (!active.path.startsWith(currentFolder)) return;
-              window.dispatchEvent(
-                new CustomEvent("omnidoc:reveal-path", { detail: { path: active.path } })
-              );
-            }}
-            title="Focus Selected File"
-            style={{ background: "none", border: "none", padding: "2px 3px", cursor: "pointer", color: "var(--color-text-muted)", display: "flex", alignItems: "center", borderRadius: "var(--radius-sm)", flexShrink: 0 }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--color-text)"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--color-text-muted)"; }}
-          >
-            <Locate size={13} />
-          </button>
 
           {/* Open Terminal rooted in this folder */}
           <button
