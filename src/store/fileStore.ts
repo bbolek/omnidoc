@@ -44,6 +44,13 @@ interface FileState {
 
   tabs: Tab[];
   activeTabId: string | null;
+  /**
+   * MRU-ordered list of tab ids (most recent first). Drives Ctrl+Tab /
+   * Ctrl+Shift+Tab so navigation walks the history of recently selected
+   * tabs instead of stepping through the tab bar in positional order.
+   * Not persisted: tab ids are regenerated each session.
+   */
+  tabHistory: string[];
   recentFiles: RecentFile[];
   recentFolders: RecentFolder[];
   splitView: boolean;
@@ -125,6 +132,43 @@ interface FileState {
 let tabCounter = 0;
 const genId = () => `tab-${Date.now()}-${tabCounter++}`;
 
+// Move `id` to the front of the MRU history, removing any prior occurrence.
+function bumpHistory(history: string[], id: string): string[] {
+  return [id, ...history.filter((h) => h !== id)];
+}
+
+// Build the ordered list of tab ids Ctrl+Tab navigation walks through:
+// MRU history first (filtered to existing & visible tabs), then any tabs
+// not yet in the history appended in tab-bar order. Tabs whose folder is
+// disabled are skipped.
+function buildNavList(state: {
+  tabs: Tab[];
+  tabHistory: string[];
+  folders: WorkspaceFolder[];
+}): string[] {
+  const disabled = new Set(
+    state.folders.filter((f) => f.disabled).map((f) => f.path),
+  );
+  const isVisible = (t: Tab) => !t.folderPath || !disabled.has(t.folderPath);
+  const tabById = new Map(state.tabs.map((t) => [t.id, t]));
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const id of state.tabHistory) {
+    const t = tabById.get(id);
+    if (t && isVisible(t) && !seen.has(id)) {
+      out.push(id);
+      seen.add(id);
+    }
+  }
+  for (const t of state.tabs) {
+    if (isVisible(t) && !seen.has(t.id)) {
+      out.push(t.id);
+      seen.add(t.id);
+    }
+  }
+  return out;
+}
+
 // Wrap a promise with a timeout so a hung Tauri `invoke` (stale network path,
 // unresponsive backend, etc.) can't keep `isRestoring` pinned to `true` and
 // leave the app stuck on the "Restoring session…" loader.
@@ -185,6 +229,7 @@ export const useFileStore = create<FileState>()(
       tree: [],
       tabs: [],
       activeTabId: null,
+      tabHistory: [],
       recentFiles: [],
       recentFolders: [],
       splitView: false,
@@ -196,7 +241,7 @@ export const useFileStore = create<FileState>()(
 
       setFolder: (path) => {
         if (!path) {
-          set({ folders: [], openFolder: null, tree: [], tabs: [], activeTabId: null, rightPaneTabId: null });
+          set({ folders: [], openFolder: null, tree: [], tabs: [], activeTabId: null, tabHistory: [], rightPaneTabId: null });
           return;
         }
         get().replaceFolders([path]);
@@ -210,6 +255,7 @@ export const useFileStore = create<FileState>()(
           ...deriveSingleFolder(folders),
           tabs: [],
           activeTabId: null,
+          tabHistory: [],
           rightPaneTabId: null,
         });
         // Kick off tree fetch + recent-folder tracking for each.
@@ -250,7 +296,7 @@ export const useFileStore = create<FileState>()(
       },
 
       removeFolder: (path) => {
-        const { tabs, activeTabId, rightPaneTabId } = get();
+        const { tabs, activeTabId, rightPaneTabId, tabHistory } = get();
         // Close tabs belonging to this folder.
         const keep = tabs.filter(
           (t) =>
@@ -258,14 +304,19 @@ export const useFileStore = create<FileState>()(
             !t.path.startsWith(path + "/") &&
             !t.path.startsWith(path + "\\"),
         );
-        const activeStillOpen = keep.some((t) => t.id === activeTabId);
+        const keepIds = new Set(keep.map((t) => t.id));
+        const activeStillOpen = activeTabId !== null && keepIds.has(activeTabId);
+        const nextActive = activeStillOpen ? activeTabId : (keep[keep.length - 1]?.id ?? null);
+        let nextHistory = tabHistory.filter((h) => keepIds.has(h));
+        if (nextActive && !activeStillOpen) nextHistory = bumpHistory(nextHistory, nextActive);
         set((state) => {
           const folders = state.folders.filter((f) => f.path !== path);
           return {
             folders,
             ...deriveSingleFolder(folders),
             tabs: keep,
-            activeTabId: activeStillOpen ? activeTabId : (keep[keep.length - 1]?.id ?? null),
+            activeTabId: nextActive,
+            tabHistory: nextHistory,
             rightPaneTabId: keep.some((t) => t.id === rightPaneTabId) ? rightPaneTabId : null,
           };
         });
@@ -280,7 +331,7 @@ export const useFileStore = create<FileState>()(
       },
 
       setFolderDisabled: (path, disabled) => {
-        const { tabs, activeTabId, rightPaneTabId, folders } = get();
+        const { tabs, activeTabId, rightPaneTabId, folders, tabHistory } = get();
         const nextFolders = folders.map((f) =>
           f.path === path ? { ...f, disabled } : f,
         );
@@ -301,9 +352,15 @@ export const useFileStore = create<FileState>()(
         const nextRightId =
           rightTab && !isVisible(rightTab) ? null : rightPaneTabId;
 
+        const nextHistory =
+          nextActiveId && nextActiveId !== activeTabId
+            ? bumpHistory(tabHistory, nextActiveId)
+            : tabHistory;
+
         set({
           folders: nextFolders,
           activeTabId: nextActiveId,
+          tabHistory: nextHistory,
           rightPaneTabId: nextRightId,
         });
       },
@@ -336,6 +393,7 @@ export const useFileStore = create<FileState>()(
           ...deriveSingleFolder(folders),
           tabs: [],
           activeTabId: null,
+          tabHistory: [],
           rightPaneTabId: null,
         });
         for (const f of folders) {
@@ -373,7 +431,10 @@ export const useFileStore = create<FileState>()(
         const existing = get().tabs.find((t) => t.path === path);
         if (existing) {
           log.debug("fileStore.openFile", `tab already open id=${existing.id}, activating`);
-          set({ activeTabId: existing.id });
+          set((state) => ({
+            activeTabId: existing.id,
+            tabHistory: bumpHistory(state.tabHistory, existing.id),
+          }));
           return;
         }
 
@@ -391,6 +452,7 @@ export const useFileStore = create<FileState>()(
         set((state) => ({
           tabs: [...state.tabs, tab],
           activeTabId: id,
+          tabHistory: bumpHistory(state.tabHistory, id),
         }));
         log.info("fileStore.openFile", `new tab id=${id} name=${name}`);
 
@@ -405,43 +467,70 @@ export const useFileStore = create<FileState>()(
           let newActive = state.activeTabId;
 
           if (state.activeTabId === id) {
-            if (newTabs.length === 0) newActive = null;
-            else if (idx > 0) newActive = newTabs[idx - 1].id;
-            else newActive = newTabs[0].id;
+            if (newTabs.length === 0) {
+              newActive = null;
+            } else {
+              // Prefer the most-recently-used surviving tab from the MRU
+              // history; fall back to neighboring positional tab if history
+              // doesn't list a survivor (shouldn't happen, but safe).
+              const newTabIds = new Set(newTabs.map((t) => t.id));
+              const mruFallback = state.tabHistory.find(
+                (h) => h !== id && newTabIds.has(h),
+              );
+              newActive =
+                mruFallback ??
+                (idx > 0 ? newTabs[idx - 1].id : newTabs[0].id);
+            }
+          }
+
+          let nextHistory = state.tabHistory.filter((h) => h !== id);
+          if (newActive && state.activeTabId === id) {
+            nextHistory = bumpHistory(nextHistory, newActive);
           }
 
           return {
             tabs: newTabs,
             activeTabId: newActive,
+            tabHistory: nextHistory,
             rightPaneTabId: state.rightPaneTabId === id ? null : state.rightPaneTabId,
           };
         });
       },
 
-      closeAllTabs: () => set({ tabs: [], activeTabId: null, rightPaneTabId: null }),
+      closeAllTabs: () => set({ tabs: [], activeTabId: null, tabHistory: [], rightPaneTabId: null }),
 
       closeTabsToRight: (id) => {
-        const { tabs, activeTabId, rightPaneTabId } = get();
+        const { tabs, activeTabId, rightPaneTabId, tabHistory } = get();
         const idx = tabs.findIndex((t) => t.id === id);
         if (idx < 0) return;
         const newTabs = tabs.slice(0, idx + 1);
-        const activeStillOpen = newTabs.some((t) => t.id === activeTabId);
+        const newTabIds = new Set(newTabs.map((t) => t.id));
+        const activeStillOpen = activeTabId !== null && newTabIds.has(activeTabId);
+        const nextActive = activeStillOpen ? activeTabId : (newTabs[newTabs.length - 1]?.id ?? null);
+        let nextHistory = tabHistory.filter((h) => newTabIds.has(h));
+        if (nextActive && !activeStillOpen) nextHistory = bumpHistory(nextHistory, nextActive);
         set({
           tabs: newTabs,
-          activeTabId: activeStillOpen ? activeTabId : (newTabs[newTabs.length - 1]?.id ?? null),
+          activeTabId: nextActive,
+          tabHistory: nextHistory,
           rightPaneTabId: newTabs.some((t) => t.id === rightPaneTabId) ? rightPaneTabId : null,
         });
       },
 
       closeTabsToLeft: (id) => {
-        const { tabs, activeTabId, rightPaneTabId } = get();
+        const { tabs, activeTabId, rightPaneTabId, tabHistory } = get();
         const idx = tabs.findIndex((t) => t.id === id);
         if (idx < 0) return;
         const newTabs = tabs.slice(idx);
-        const activeStillOpen = newTabs.some((t) => t.id === activeTabId);
+        const newTabIds = new Set(newTabs.map((t) => t.id));
+        const activeStillOpen = activeTabId !== null && newTabIds.has(activeTabId);
+        const nextActive = activeStillOpen ? activeTabId : (newTabs[0]?.id ?? null);
+        let nextHistory = tabHistory.filter((h) => newTabIds.has(h));
+        if (nextActive && !activeStillOpen) nextHistory = bumpHistory(nextHistory, nextActive);
         set({
           tabs: newTabs,
-          activeTabId: activeStillOpen ? activeTabId : (newTabs[0]?.id ?? null),
+          activeTabId: nextActive,
+          tabHistory: nextHistory,
           rightPaneTabId: newTabs.some((t) => t.id === rightPaneTabId) ? rightPaneTabId : null,
         });
       },
@@ -453,6 +542,7 @@ export const useFileStore = create<FileState>()(
         set({
           tabs: [tab],
           activeTabId: id,
+          tabHistory: [id],
           rightPaneTabId: rightPaneTabId === id ? id : null,
         });
       },
@@ -468,23 +558,32 @@ export const useFileStore = create<FileState>()(
       },
 
       closeTabsByPath: (path) => {
-        const { tabs, activeTabId, rightPaneTabId } = get();
+        const { tabs, activeTabId, rightPaneTabId, tabHistory } = get();
         const newTabs = tabs.filter(
           (t) => t.path !== path && !t.path.startsWith(path + "/")
         );
-        const activeStillOpen = newTabs.some((t) => t.id === activeTabId);
+        const newTabIds = new Set(newTabs.map((t) => t.id));
+        const activeStillOpen = activeTabId !== null && newTabIds.has(activeTabId);
+        const nextActive = activeStillOpen
+          ? activeTabId
+          : (newTabs[newTabs.length - 1]?.id ?? null);
+        let nextHistory = tabHistory.filter((h) => newTabIds.has(h));
+        if (nextActive && !activeStillOpen) nextHistory = bumpHistory(nextHistory, nextActive);
         set({
           tabs: newTabs,
-          activeTabId: activeStillOpen
-            ? activeTabId
-            : (newTabs[newTabs.length - 1]?.id ?? null),
+          activeTabId: nextActive,
+          tabHistory: nextHistory,
           rightPaneTabId: newTabs.some((t) => t.id === rightPaneTabId)
             ? rightPaneTabId
             : null,
         });
       },
 
-      setActiveTab: (id) => set({ activeTabId: id }),
+      setActiveTab: (id) =>
+        set((state) => ({
+          activeTabId: id,
+          tabHistory: bumpHistory(state.tabHistory, id),
+        })),
 
       openDiffTab: (folder, relPath, revision, displayName) => {
         const revKey =
@@ -492,7 +591,10 @@ export const useFileStore = create<FileState>()(
         const id = `diff:${folder}:${relPath}:${revKey}`;
         const existing = get().tabs.find((t) => t.id === id);
         if (existing) {
-          set({ activeTabId: id });
+          set((state) => ({
+            activeTabId: id,
+            tabHistory: bumpHistory(state.tabHistory, id),
+          }));
           return;
         }
         const tab: Tab = {
@@ -510,21 +612,39 @@ export const useFileStore = create<FileState>()(
             revision,
           },
         };
-        set((state) => ({ tabs: [...state.tabs, tab], activeTabId: id }));
+        set((state) => ({
+          tabs: [...state.tabs, tab],
+          activeTabId: id,
+          tabHistory: bumpHistory(state.tabHistory, id),
+        }));
       },
 
+      // Walks the MRU history rather than the tab-bar order so Ctrl+Tab /
+      // Ctrl+Shift+Tab cycle through tabs in the order they were last
+      // selected. The active tab's *position* in the history acts as the
+      // navigation cursor, and we deliberately do NOT bump on nav so
+      // successive presses keep moving through history rather than
+      // toggling between two tabs. setActiveTab (click, openFile, …) is
+      // what bumps a tab to the front.
       nextTab: () => {
-        const { tabs, activeTabId } = get();
-        if (tabs.length < 2) return;
-        const idx = tabs.findIndex((t) => t.id === activeTabId);
-        get().setActiveTab(tabs[(idx + 1) % tabs.length].id);
+        const navList = buildNavList(get());
+        if (navList.length < 2) return;
+        const { activeTabId } = get();
+        const idx = activeTabId ? navList.indexOf(activeTabId) : -1;
+        const nextIdx = idx === -1 ? 0 : (idx + 1) % navList.length;
+        set({ activeTabId: navList[nextIdx] });
       },
 
       prevTab: () => {
-        const { tabs, activeTabId } = get();
-        if (tabs.length < 2) return;
-        const idx = tabs.findIndex((t) => t.id === activeTabId);
-        get().setActiveTab(tabs[(idx - 1 + tabs.length) % tabs.length].id);
+        const navList = buildNavList(get());
+        if (navList.length < 2) return;
+        const { activeTabId } = get();
+        const idx = activeTabId ? navList.indexOf(activeTabId) : -1;
+        const prevIdx =
+          idx === -1
+            ? navList.length - 1
+            : (idx - 1 + navList.length) % navList.length;
+        set({ activeTabId: navList[prevIdx] });
       },
 
       updateTabContent: (id, content) => {
