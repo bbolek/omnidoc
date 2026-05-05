@@ -16,9 +16,22 @@ import { spawnTerminalForFolder } from "../../store/terminalStore";
 import { getFileName, isOpenable, loadFileForOpen } from "../../utils/fileUtils";
 import { FileIcon } from "../ui/FileIcon";
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from "../ui/ContextMenu";
+import { showToast } from "../ui/Toast";
 import { folderColor } from "../../utils/folderColors";
 import { ErrorBoundary } from "../ui/ErrorBoundary";
 import type { FileEntry, FileInfo, WorkspaceFolder } from "../../types";
+
+// ─── Reveal-handler registry ─────────────────────────────────────────────────
+//
+// `omnidoc:reveal-path` worked for breadcrumb clicks, but a button click that
+// dispatches the same event with no handler registered (sidebar panel just
+// switched, the active file isn't in any open folder, etc.) is silently a
+// no-op — exactly the "does nothing" failure mode users hit. Each
+// FolderSection also registers a direct callback here, keyed by its folder
+// path, so the Focus Selected File button can resolve the owning folder
+// itself, invoke the handler synchronously, and surface a toast when no
+// folder claims the path.
+const folderRevealHandlers = new Map<string, (path: string) => void>();
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -775,19 +788,54 @@ function StarredSection({ starredPaths, onToggleStar }: StarredSectionProps) {
 
 /**
  * Workspace-wide actions that aren't tied to a single folder section.
- * The Focus Selected File button dispatches `omnidoc:reveal-path`; whichever
- * `FolderSection` owns the active tab's path picks it up and reveals it.
+ *
+ * The Focus Selected File button used to fire `omnidoc:reveal-path` and trust
+ * that some FolderSection would respond. When the active tab lived outside
+ * every open folder, or the listener wasn't registered yet, the click was a
+ * silent no-op. We now resolve the owning folder up front, invoke its reveal
+ * handler directly, and surface a toast when the file can't be located.
  */
 function ExplorerToolbar() {
   const activeTabId = useFileStore((s) => s.activeTabId);
   const hasActive = activeTabId !== null;
 
   const handleFocusSelected = () => {
-    const active = useFileStore.getState().getActiveTab();
+    const state = useFileStore.getState();
+    const active = state.getActiveTab();
     if (!active?.path) return;
-    window.dispatchEvent(
-      new CustomEvent("omnidoc:reveal-path", { detail: { path: active.path } })
-    );
+
+    // Prefer the tab's stored folderPath; fall back to a longest-prefix match
+    // for legacy tabs that pre-date the folderPath field.
+    const owning =
+      state.folders.find((f) => f.path === active.folderPath) ??
+      state.folders
+        .filter(
+          (f) =>
+            active.path === f.path ||
+            active.path.startsWith(f.path + "/") ||
+            active.path.startsWith(f.path + "\\"),
+        )
+        .sort((a, b) => b.path.length - a.path.length)[0];
+
+    if (!owning) {
+      showToast({
+        type: "warning",
+        message: "Active file isn't inside any open workspace folder.",
+      });
+      return;
+    }
+
+    const reveal = folderRevealHandlers.get(owning.path);
+    if (reveal) {
+      reveal(active.path);
+    } else {
+      // Fallback while the folder section is mid-mount — let the event bus
+      // catch up. The listener registers in the same render that mounts the
+      // section, so this path is rarely hit but worth keeping.
+      window.dispatchEvent(
+        new CustomEvent("omnidoc:reveal-path", { detail: { path: active.path } }),
+      );
+    }
   };
 
   return (
@@ -1195,14 +1243,14 @@ function FolderSection({ folder }: FolderSectionProps) {
   // ── reveal-path event: expand folders and scroll to a path ────────────────
 
   useEffect(() => {
-    const handler = async (ev: Event) => {
-      const detail = (ev as CustomEvent<{ path: string }>).detail;
-      if (!detail?.path || !currentFolder) return;
+    if (!currentFolder) return;
+
+    const reveal = async (targetPath: string) => {
       // Strict prefix check so e.g. `/a/foo` doesn't claim `/a/foobar/x`.
       const inFolder =
-        detail.path === currentFolder ||
-        detail.path.startsWith(currentFolder + "/") ||
-        detail.path.startsWith(currentFolder + "\\");
+        targetPath === currentFolder ||
+        targetPath.startsWith(currentFolder + "/") ||
+        targetPath.startsWith(currentFolder + "\\");
       if (!inFolder) return;
 
       // Child TreeNodes are unmounted while the section is collapsed — nothing
@@ -1216,13 +1264,18 @@ function FolderSection({ folder }: FolderSectionProps) {
         await new Promise((r) => setTimeout(r, 80));
       }
 
-      const rel = detail.path.slice(currentFolder.length).replace(/^[/\\]/, "");
+      const rel = targetPath.slice(currentFolder.length).replace(/^[/\\]/, "");
       const parts = rel ? rel.split(/[/\\]/).filter(Boolean) : [];
+
+      // Use the same separator the workspace folder uses, so `accum` matches
+      // entry.path on Windows (where Tauri returns paths with `\`).
+      const sep =
+        currentFolder.includes("\\") && !currentFolder.includes("/") ? "\\" : "/";
 
       // Walk from root, expanding each intermediate folder in sequence.
       let accum = currentFolder;
       for (const part of parts) {
-        accum = accum + "/" + part;
+        accum = accum + sep + part;
         const handlers = nodeHandlersRef.current.get(accum);
         if (handlers) {
           handlers.expand();
@@ -1234,16 +1287,34 @@ function FolderSection({ folder }: FolderSectionProps) {
       // Scroll the target into view if present.
       setTimeout(() => {
         const el = treeContainerRef.current?.querySelector<HTMLElement>(
-          `[data-path="${CSS.escape(detail.path)}"]`
+          `[data-path="${CSS.escape(targetPath)}"]`
         );
         if (el) {
           el.scrollIntoView({ block: "center", behavior: "smooth" });
-          setFocusedPath(detail.path);
+          setFocusedPath(targetPath);
         }
       }, 80);
     };
+
+    // Direct registration — used by the Explorer toolbar's Focus Selected File
+    // button after it resolves the owning folder itself.
+    folderRevealHandlers.set(currentFolder, (path) => { void reveal(path); });
+
+    // Window CustomEvent — kept for breadcrumb segment clicks and any future
+    // callers that don't know which folder owns the path up front.
+    const handler = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ path: string }>).detail;
+      if (!detail?.path) return;
+      void reveal(detail.path);
+    };
     window.addEventListener("omnidoc:reveal-path", handler);
-    return () => window.removeEventListener("omnidoc:reveal-path", handler);
+
+    return () => {
+      window.removeEventListener("omnidoc:reveal-path", handler);
+      // Only delete our own entry; a remount may have already replaced it.
+      const current = folderRevealHandlers.get(currentFolder);
+      if (current) folderRevealHandlers.delete(currentFolder);
+    };
   }, [currentFolder, setFolderCollapsed]);
 
   // ── keyboard navigation ───────────────────────────────────────────────────
