@@ -1137,7 +1137,12 @@ function FolderSection({ folder }: FolderSectionProps) {
     const handler = async (ev: Event) => {
       const detail = (ev as CustomEvent<{ path: string }>).detail;
       if (!detail?.path || !currentFolder) return;
-      if (!detail.path.startsWith(currentFolder)) return;
+      // Strict prefix check so e.g. `/a/foo` doesn't claim `/a/foobar/x`.
+      const inFolder =
+        detail.path === currentFolder ||
+        detail.path.startsWith(currentFolder + "/") ||
+        detail.path.startsWith(currentFolder + "\\");
+      if (!inFolder) return;
 
       // Child TreeNodes are unmounted while the section is collapsed — nothing
       // to expand or scroll to. Expand the section first and wait a tick for
@@ -1370,12 +1375,11 @@ function FolderSection({ folder }: FolderSectionProps) {
             {folderName}
           </span>
 
-          {/* Focus Selected File */}
+          {/* Focus Selected File — searches every workspace folder, not just this section. */}
           <button
             onClick={() => {
               const active = useFileStore.getState().getActiveTab();
               if (!active?.path) return;
-              if (!active.path.startsWith(currentFolder)) return;
               window.dispatchEvent(
                 new CustomEvent("omnidoc:reveal-path", { detail: { path: active.path } })
               );
