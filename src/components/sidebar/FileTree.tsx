@@ -12,6 +12,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useFileStore } from "../../store/fileStore";
 import { useStarredStore } from "../../store/starredStore";
 import { useFileClipboardStore } from "../../store/fileClipboardStore";
+import { useTreeStore } from "../../store/treeStore";
 import { spawnTerminalForFolder } from "../../store/terminalStore";
 import { getFileName, isOpenable, loadFileForOpen } from "../../utils/fileUtils";
 import { FileIcon } from "../ui/FileIcon";
@@ -211,12 +212,12 @@ function InlineInput({ depth, type, onConfirm, onCancel }: InlineInputProps) {
 interface TreeNodeProps {
   entry: FileEntry;
   depth: number;
-  collapseKey: number;
   parentPath?: string;
 }
 
-function TreeNode({ entry, depth, collapseKey, parentPath }: TreeNodeProps) {
-  const [expanded, setExpanded] = useState(false);
+function TreeNode({ entry, depth, parentPath }: TreeNodeProps) {
+  const expanded = useTreeStore((s) => s.expandedFolders.has(entry.path));
+  const setFolderExpanded = useTreeStore((s) => s.setFolderExpanded);
   const [children, setChildren] = useState<FileEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
@@ -242,9 +243,6 @@ function TreeNode({ entry, depth, collapseKey, parentPath }: TreeNodeProps) {
   const nameStyle = gitStatusStyle(effectiveStatus);
 
   const showInlineCreate = navCtx?.inlineCreate?.parentPath === entry.path;
-
-  // Collapse all
-  useEffect(() => { setExpanded(false); }, [collapseKey]);
 
   // Focus rename input when activated
   useEffect(() => {
@@ -279,21 +277,31 @@ function TreeNode({ entry, depth, collapseKey, parentPath }: TreeNodeProps) {
   }, [entry.path, entry.is_dir, expanded, children.length, fetchChildren, navCtx]);
 
   const handleExpand = useCallback(async () => {
-    if (!entry.is_dir || loading) return;
-    const next = !expanded;
-    setExpanded(next);
-    if (next && children.length === 0) {
-      setLoading(true);
-      try {
-        const entries = await invoke<FileEntry[]>("list_directory", { path: entry.path });
-        setChildren(entries);
-      } catch (err) {
-        console.error("Failed to list directory:", err);
-      } finally {
-        setLoading(false);
-      }
-    }
-  }, [entry, expanded, children.length, loading]);
+    if (!entry.is_dir) return;
+    setFolderExpanded(entry.path, !expanded);
+    // Yield a frame so React can commit the expansion and the fetch effect
+    // below can re-register `nodeRefreshersRef` with the new closure value
+    // before any caller (e.g. paste) triggers a follow-up refresh.
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  }, [entry.is_dir, entry.path, expanded, setFolderExpanded]);
+
+  // Fetch children whenever this node is expanded but unloaded — covers the
+  // initial click *and* the case where the file-explorer panel is remounted
+  // (e.g. after a sidebar panel switch) with the expansion still in the
+  // store. Both paths converge here so we can never double-fetch. `loading`
+  // is intentionally omitted from the deps: it's only set by this effect, so
+  // including it would cancel the in-flight fetch on the next tick.
+  useEffect(() => {
+    if (!entry.is_dir || !expanded || children.length > 0) return;
+    let cancelled = false;
+    setLoading(true);
+    invoke<FileEntry[]>("list_directory", { path: entry.path })
+      .then((entries) => { if (!cancelled) setChildren(entries); })
+      .catch((err) => { if (!cancelled) console.error("Failed to list directory:", err); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entry.is_dir, entry.path, expanded, children.length]);
 
   const handleFileOpen = useCallback(async () => {
     if (entry.is_dir) { handleExpand(); return; }
@@ -311,10 +319,10 @@ function TreeNode({ entry, depth, collapseKey, parentPath }: TreeNodeProps) {
     if (!navCtx) return;
     navCtx.nodeHandlersRef.current.set(entry.path, {
       expand:   () => { if (!expanded) handleExpand(); },
-      collapse: () => setExpanded(false),
+      collapse: () => setFolderExpanded(entry.path, false),
     });
     return () => { navCtx.nodeHandlersRef.current.delete(entry.path); };
-  }, [entry.path, expanded, handleExpand, navCtx]);
+  }, [entry.path, expanded, handleExpand, navCtx, setFolderExpanded]);
 
   // ── context menu ─────────────────────────────────────────────────────────
 
@@ -332,7 +340,7 @@ function TreeNode({ entry, depth, collapseKey, parentPath }: TreeNodeProps) {
       await handleExpand();
     } else if (children.length === 0) {
       await fetchChildren();
-      setExpanded(true);
+      setFolderExpanded(entry.path, true);
     }
     navCtx?.setInlineCreate({ parentPath: entry.path, type });
   };
@@ -543,7 +551,6 @@ function TreeNode({ entry, depth, collapseKey, parentPath }: TreeNodeProps) {
                     key={child.path}
                     entry={child}
                     depth={depth + 1}
-                    collapseKey={collapseKey}
                     parentPath={entry.path}
                   />
                 ))}
@@ -988,8 +995,8 @@ function FolderSection({ folder }: FolderSectionProps) {
   const setFolderTree = useFileStore((s) => s.setFolderTree);
   const setFolderCollapsed = useFileStore((s) => s.setFolderCollapsed);
   const removeFolder = useFileStore((s) => s.removeFolder);
+  const collapseAllUnder = useTreeStore((s) => s.collapseAllUnder);
 
-  const [collapseKey, setCollapseKey]     = useState(0);
   const [query, setQuery]                 = useState("");
   const [searchResults, setSearchResults] = useState<FileEntry[]>([]);
   const [isSearching, setIsSearching]     = useState(false);
@@ -1531,7 +1538,7 @@ function FolderSection({ folder }: FolderSectionProps) {
 
           {/* Collapse All children */}
           <button
-            onClick={() => { setCollapseKey((k) => k + 1); setFocusedPath(null); }}
+            onClick={() => { collapseAllUnder(currentFolder); setFocusedPath(null); }}
             title="Collapse All"
             style={{ background: "none", border: "none", padding: "2px 3px", cursor: "pointer", color: "var(--color-text-muted)", display: "flex", alignItems: "center", borderRadius: "var(--radius-sm)", flexShrink: 0 }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--color-text)"; }}
@@ -1604,7 +1611,7 @@ function FolderSection({ folder }: FolderSectionProps) {
           ) : (
             <>
               {tree.map((entry) => (
-                <TreeNode key={entry.path} entry={entry} depth={0} collapseKey={collapseKey} parentPath={currentFolder} />
+                <TreeNode key={entry.path} entry={entry} depth={0} parentPath={currentFolder} />
               ))}
               {rootInlineCreate && (
                 <InlineInput
