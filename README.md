@@ -203,6 +203,17 @@ Grab the latest installer for your platform from the
 | macOS (Apple Silicon) | `.dmg` (aarch64)                  |
 | Linux               | `.AppImage` (portable) or `.deb`    |
 
+### Always-latest build
+
+Every merge to `main` automatically rebuilds all installers and publishes them
+to the rolling [`latest` release](https://github.com/bbolek/omnidoc/releases/tag/latest).
+These stable links always point at the newest build:
+
+- **Windows:** [`latest.msi`](https://github.com/bbolek/omnidoc/releases/download/latest/latest.msi)
+
+All other packages (`.exe`, `.dmg`, `.AppImage`, `.deb`) are attached to that
+same release. For a pinned, reproducible download use a versioned `v*` release.
+
 ## Development
 
 ### Prerequisites

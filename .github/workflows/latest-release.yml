@@ -1,0 +1,149 @@
+name: Latest Release
+
+# Build installers for every change that lands on main (i.e. every merged PR)
+# and publish them to a single, rolling "latest" release. This keeps a set of
+# always-current packages (.msi, .exe, .dmg, .AppImage, .deb) available, and
+# exposes stable download URLs that never change between builds, e.g.:
+#
+#   https://github.com/bbolek/omnidoc/releases/download/latest/latest.msi
+#   https://github.com/bbolek/omnidoc/releases/latest/download/latest.msi
+#
+# Tagged `v*` releases continue to be handled by release.yml.
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+# Only one rolling-latest build at a time. A newer push supersedes an
+# in-flight one so the `latest` release always reflects the newest main commit.
+concurrency:
+  group: latest-release
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  # Recreate the `latest` tag/release up front so the matrix jobs below only
+  # have to upload assets to it (no race to create it, no stale assets left
+  # over from previous runs).
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Recreate the `latest` release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Remove the previous rolling release and its tag (ignore if absent).
+          gh release delete latest --cleanup-tag --yes || true
+          git push origin :refs/tags/latest || true
+
+          gh release create latest \
+            --target "${{ github.sha }}" \
+            --title "Latest build" \
+            --latest \
+            --notes "Rolling build of the latest commit on \`main\` (\`${{ github.sha }}\`).
+
+          These installers are rebuilt automatically on every merge to \`main\`.
+          For pinned, versioned downloads use a tagged \`v*\` release instead.
+
+          ## Stable download links
+          | Platform | Link |
+          |----------|------|
+          | Windows (MSI) | https://github.com/${{ github.repository }}/releases/download/latest/latest.msi |
+
+          ## All packages
+          Every installer produced by this build is attached below."
+
+  build:
+    needs: prepare
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: macos-latest
+            target: x86_64-apple-darwin
+          - os: macos-latest
+            target: aarch64-apple-darwin
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      # Cache Rust build artifacts to speed up subsequent runs (~5–10 min saved)
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install Linux system dependencies
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build and upload to the `latest` release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # Upload into the `latest` release that the prepare job created.
+          tagName: latest
+          releaseName: "Latest build"
+          releaseDraft: false
+          prerelease: false
+          target: ${{ matrix.target }}
+          args: --target ${{ matrix.target }}
+
+  # After all platforms have uploaded, publish a stable `latest.msi` alias so
+  # the download URL never changes even when the version in the filename does.
+  publish-latest-msi:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mirror the Windows MSI to latest.msi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p msi
+          # Grab the versioned MSI that tauri-action just uploaded.
+          gh release download latest \
+            --repo "${{ github.repository }}" \
+            --pattern "*_x64_*.msi" \
+            --dir msi
+          src="$(ls msi/*.msi | head -n1)"
+          if [ -z "$src" ]; then
+            echo "No MSI found in the latest release" >&2
+            exit 1
+          fi
+          cp "$src" latest.msi
+          gh release upload latest latest.msi \
+            --repo "${{ github.repository }}" \
+            --clobber
