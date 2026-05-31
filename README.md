@@ -209,10 +209,18 @@ Every merge to `main` automatically rebuilds all installers and publishes them
 to the rolling [`latest` release](https://github.com/bbolek/omnidoc/releases/tag/latest).
 These stable links always point at the newest build:
 
-- **Windows:** [`latest.msi`](https://github.com/bbolek/omnidoc/releases/download/latest/latest.msi)
+| Platform | Link |
+|----------|------|
+| Windows (MSI) | [`latest.msi`](https://github.com/bbolek/omnidoc/releases/download/latest/latest.msi) |
+| Windows (NSIS) | [`latest-setup.exe`](https://github.com/bbolek/omnidoc/releases/download/latest/latest-setup.exe) |
+| macOS (Intel) | [`latest-x64.dmg`](https://github.com/bbolek/omnidoc/releases/download/latest/latest-x64.dmg) |
+| macOS (Apple Silicon) | [`latest-aarch64.dmg`](https://github.com/bbolek/omnidoc/releases/download/latest/latest-aarch64.dmg) |
+| Linux (AppImage) | [`latest.AppImage`](https://github.com/bbolek/omnidoc/releases/download/latest/latest.AppImage) |
+| Linux (.deb) | [`latest.deb`](https://github.com/bbolek/omnidoc/releases/download/latest/latest.deb) |
+| Linux (.rpm) | [`latest.rpm`](https://github.com/bbolek/omnidoc/releases/download/latest/latest.rpm) |
 
-All other packages (`.exe`, `.dmg`, `.AppImage`, `.deb`) are attached to that
-same release. For a pinned, reproducible download use a versioned `v*` release.
+The original versioned installers are attached to the same release. For a
+pinned, reproducible download use a versioned `v*` release.
 
 ## Development
 
