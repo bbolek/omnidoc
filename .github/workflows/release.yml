@@ -2,8 +2,8 @@ name: Release
 
 on:
   push:
-    branches:
-      - main
+    tags:
+      - "v*"
 
 jobs:
   release:
@@ -60,8 +60,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: v__VERSION__
-          releaseName: "Omnidoc v__VERSION__"
+          tagName: ${{ github.ref_name }}
+          releaseName: "Omnidoc ${{ github.ref_name }}"
           releaseBody: |
             ## What's new
             See commit history for changes in this release.
