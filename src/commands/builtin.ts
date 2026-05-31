@@ -214,7 +214,12 @@ export function registerBuiltinCommands(): void {
     category: "Edit",
     keywords: ["search", "global"],
     menu: { path: ["Edit"], order: 20, separatorBefore: true },
-    handler: () => useUiStore.getState().setActiveSidebarPanel("search"),
+    handler: () => {
+      const ui = useUiStore.getState();
+      ui.setActiveSidebarPanel("search");
+      // Select any existing query so the next keystroke replaces it.
+      ui.requestSearchFocus();
+    },
   });
 
   r({
