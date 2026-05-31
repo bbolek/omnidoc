@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { RotateCcw, Save } from "lucide-react";
 import { useFileStore } from "../../store/fileStore";
 import { useThemeStore } from "../../store/themeStore";
@@ -36,9 +36,10 @@ export function PlainTextEditor({
   const { updateTabContent, saveTabContent, discardTabChanges } = useFileStore();
   const { themeName } = useThemeStore();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const gutterRef = useRef<HTMLDivElement>(null);
-  const overlayInnerRef = useRef<HTMLDivElement>(null);
-  useTabScrollMemory(textareaRef, tab.id, "editor");
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  // The wrapper — not the textarea — is the scroll container, so scroll
+  // memory must track it (the textarea is overflow:hidden and never scrolls).
+  useTabScrollMemory(scrollerRef, tab.id, "editor");
   const [saving, setSaving] = useState(false);
   const [lineCount, setLineCount] = useState(() => tab.content.split("\n").length);
   const [highlightedHtml, setHighlightedHtml] = useState<string>("");
@@ -114,6 +115,27 @@ export function PlainTextEditor({
     [handleSave, onChange]
   );
 
+  // Grow the textarea to fit its content so the wrapper (`.pte-scroller`),
+  // not the textarea, is the thing that scrolls. With the textarea and the
+  // highlight overlay sharing a single scroller, they move together natively
+  // and can't drift — there's no JS scroll sync to lag behind a fast/momentum
+  // scroll. The two overlap in one CSS-grid cell, so the row sizes to the
+  // taller of them: the textarea reflects edits instantly (its height is
+  // measured here) while the overlay `<pre>` drives the width (`max-content`).
+  const overlayActive = !!(language && highlightedHtml);
+  const resize = useCallback(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    // Reset to auto before reading scrollHeight, else a previously-grown
+    // height inflates the measurement (read-after-write feedback loop).
+    ta.style.height = "auto";
+    // Grow to the content height, but never below the viewport — so a short
+    // file still fills the editor and clicking the empty area below the text
+    // places the caret instead of doing nothing.
+    const fill = scrollerRef.current?.clientHeight ?? 0;
+    ta.style.height = `${Math.max(ta.scrollHeight, fill)}px`;
+  }, []);
+
   // Sync textarea when content changes from outside (discard, external change).
   useEffect(() => {
     const ta = textareaRef.current;
@@ -123,20 +145,22 @@ export function PlainTextEditor({
     }
   }, [tab.content]);
 
-  // Keep the line-number gutter and highlight overlay aligned with the
-  // textarea's scroll position. Both are driven off the same event so they
-  // can't drift — the gutter only scrolls vertically, the overlay is
-  // translated horizontally and vertically so it tracks word-wrap-off code.
-  const onScroll = useCallback(() => {
-    const ta = textareaRef.current;
-    if (!ta) return;
-    if (gutterRef.current) {
-      gutterRef.current.scrollTop = ta.scrollTop;
-    }
-    if (overlayInnerRef.current) {
-      overlayInnerRef.current.style.transform = `translate(${-ta.scrollLeft}px, ${-ta.scrollTop}px)`;
-    }
-  }, []);
+  // Re-grow on every input, content swap, mode change, or once the async
+  // Shiki overlay arrives (its `<pre>` settles the column's width/height).
+  useLayoutEffect(() => {
+    resize();
+  }, [tab.content, language, highlightedHtml, resize]);
+
+  // Prose soft-wraps, so its height depends on the available width — re-grow
+  // when the scroller is resized. (Code wraps off, so width changes don't
+  // affect its height, but observing is harmless.)
+  useEffect(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => resize());
+    ro.observe(scroller);
+    return () => ro.disconnect();
+  }, [resize]);
 
   const fontFamily = monospace
     ? "'Fira Code', 'Cascadia Code', 'Consolas', monospace"
@@ -197,100 +221,159 @@ export function PlainTextEditor({
         </div>
       )}
 
-      <div style={{ flex: 1, minHeight: 0, display: "flex", position: "relative" }}>
-        {showLineNumbers && (
-          <div
-            ref={gutterRef}
-            aria-hidden
-            style={{
-              padding: "16px 8px 16px 16px",
-              textAlign: "right",
-              color: "var(--color-text-muted)",
-              userSelect: "none",
-              borderRight: "1px solid var(--color-border-muted)",
-              background: "var(--color-bg-subtle)",
-              flexShrink: 0,
-              minWidth: 44,
-              overflow: "hidden",
-              fontFamily: "'Fira Code', monospace",
-              fontSize: 13,
-              lineHeight: 1.7,
-              boxSizing: "border-box",
-            }}
-          >
-            {Array.from({ length: lineCount }, (_, i) => (
-              <div key={i}>{i + 1}</div>
-            ))}
-          </div>
-        )}
-        <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
-          {language && highlightedHtml && (
+      {/*
+        Single shared scroll container. The line-number gutter, the
+        highlighted overlay, and the textarea all live inside it and scroll
+        together natively — there is no JS scroll sync to lag behind a fast
+        scroll, so the colored overlay can never drift from the caret /
+        selection. The textarea is `overflow: hidden` and sized to its
+        content (see `resize`), so the scrollbars belong to this wrapper.
+      */}
+      <div
+        ref={scrollerRef}
+        className="pte-scroller"
+        style={{
+          flex: 1,
+          minHeight: 0,
+          position: "relative",
+          background: "var(--color-bg)",
+          overflowY: "auto",
+          // Code may have long lines (wrap off) and needs horizontal scroll;
+          // prose wraps, so it never scrolls horizontally.
+          overflowX: language ? "auto" : "hidden",
+        }}
+      >
+        <div
+          style={{
+            position: "relative",
+            display: "flex",
+            flexDirection: "row",
+            alignItems: "stretch",
+            // Fill the viewport even for short/empty files so the background
+            // and click target cover the whole area.
+            minHeight: "100%",
+            minWidth: "100%",
+            // For highlighted code, size to the longest line so the wrapper
+            // gets a horizontal scrollbar; otherwise fill the width.
+            width: overlayActive ? "max-content" : "100%",
+            boxSizing: "border-box",
+          }}
+        >
+          {showLineNumbers && (
             <div
               aria-hidden
-              className="pte-highlight"
+              className="pte-gutter"
               style={{
-                position: "absolute",
-                inset: 0,
-                overflow: "hidden",
-                pointerEvents: "none",
-                background: "var(--color-bg)",
+                // Pinned to the left while content scrolls horizontally.
+                position: "sticky",
+                left: 0,
+                zIndex: 2,
+                padding: "16px 8px 16px 16px",
+                textAlign: "right",
+                color: "var(--color-text-muted)",
+                userSelect: "none",
+                borderRight: "1px solid var(--color-border-muted)",
+                background: "var(--color-bg-subtle)",
+                flexShrink: 0,
+                minWidth: 44,
+                fontFamily: "'Fira Code', monospace",
+                fontSize: 13,
+                lineHeight: 1.7,
+                boxSizing: "border-box",
               }}
             >
+              {Array.from({ length: lineCount }, (_, i) => (
+                <div key={i}>{i + 1}</div>
+              ))}
+            </div>
+          )}
+          {/*
+            Single-cell grid: the overlay and textarea are placed in the same
+            grid area so they overlap pixel-for-pixel. The cell sizes to the
+            larger of the two in each axis — the overlay `<pre>` (max-content)
+            drives the width so long code lines scroll horizontally, while the
+            textarea drives the height so freshly typed lines are never clipped
+            waiting on the async re-highlight.
+          */}
+          <div
+            style={{
+              display: "grid",
+              minWidth: 0,
+              // Grow to fill leftover width when lines are short, but never
+              // shrink below the (max-content) overlay so long lines still
+              // produce a horizontal scrollbar.
+              flex: overlayActive ? "1 0 auto" : "1 1 0%",
+            }}
+          >
+            {overlayActive && (
               <div
-                ref={overlayInnerRef}
+                aria-hidden
+                className="pte-highlight"
                 style={{
+                  gridArea: "1 / 1",
+                  alignSelf: "start",
+                  justifySelf: "start",
+                  // Longest line sets the column's max-content width; `100%`
+                  // floor keeps it spanning the cell when lines are short.
+                  width: "max-content",
+                  minWidth: "100%",
+                  margin: 0,
                   padding: "16px 24px",
                   fontFamily,
                   fontSize: 13,
                   lineHeight: 1.7,
-                  willChange: "transform",
+                  pointerEvents: "none",
+                  boxSizing: "border-box",
                 }}
                 dangerouslySetInnerHTML={{ __html: highlightedHtml }}
               />
-            </div>
-          )}
-          <textarea
-            ref={textareaRef}
-            defaultValue={tab.content}
-            placeholder={placeholder}
-            onChange={(e) => onChange(e.target.value)}
-            onKeyDown={onKeyDown}
-            onScroll={showLineNumbers || language ? onScroll : undefined}
-            spellCheck={false}
-            // With a language overlay, disable the textarea's own soft-wrap so
-            // each logical line stays on a single visual row — otherwise it
-            // wraps long lines while the overlay (`white-space: pre`) does
-            // not, and the caret ends up rows away from the token you clicked.
-            wrap={language ? "off" : "soft"}
-            style={{
-              position: language ? "absolute" : "relative",
-              inset: language ? 0 : undefined,
-              width: "100%",
-              height: "100%",
-              resize: "none",
-              border: "none",
-              outline: "none",
-              background: language ? "transparent" : "var(--color-bg)",
-              // Hide the textarea's own text so only the highlighted overlay
-              // is visible — the caret still renders via `caretColor`.
-              color: language ? "transparent" : "var(--color-text)",
-              WebkitTextFillColor: language ? "transparent" : undefined,
-              fontFamily,
-              fontSize: 13,
-              lineHeight: 1.7,
-              padding: "16px 24px",
-              boxSizing: "border-box",
-              // Match the overlay's tab width so literal tab chars line up
-              // with the highlighted tokens underneath.
-              tabSize: language ? 2 : undefined,
-              // Code needs horizontal scroll (long lines shouldn't wrap or the
-              // overlay would misalign); prose wraps as usual.
-              overflow: language ? "auto" : undefined,
-              overflowY: language ? undefined : "auto",
-              whiteSpace: language ? "pre" : undefined,
-              caretColor: "var(--color-accent)",
-            }}
-          />
+            )}
+            <textarea
+              ref={textareaRef}
+              defaultValue={tab.content}
+              placeholder={placeholder}
+              onChange={(e) => onChange(e.target.value)}
+              onKeyDown={onKeyDown}
+              spellCheck={false}
+              // With a language overlay, disable the textarea's own soft-wrap so
+              // each logical line stays on a single visual row — otherwise it
+              // wraps long lines while the overlay (`white-space: pre`) does
+              // not, and the caret ends up rows away from the token you clicked.
+              wrap={language ? "off" : "soft"}
+              style={{
+                // Share the overlay's grid cell so they overlap exactly, and
+                // stretch to fill the cell width so the whole row is clickable.
+                gridArea: "1 / 1",
+                alignSelf: "start",
+                justifySelf: "stretch",
+                width: "100%",
+                // Height is owned by `resize` (auto-grown to content) so the
+                // textarea — not the lagging overlay — sets the row height.
+                resize: "none",
+                border: "none",
+                outline: "none",
+                // The wrapper scrolls; the textarea must not, or it would
+                // create a second, drifting scroll position.
+                overflow: "hidden",
+                background: overlayActive ? "transparent" : "var(--color-bg)",
+                // Hide the textarea's own text only while the colored overlay
+                // is showing; before Shiki loads, keep code readable. The
+                // caret always renders via `caretColor`.
+                color: overlayActive ? "transparent" : "var(--color-text)",
+                WebkitTextFillColor: overlayActive ? "transparent" : undefined,
+                fontFamily,
+                fontSize: 13,
+                lineHeight: 1.7,
+                padding: "16px 24px",
+                boxSizing: "border-box",
+                // Match the overlay's tab width so literal tab chars line up
+                // with the highlighted tokens underneath.
+                tabSize: language ? 2 : undefined,
+                whiteSpace: language ? "pre" : undefined,
+                caretColor: "var(--color-accent)",
+              }}
+            />
+          </div>
         </div>
       </div>
     </div>
