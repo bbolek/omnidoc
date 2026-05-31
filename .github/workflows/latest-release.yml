@@ -55,9 +55,15 @@ jobs:
           | Platform | Link |
           |----------|------|
           | Windows (MSI) | https://github.com/${{ github.repository }}/releases/download/latest/latest.msi |
+          | Windows (NSIS .exe) | https://github.com/${{ github.repository }}/releases/download/latest/latest-setup.exe |
+          | macOS (Intel) | https://github.com/${{ github.repository }}/releases/download/latest/latest-x64.dmg |
+          | macOS (Apple Silicon) | https://github.com/${{ github.repository }}/releases/download/latest/latest-aarch64.dmg |
+          | Linux (AppImage) | https://github.com/${{ github.repository }}/releases/download/latest/latest.AppImage |
+          | Linux (.deb) | https://github.com/${{ github.repository }}/releases/download/latest/latest.deb |
+          | Linux (.rpm) | https://github.com/${{ github.repository }}/releases/download/latest/latest.rpm |
 
           ## All packages
-          Every installer produced by this build is attached below."
+          The original versioned installers are also attached below."
 
   build:
     needs: prepare
@@ -122,28 +128,50 @@ jobs:
           target: ${{ matrix.target }}
           args: --target ${{ matrix.target }}
 
-  # After all platforms have uploaded, publish a stable `latest.msi` alias so
-  # the download URL never changes even when the version in the filename does.
-  publish-latest-msi:
+  # After all platforms have uploaded, publish stable `latest.*` aliases for
+  # every installer so the download URLs never change even when the version in
+  # the filename does. macOS has two builds, so its DMGs are arch-suffixed.
+  publish-latest-aliases:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Mirror the Windows MSI to latest.msi
+      - name: Mirror every installer to a stable latest.* name
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
         run: |
-          mkdir -p msi
-          # Grab the versioned MSI that tauri-action just uploaded.
-          gh release download latest \
-            --repo "${{ github.repository }}" \
-            --pattern "*_x64_*.msi" \
-            --dir msi
-          src="$(ls msi/*.msi | head -n1)"
-          if [ -z "$src" ]; then
-            echo "No MSI found in the latest release" >&2
+          set -euo pipefail
+          mkdir -p dist
+          # Pull down everything the build jobs uploaded (the versioned files
+          # are prefixed with the product name; our own latest.* are not).
+          gh release download latest --repo "$REPO" --dir dist --pattern "Omnidoc_*"
+
+          cd dist
+          shopt -s nullglob
+
+          # mirror <glob> <stable-name>: copy the first match, if any.
+          mirror() {
+            local dest="$2"; local f
+            for f in $1; do
+              cp "$f" "$dest"
+              echo "  $f -> $dest"
+              return 0
+            done
+            echo "  (no match for '$1', skipping $dest)"
+          }
+
+          echo "Building latest.* aliases:"
+          mirror 'Omnidoc_*_x64_*.msi'   latest.msi            # Windows installer (MSI)
+          mirror 'Omnidoc_*-setup.exe'   latest-setup.exe      # Windows installer (NSIS)
+          mirror 'Omnidoc_*_x64.dmg'     latest-x64.dmg        # macOS (Intel)
+          mirror 'Omnidoc_*_aarch64.dmg' latest-aarch64.dmg    # macOS (Apple Silicon)
+          mirror 'Omnidoc_*.AppImage'    latest.AppImage       # Linux (portable)
+          mirror 'Omnidoc_*.deb'         latest.deb            # Linux (Debian/Ubuntu)
+          mirror 'Omnidoc_*.rpm'         latest.rpm            # Linux (Fedora/RHEL)
+
+          uploads=(latest.* latest-*)
+          if [ ${#uploads[@]} -eq 0 ]; then
+            echo "No installers found in the latest release" >&2
             exit 1
           fi
-          cp "$src" latest.msi
-          gh release upload latest latest.msi \
-            --repo "${{ github.repository }}" \
-            --clobber
+          gh release upload latest "${uploads[@]}" --repo "$REPO" --clobber
