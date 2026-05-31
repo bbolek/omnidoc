@@ -14,6 +14,8 @@ interface UiState {
   platform: "macos" | "windows" | "linux" | "unknown";
   zoomLevel: number;
   globalSearchQuery: string;
+  /** Bumped to ask the global search panel to focus and select its input. */
+  searchFocusNonce: number;
   pendingFindQuery: string | null;
   zenMode: boolean;
   presentationVisible: boolean;
@@ -37,6 +39,7 @@ interface UiState {
   decreaseZoom: () => void;
   resetZoom: () => void;
   setGlobalSearchQuery: (q: string) => void;
+  requestSearchFocus: () => void;
   setPendingFindQuery: (q: string | null) => void;
   toggleZenMode: () => void;
   setZenMode: (v: boolean) => void;
@@ -64,6 +67,7 @@ export const useUiStore = create<UiState>()(
       platform: "unknown",
       zoomLevel: 1.0,
       globalSearchQuery: "",
+      searchFocusNonce: 0,
       pendingFindQuery: null,
       zenMode: false,
       presentationVisible: false,
@@ -88,6 +92,7 @@ export const useUiStore = create<UiState>()(
       decreaseZoom: () => get().setZoomLevel(get().zoomLevel - 0.1),
       resetZoom: () => get().setZoomLevel(1.0),
       setGlobalSearchQuery: (q) => set({ globalSearchQuery: q }),
+      requestSearchFocus: () => set((s) => ({ searchFocusNonce: s.searchFocusNonce + 1 })),
       setPendingFindQuery: (q) => set({ pendingFindQuery: q }),
       toggleZenMode: () => set((s) => ({ zenMode: !s.zenMode })),
       setZenMode: (v) => set({ zenMode: v }),

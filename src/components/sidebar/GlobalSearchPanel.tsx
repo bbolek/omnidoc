@@ -234,7 +234,7 @@ function FileGroup({
 
 export function GlobalSearchPanel() {
   const folders = useFileStore((s) => s.folders);
-  const { globalSearchQuery, setGlobalSearchQuery, setPendingFindQuery, setSearchVisible } = useUiStore();
+  const { globalSearchQuery, setGlobalSearchQuery, setPendingFindQuery, setSearchVisible, searchFocusNonce } = useUiStore();
   const { openFile } = useFileStore();
 
   // Stable join so effect deps don't trigger on array identity changes alone.
@@ -250,10 +250,15 @@ export function GlobalSearchPanel() {
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Focus input when panel mounts
+  // Focus the input when the panel mounts and whenever Find in All Files is
+  // re-triggered (Ctrl/Cmd+Shift+F), selecting any existing query so the next
+  // keystroke replaces it instead of appending.
   useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
+    const el = inputRef.current;
+    if (!el) return;
+    el.focus();
+    el.select();
+  }, [searchFocusNonce]);
 
   // Sync query to global store
   useEffect(() => {
