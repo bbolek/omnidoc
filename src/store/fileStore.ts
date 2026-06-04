@@ -12,7 +12,7 @@ import type {
   DiffRevision,
 } from "../types";
 import { nextColorIndex } from "../utils/folderColors";
-import { getFileName } from "../utils/fileUtils";
+import { getFileName, loadFileForOpen } from "../utils/fileUtils";
 import { log } from "../utils/logger";
 
 interface SessionTab {
@@ -728,51 +728,69 @@ export const useFileStore = create<FileState>()(
 
         try {
           // Re-fetch each folder's tree (only paths + color were persisted).
-          for (const f of folders) {
-            try {
-              const entries = await withTimeout(
-                invoke<FileEntry[]>("list_directory", { path: f.path }),
-                PER_CALL_MS,
-                `list_directory ${f.path}`,
-              );
-              log.debug(
-                "fileStore.restoreSession",
-                `folder ${f.path} -> ${entries.length} entries`,
-              );
-              get().setFolderTree(f.path, entries);
-            } catch (err) {
-              log.warn(
-                "fileStore.restoreSession",
-                `list_directory failed for ${f.path}`,
-                err,
-              );
-              // Folder may have been deleted/moved or backend hung — skip.
-            }
-          }
+          // Fetched concurrently so total time is bounded by the slowest
+          // folder rather than the sum of all of them.
+          await Promise.all(
+            folders.map(async (f) => {
+              try {
+                const entries = await withTimeout(
+                  invoke<FileEntry[]>("list_directory", { path: f.path }),
+                  PER_CALL_MS,
+                  `list_directory ${f.path}`,
+                );
+                log.debug(
+                  "fileStore.restoreSession",
+                  `folder ${f.path} -> ${entries.length} entries`,
+                );
+                get().setFolderTree(f.path, entries);
+              } catch (err) {
+                log.warn(
+                  "fileStore.restoreSession",
+                  `list_directory failed for ${f.path}`,
+                  err,
+                );
+                // Folder may have been deleted/moved or backend hung — skip.
+              }
+            }),
+          );
 
-          if (!lastSession?.tabs?.length) {
+          const sessionTabs = lastSession?.tabs ?? [];
+          if (!sessionTabs.length) {
             log.info("fileStore.restoreSession", "no tabs to restore");
             return;
           }
 
-          for (const { path, name, folderPath } of lastSession.tabs) {
-            try {
-              const [content, info] = await withTimeout(
-                Promise.all([
-                  invoke<string>("read_file", { path }),
-                  invoke<FileInfo>("get_file_info", { path }),
-                ]),
-                PER_CALL_MS,
-                `read ${path}`,
-              );
-              get().openFile(path, name, content as string, info as FileInfo, folderPath);
-            } catch (err) {
-              log.warn("fileStore.restoreSession", `failed to reopen ${path}`, err);
-              // File deleted, moved, or backend hung — skip silently.
-            }
+          // Read every tab's content concurrently rather than one-at-a-time:
+          // restore time drops from the sum of all reads to roughly the
+          // slowest single read. Each read keeps its own per-call timeout so a
+          // single hung/missing file can't stall the whole batch, and
+          // `loadFileForOpen` skips the content read entirely for
+          // binary-viewable files (PDFs, images), which fetch their own bytes.
+          // Results are collected positionally so tabs reopen in their
+          // original order.
+          const loaded = await Promise.all(
+            sessionTabs.map(async ({ path, name, folderPath }) => {
+              try {
+                const { content, info } = await withTimeout(
+                  loadFileForOpen(path),
+                  PER_CALL_MS,
+                  `read ${path}`,
+                );
+                return { path, name, folderPath, content, info };
+              } catch (err) {
+                log.warn("fileStore.restoreSession", `failed to reopen ${path}`, err);
+                // File deleted, moved, or backend hung — skip silently.
+                return null;
+              }
+            }),
+          );
+
+          for (const item of loaded) {
+            if (!item) continue;
+            get().openFile(item.path, item.name, item.content, item.info, item.folderPath);
           }
 
-          if (lastSession.activePath) {
+          if (lastSession?.activePath) {
             const active = get().tabs.find((t) => t.path === lastSession.activePath);
             if (active) {
               log.debug(
