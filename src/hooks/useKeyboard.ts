@@ -11,6 +11,35 @@ interface CompiledBinding {
 const isMac = navigator.platform.toUpperCase().includes("MAC");
 
 /**
+ * App commands that stay live even while a terminal is focused, so the user
+ * always has a keyboard way out. Their shortcuts (`Mod+Shift+P`, `Mod+\``,
+ * `Mod+Shift+\``) don't collide with common shell / readline control codes.
+ */
+const TERMINAL_PASSTHROUGH = new Set<string>([
+  "go.commandPalette", // run any command, including the ones suppressed below
+  "view.toggleTerminal", // hide the terminal panel
+  "terminal.new", // open another terminal
+]);
+
+/** True when the keyboard event targets a focused xterm terminal. */
+function isInTerminal(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest(".xterm") !== null;
+}
+
+/**
+ * Whether a focused terminal will consume this keystroke — in which case the
+ * app must not also act on it (otherwise e.g. Ctrl+O both runs readline's
+ * operate-and-get-next *and* opens the file dialog). The terminal forwards
+ * control / alt sequences and plain typed keys to the shell; pure Cmd/Win
+ * (meta) chords are app-level shortcuts the terminal ignores, so they still
+ * fire.
+ */
+function terminalConsumes(e: KeyboardEvent): boolean {
+  if (e.metaKey && !e.ctrlKey && !e.altKey) return false;
+  return true;
+}
+
+/**
  * Compile every registered command's `shortcut` (and `additionalShortcuts`)
  * into one flat array of `(parsed, commandId)` pairs the keydown listener
  * can scan.
@@ -54,8 +83,15 @@ export function useGlobalKeyboard() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      // Escape: close overlays / exit zen. Always handled, even during presentation.
+      // A focused terminal owns the keyboard: keystrokes it consumes belong to
+      // the shell, not to app shortcuts. A short allowlist stays live so the
+      // user is never trapped.
+      const terminalOwnsEvent = isInTerminal(e.target) && terminalConsumes(e);
+
+      // Escape: close overlays / exit zen. Always handled, even during
+      // presentation — unless the terminal owns it (vim, less, fzf, …).
       if (e.key === "Escape") {
+        if (terminalOwnsEvent) return;
         setShortcutsVisible(false);
         setSearchVisible(false);
         if (zenMode) setZenMode(false);
@@ -67,6 +103,9 @@ export function useGlobalKeyboard() {
       for (const b of bindingsRef.current) {
         if (!matches(b.parsed, e, isMac)) continue;
         if (presentationVisible && b.commandId !== "view.presentation") return;
+        // Terminal-focused: let the shell have the keystroke instead of firing
+        // an app shortcut, except for the allowlisted escape hatches.
+        if (terminalOwnsEvent && !TERMINAL_PASSTHROUGH.has(b.commandId)) return;
         // Modifier-less single-char shortcuts (like `?`) shouldn't steal
         // keystrokes while the user is typing in an input.
         const noMods =
