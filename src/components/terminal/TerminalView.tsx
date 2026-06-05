@@ -54,8 +54,8 @@ export function TerminalView({
   const markStarted = useTerminalStore((s) => s.markStarted);
   const removeTerminal = useTerminalStore((s) => s.removeTerminal);
 
-  // Pick folder color for theming the cursor/selection accents. Background
-  // stays transparent so the active app theme shows through.
+  // Pick folder color for theming the cursor/selection accents. The terminal's
+  // background/foreground follow the active app theme (see buildTheme).
   const folders = useFileStore((s) => s.folders);
   const folder = terminal?.folderPath
     ? folders.find((f) => f.path === terminal.folderPath)
@@ -307,10 +307,22 @@ export function TerminalView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [terminalId]);
 
-  // ── Re-theme when folder color changes ───────────────────────────────
+  // ── Re-theme when folder color OR the app theme changes ──────────────
   useEffect(() => {
-    if (!termRef.current) return;
-    termRef.current.options.theme = buildTheme(accent);
+    const applyThemeColors = () => {
+      if (termRef.current) termRef.current.options.theme = buildTheme(accent);
+    };
+    applyThemeColors();
+    // applyTheme() reflects the active theme + resolved scheme on <html> via
+    // the data-theme / data-scheme attributes. Observing them keeps an open
+    // terminal in sync when the user switches themes, toggles light/dark, or
+    // the OS "system" preference flips — without coupling this to the store.
+    const obs = new MutationObserver(applyThemeColors);
+    obs.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme", "data-scheme"],
+    });
+    return () => obs.disconnect();
   }, [accent]);
 
   // ── Refit whenever visibility / size changes ─────────────────────────
@@ -431,24 +443,69 @@ async function openTerminalPath(raw: string, cwd: string | null): Promise<void> 
   }
 }
 
+// 16-color ANSI palettes (GitHub Primer terminal colors). xterm ships a
+// single dark-tuned palette, which renders bright yellow/green/cyan nearly
+// invisible on a light background — so we swap palettes based on the resolved
+// color scheme. fg/bg themselves come from the active theme's tokens below.
+const ANSI_DARK = {
+  black: "#484f58",
+  red: "#ff7b72",
+  green: "#3fb950",
+  yellow: "#d29922",
+  blue: "#58a6ff",
+  magenta: "#bc8cff",
+  cyan: "#39c5cf",
+  white: "#b1bac4",
+  brightBlack: "#6e7681",
+  brightRed: "#ffa198",
+  brightGreen: "#56d364",
+  brightYellow: "#e3b341",
+  brightBlue: "#79c0ff",
+  brightMagenta: "#d2a8ff",
+  brightCyan: "#56d4dd",
+  brightWhite: "#f0f6fc",
+};
+const ANSI_LIGHT = {
+  black: "#24292f",
+  red: "#cf222e",
+  green: "#116329",
+  yellow: "#953800",
+  blue: "#0969da",
+  magenta: "#8250df",
+  cyan: "#1b7c83",
+  white: "#6e7781",
+  brightBlack: "#57606a",
+  brightRed: "#a40e26",
+  brightGreen: "#1a7f37",
+  brightYellow: "#633c01",
+  brightBlue: "#218bff",
+  brightMagenta: "#a475f9",
+  brightCyan: "#3192aa",
+  brightWhite: "#8c959f",
+};
+
 /**
- * Build an xterm theme that inherits foreground/background from the host
- * app theme via CSS variables and uses the folder-accent color for cursor
- * and selection highlights.
+ * Build an xterm theme that inherits its background/foreground from the active
+ * app theme (the CSS custom properties applyTheme() sets on <html>) and picks
+ * a light or dark ANSI palette to match the resolved color scheme. The
+ * folder-accent color drives the cursor and selection highlight.
  */
 function buildTheme(accent: string) {
+  const root = typeof document !== "undefined" ? document.documentElement : null;
   const get = (name: string, fallback: string) => {
-    if (typeof document === "undefined") return fallback;
-    const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    if (!root) return fallback;
+    const v = getComputedStyle(root).getPropertyValue(name).trim();
     return v || fallback;
   };
-  const fg = get("--text-primary", "#e6edf3");
-  const bg = get("--bg-primary", "#0d1117");
+  const light = root?.getAttribute("data-scheme") === "light";
+  const fg = get("--color-text", light ? "#1f2328" : "#e6edf3");
+  const bg = get("--color-bg", light ? "#ffffff" : "#0d1117");
   return {
     foreground: fg,
     background: bg,
     cursor: accent,
     cursorAccent: bg,
     selectionBackground: `${accent}55`,
+    ...(light ? ANSI_LIGHT : ANSI_DARK),
   };
 }
