@@ -13,6 +13,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import "@xterm/xterm/css/xterm.css";
 import { useTerminalStore } from "../../store/terminalStore";
+import { useUiStore } from "../../store/uiStore";
 import { folderColor } from "../../utils/folderColors";
 import { useFileStore } from "../../store/fileStore";
 import { loadFileForOpen } from "../../utils/fileUtils";
@@ -20,6 +21,11 @@ import { log } from "../../utils/logger";
 
 const isMacPlatform =
   typeof navigator !== "undefined" && navigator.platform.toUpperCase().includes("MAC");
+
+// Base (100% zoom) terminal font size. The app-wide zoom level scales this;
+// xterm renders to a canvas and ignores the `--content-zoom` CSS variable the
+// rest of the UI uses, so the zoom has to be pushed into its options directly.
+const BASE_FONT_SIZE = 13;
 
 /**
  * One live xterm.js instance bound 1:1 to a backend PTY by `terminalId`.
@@ -62,6 +68,10 @@ export function TerminalView({
     : undefined;
   const accent = folder ? folderColor(folder.colorIndex).accent : "#388bfd";
 
+  // App-wide zoom level. xterm's canvas renderer doesn't pick up the
+  // `--content-zoom` CSS variable, so we scale its font size by hand below.
+  const zoomLevel = useUiStore((s) => s.zoomLevel);
+
   // Guarded fit: reads refs fresh every call and bails if the terminal was
   // disposed or the container isn't measurable yet. All fit() callers route
   // through here so a late RAF/ResizeObserver can't touch a torn-down xterm.
@@ -87,7 +97,9 @@ export function TerminalView({
 
     const term = new Terminal({
       fontFamily: '"Fira Code", "Cascadia Code", Menlo, Consolas, monospace',
-      fontSize: 13,
+      // Seed with the current zoom; a dedicated effect keeps it in sync after.
+      // useUiStore.getState() avoids adding zoomLevel to this once-per-id effect.
+      fontSize: Math.round(BASE_FONT_SIZE * useUiStore.getState().zoomLevel),
       cursorBlink: true,
       allowProposedApi: true,
       theme: buildTheme(accent),
@@ -324,6 +336,21 @@ export function TerminalView({
     });
     return () => obs.disconnect();
   }, [accent]);
+
+  // ── Scale font with the app-wide zoom level ──────────────────────────
+  // xterm renders to a canvas, so the `--content-zoom` CSS variable that
+  // zooms the rest of the UI doesn't reach it. Push the zoom into the font
+  // size directly, then refit so the PTY's cols/rows track the new cell size.
+  useEffect(() => {
+    const term = termRef.current;
+    if (!term) return;
+    const next = Math.round(BASE_FONT_SIZE * zoomLevel);
+    if (term.options.fontSize === next) return;
+    term.options.fontSize = next;
+    safeFit();
+    // safeFit reads refs only; intentionally not a dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [zoomLevel]);
 
   // ── Refit whenever visibility / size changes ─────────────────────────
   useEffect(() => {
